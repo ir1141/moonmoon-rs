@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}{{ vod_title }}{% endblock %}
+{% block view_title %}{{ vod_title }}{% endblock %}
+
+{% block header_actions %}
+<a href="/" class="back-btn" style="display:inline-flex">&#8592; All Games</a>
+<a href="/streams" class="header-btn">All Streams</a>
+{% endblock %}
+
+{% block search %}{% endblock %}
+
+{% block content %}
+<div class="player-container">
+  <div class="player-main">
+    <div id="player-wrap">
+      <div id="youtube-player"></div>
+    </div>
+    <div class="player-bar">
+      <div class="player-info">
+        <h2 class="player-title">{{ vod_title }}</h2>
+        <div class="part-selector" id="part-selector"></div>
+        <button class="theatre-btn" id="theatre-toggle" title="Theatre Mode (t)">Theatre</button>
+      </div>
+    </div>
+  </div>
+  <div class="chat-panel" id="chat-panel">
+    <div class="chat-header">
+      <span>Chat Replay</span>
+      <div class="chat-controls">
+        <button class="chat-size-btn" id="chat-size-down" title="Smaller text">-</button>
+        <button class="chat-size-btn" id="chat-size-up" title="Larger text">+</button>
+        <span class="chat-status" id="chat-status"></span>
+      </div>
+    </div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-paused" id="chat-paused" style="display:none">Chat Paused (scroll down to resume)</div>
+  </div>
+</div>
+
+<div id="vod-data" data-vod-id="{{ vod_id }}" data-youtube-ids="{{ youtube_ids_json }}"></div>
+<script src="https://www.youtube.com/iframe_api"></script>
+<script src="/static/player.js"></script>
+{% endblock %}

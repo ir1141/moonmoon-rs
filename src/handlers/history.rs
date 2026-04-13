@@ -1,0 +1,57 @@
+use super::{VodDisplay, render_template};
+use crate::SharedState;
+use askama::Template;
+use axum::extract::{Query, State};
+use axum::response::IntoResponse;
+use serde::Deserialize;
+use std::sync::Arc;
+
+#[derive(Template)]
+#[template(path = "history.html")]
+struct HistoryTemplate;
+
+pub async fn history_page() -> impl IntoResponse {
+    render_template(&HistoryTemplate)
+}
+
+#[derive(Deserialize)]
+pub struct HistoryVodsQuery {
+    pub ids: Option<String>,
+}
+
+#[derive(Template)]
+#[template(path = "vods_grid.html")]
+struct VodsGridTemplate {
+    vods: Vec<VodDisplay>,
+    has_more: bool,
+    next_url: String,
+    show_game_tags: bool,
+}
+
+pub async fn history_vods_grid(
+    State(state): State<SharedState>,
+    Query(params): Query<HistoryVodsQuery>,
+) -> impl IntoResponse {
+    let ids_str = params.ids.unwrap_or_default();
+    let requested_ids: Vec<&str> = ids_str.split(',').filter(|s| !s.is_empty()).collect();
+
+    let vods = {
+        let guard = state.vods.read().await;
+        Arc::clone(&*guard)
+    };
+
+    // Build displays in the order of requested IDs (most recently watched first)
+    let mut displays = Vec::new();
+    for id in &requested_ids {
+        if let Some(vod) = vods.iter().find(|v| v.id == *id) {
+            displays.push(VodDisplay::from_vod(vod));
+        }
+    }
+
+    render_template(&VodsGridTemplate {
+        vods: displays,
+        has_more: false,
+        next_url: String::new(),
+        show_game_tags: true,
+    })
+}

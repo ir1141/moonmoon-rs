@@ -1,0 +1,36 @@
+{% for vod in vods %}
+<a href="/watch/{{ vod.id }}{% if let Some(t) = vod.chapter_start %}?t={{ t }}{% endif %}" class="vod-card" data-vod-id="{{ vod.id }}" data-duration-secs="{{ vod.duration_seconds }}">
+  <div class="thumb-wrap">
+    {% if let Some(thumb) = vod.thumbnail_url %}
+    <img src="{{ thumb }}" alt="{{ vod.display_title }}" class="thumb" loading="lazy">
+    {% else %}
+    <div class="thumb" style="background:var(--bg-elevated)"></div>
+    {% endif %}
+    <div class="thumb-overlay"></div>
+    {% if let Some(dur) = vod.duration %}
+    <div class="duration-badge">{{ dur }}</div>
+    {% endif %}
+    <div class="date-badge">{{ vod.formatted_date }}</div>
+    <div class="play-icon">
+      <svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>
+    </div>
+    <div class="resume-bar"><div class="resume-bar-fill"></div></div>
+  </div>
+  <div class="card-body">
+    <div class="vod-title">{{ vod.display_title }}</div>
+    {% if show_game_tags && !vod.game_tags.is_empty() %}
+    <div class="vod-games">
+      {% for tag in vod.game_tags %}
+      <a href="/watch/{{ vod.id }}?t={{ tag.start_seconds }}" class="game-tag" onclick="event.stopPropagation()">{{ tag.name }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</a>
+{% endfor %}
+{% if vods.is_empty() %}
+<div class="no-results">No streams found</div>
+{% endif %}
+{% if has_more %}
+<div class="load-sentinel" hx-get="{{ next_url }}" hx-trigger="revealed" hx-swap="outerHTML"></div>
+{% endif %}

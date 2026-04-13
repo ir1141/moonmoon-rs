@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}{{ game_name }} - VODs{% endblock %}
+
+{% block view_title %}{{ game_name }}{% endblock %}
+
+{% block header_actions %}
+<a href="/" class="back-btn" style="display:inline-flex">&#8592; All Games</a>
+<a href="/streams" class="header-btn">All Streams</a>
+{% endblock %}
+
+{% block search %}{% endblock %}
+
+{% block content %}
+<div class="vods-hero">
+  {% if let Some(image) = game_image %}
+  <img src="{{ image }}" alt="{{ game_name }}" class="game-art">
+  {% else %}
+  <div class="game-art"></div>
+  {% endif %}
+  <div class="game-info">
+    <h2>{{ game_name }}</h2>
+    <div class="meta"><span>{{ vod_count }}</span> streams archived</div>
+  </div>
+</div>
+
+<div class="vod-toolbar">
+  <input type="text" name="search" class="toolbar-search" placeholder="Search streams..."
+         hx-get="/game/{{ game_name|urlencode }}/vods" hx-trigger="input changed delay:300ms"
+         hx-target="#vod-grid" hx-swap="innerHTML"
+         hx-include="[name='sort'], [name='from'], [name='to']">
+  <select name="sort" class="toolbar-select"
+          hx-get="/game/{{ game_name|urlencode }}/vods" hx-trigger="change"
+          hx-target="#vod-grid" hx-swap="innerHTML"
+          hx-include="[name='search'], [name='from'], [name='to']">
+    <option value="newest" {% if sort == "newest" %}selected{% endif %}>Newest First</option>
+    <option value="oldest" {% if sort == "oldest" %}selected{% endif %}>Oldest First</option>
+    <option value="longest" {% if sort == "longest" %}selected{% endif %}>Longest</option>
+    <option value="shortest" {% if sort == "shortest" %}selected{% endif %}>Shortest</option>
+  </select>
+  <div class="toolbar-dates">
+    <span class="toolbar-label">From</span>
+    <input type="month" name="from" class="toolbar-date"
+           hx-get="/game/{{ game_name|urlencode }}/vods" hx-trigger="change"
+           hx-target="#vod-grid" hx-swap="innerHTML"
+           hx-include="[name='search'], [name='sort'], [name='to']"
+           {% if let Some(f) = from %}value="{{ f }}"{% endif %}>
+    <span class="toolbar-label">To</span>
+    <input type="month" name="to" class="toolbar-date"
+           hx-get="/game/{{ game_name|urlencode }}/vods" hx-trigger="change"
+           hx-target="#vod-grid" hx-swap="innerHTML"
+           hx-include="[name='search'], [name='sort'], [name='from']"
+           {% if let Some(t) = to %}value="{{ t }}"{% endif %}>
+  </div>
+</div>
+
+<div id="vod-grid" class="vod-grid">
+  {% include "vods_grid.html" %}
+</div>
+{% endblock %}

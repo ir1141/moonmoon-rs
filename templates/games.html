@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Games Browser{% endblock %}
+
+{% block view_title %}Games{% endblock %}
+
+{% block content %}
+<div class="games-view">
+  <div class="games-toolbar">
+    <div class="stats">{{ games.len() }} games</div>
+    <div class="games-filters">
+      <select name="sort" class="toolbar-select"
+              hx-get="/games" hx-trigger="change"
+              hx-target="#games-grid" hx-swap="innerHTML"
+              hx-include="[name='search'], [name='from'], [name='to']">
+        <option value="most" {% if sort == "most" %}selected{% endif %}>Most streams</option>
+        <option value="fewest" {% if sort == "fewest" %}selected{% endif %}>Fewest streams</option>
+        <option value="az" {% if sort == "az" %}selected{% endif %}>A - Z</option>
+        <option value="za" {% if sort == "za" %}selected{% endif %}>Z - A</option>
+      </select>
+      <div class="toolbar-dates">
+        <span class="toolbar-label">From</span>
+        <input type="month" name="from" class="toolbar-date"
+               hx-get="/games" hx-trigger="change"
+               hx-target="#games-grid" hx-swap="innerHTML"
+               hx-include="[name='search'], [name='sort'], [name='to']"
+               {% if let Some(f) = from %}value="{{ f }}"{% endif %}>
+        <span class="toolbar-label">To</span>
+        <input type="month" name="to" class="toolbar-date"
+               hx-get="/games" hx-trigger="change"
+               hx-target="#games-grid" hx-swap="innerHTML"
+               hx-include="[name='search'], [name='sort'], [name='from']"
+               {% if let Some(t) = to %}value="{{ t }}"{% endif %}>
+      </div>
+    </div>
+  </div>
+  <div id="games-grid" class="games-grid">
+    {% include "games_grid.html" %}
+  </div>
+</div>
+{% endblock %}

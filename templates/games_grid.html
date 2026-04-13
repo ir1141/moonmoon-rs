@@ -1,0 +1,19 @@
+{% for game in games %}
+<a href="/game/{{ game.name|urlencode }}" class="game-card">
+  <div class="art-wrap">
+    {% if let Some(image) = game.image %}
+    <img class="art" src="{{ image }}" alt="{{ game.name }}" loading="lazy" onerror="this.style.display='none'">
+    {% endif %}
+    <div class="stream-badge">{{ game.vod_count }}</div>
+  </div>
+  <div class="info">
+    <div class="name" title="{{ game.name }}">{{ game.name }}</div>
+  </div>
+</a>
+{% endfor %}
+{% if games.is_empty() %}
+<div class="no-results">No games found</div>
+{% endif %}
+{% if has_more %}
+<div class="load-sentinel" hx-get="{{ next_url }}" hx-trigger="revealed" hx-swap="outerHTML"></div>
+{% endif %}

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Watch History{% endblock %}
+{% block view_title %}History{% endblock %}
+
+{% block header_actions %}
+<a href="/" class="back-btn" style="display:inline-flex">&#8592; All Games</a>
+<a href="/streams" class="header-btn">All Streams</a>
+<a href="/calendar" class="header-btn">Calendar</a>
+{% endblock %}
+
+{% block search %}{% endblock %}
+
+{% block content %}
+<div class="games-view">
+  <div class="games-toolbar">
+    <div class="stats" id="history-stats"></div>
+  </div>
+  <div id="history-grid" class="vod-grid"></div>
+</div>
+<script>
+(function() {
+  var store;
+  try { store = JSON.parse(localStorage.getItem('moonmoon_resume')) || {}; } catch(e) { store = {}; }
+
+  var entries = [];
+  for (var id in store) {
+    if (store[id] && store[id].updated) {
+      entries.push({ id: id, updated: store[id].updated });
+    }
+  }
+
+  var stats = document.getElementById('history-stats');
+  var grid = document.getElementById('history-grid');
+
+  if (entries.length === 0) {
+    stats.textContent = 'No watch history';
+    var msg = document.createElement('div');
+    msg.className = 'no-results';
+    msg.textContent = 'No streams watched yet';
+    grid.appendChild(msg);
+    return;
+  }
+
+  entries.sort(function(a, b) { return b.updated - a.updated; });
+  stats.textContent = entries.length + ' watched';
+
+  var ids = entries.map(function(e) { return e.id; }).join(',');
+  fetch('/history/vods?ids=' + encodeURIComponent(ids))
+    .then(function(r) { return r.text(); })
+    .then(function(html) {
+      grid.replaceChildren();
+      var temp = document.createElement('template');
+      temp.innerHTML = html;
+      grid.appendChild(temp.content);
+      var evt = new CustomEvent('htmx:afterSwap', { detail: { target: grid } });
+      document.body.dispatchEvent(evt);
+    })
+    .catch(function() {
+      grid.replaceChildren();
+      var msg = document.createElement('div');
+      msg.className = 'no-results';
+      msg.textContent = 'Failed to load history';
+      grid.appendChild(msg);
+    });
+})();
+</script>
+{% endblock %}

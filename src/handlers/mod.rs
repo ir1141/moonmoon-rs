@@ -1,0 +1,475 @@
+mod api;
+mod calendar;
+mod games;
+mod history;
+mod vods;
+mod watch;
+
+pub use api::{chat_proxy, refresh_vods};
+pub use calendar::calendar_page;
+pub use games::{games_grid, games_page};
+pub use history::{history_page, history_vods_grid};
+pub use vods::{all_streams_grid, all_streams_page, game_vods_grid, game_vods_page};
+pub use watch::{random_vod, vod_detail, watch_page};
+
+use crate::vods::{Game, Vod};
+use askama::Template;
+use axum::response::{Html, IntoResponse};
+use serde::Deserialize;
+
+pub(crate) const VOD_BATCH_SIZE: usize = 36;
+pub(crate) const GAME_BATCH_SIZE: usize = 60;
+
+// ─── Query types ───
+
+#[derive(Deserialize, Default)]
+pub struct ListQuery {
+    pub search: Option<String>,
+    pub sort: Option<String>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub page: Option<usize>,
+}
+
+// ─── Display types ───
+
+pub(crate) struct GameTag {
+    pub name: String,
+    pub start_seconds: i64,
+}
+
+pub(crate) struct VodDisplay {
+    pub id: String,
+    pub display_title: String,
+    pub formatted_date: String,
+    pub duration: Option<String>,
+    pub thumbnail_url: Option<String>,
+    pub game_tags: Vec<GameTag>,
+    pub created_at: String,
+    pub duration_minutes: i64,
+    pub duration_seconds: i64,
+    pub chapter_start: Option<i64>,
+}
+
+impl VodDisplay {
+    pub(crate) fn from_vod(vod: &Vod) -> Self {
+        let display_title = vod
+            .title
+            .clone()
+            .unwrap_or_else(|| "Untitled Stream".to_string());
+        let formatted_date = format_date(&vod.created_at);
+        let game_tags = get_game_tags(vod);
+        let duration_minutes = parse_duration_minutes(vod.duration.as_deref().unwrap_or(""));
+        let duration_seconds = parse_duration_seconds(vod.duration.as_deref().unwrap_or(""));
+        VodDisplay {
+            id: vod.id.clone(),
+            display_title,
+            formatted_date,
+            duration: vod.duration.clone(),
+            thumbnail_url: vod.thumbnail_url.clone(),
+            game_tags,
+            created_at: vod.created_at.clone(),
+            duration_minutes,
+            duration_seconds,
+            chapter_start: None,
+        }
+    }
+}
+
+// ─── Render helper ───
+
+pub(crate) fn render_template(tmpl: &impl Template) -> axum::response::Response {
+    match tmpl.render() {
+        Ok(html) => Html(html).into_response(),
+        Err(e) => {
+            tracing::error!("template render failed: {e}");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Html("Internal server error".to_string()),
+            )
+                .into_response()
+        }
+    }
+}
+
+// ─── Helpers ───
+
+pub(crate) fn filter_games(mut games: Vec<Game>, params: &ListQuery) -> Vec<Game> {
+    if let Some(ref search) = params.search {
+        let search_lower = search.to_lowercase();
+        if !search_lower.is_empty() {
+            games.retain(|g| g.name.to_lowercase().contains(&search_lower));
+        }
+    }
+
+    let sort = params.sort.as_deref().unwrap_or("most");
+    match sort {
+        "fewest" => games.sort_by(|a, b| a.vod_count.cmp(&b.vod_count)),
+        "az" => games.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
+        "za" => games.sort_by(|a, b| b.name.to_lowercase().cmp(&a.name.to_lowercase())),
+        _ => games.sort_by(|a, b| b.vod_count.cmp(&a.vod_count)),
+    }
+
+    games
+}
+
+pub(crate) fn filter_vod_displays(displays: &mut Vec<VodDisplay>, params: &ListQuery) {
+    if let Some(ref search) = params.search {
+        let search_lower = search.to_lowercase();
+        if !search_lower.is_empty() {
+            displays.retain(|v| v.display_title.to_lowercase().contains(&search_lower));
+        }
+    }
+
+    if let Some(ref from) = params.from
+        && !from.is_empty()
+    {
+        displays.retain(|v| v.created_at.as_str() >= from.as_str());
+    }
+
+    if let Some(ref to) = params.to
+        && !to.is_empty()
+    {
+        let to_end = format!("{to}\u{ffff}");
+        displays.retain(|v| v.created_at.as_str() <= to_end.as_str());
+    }
+
+    let sort = params.sort.as_deref().unwrap_or("newest");
+    match sort {
+        "oldest" => displays.sort_by(|a, b| a.created_at.cmp(&b.created_at)),
+        "longest" => displays.sort_by(|a, b| b.duration_minutes.cmp(&a.duration_minutes)),
+        "shortest" => displays.sort_by(|a, b| a.duration_minutes.cmp(&b.duration_minutes)),
+        _ => displays.sort_by(|a, b| b.created_at.cmp(&a.created_at)),
+    }
+}
+
+pub(crate) fn get_chapter_start(vod: &Vod, game_name: &str) -> Option<i64> {
+    if let Some(ref chapters) = vod.chapters {
+        for ch in chapters {
+            if let Some(ref name) = ch.name
+                && name.eq_ignore_ascii_case(game_name)
+            {
+                return ch.start.map(|s| s as i64);
+            }
+        }
+    }
+    None
+}
+
+pub(crate) fn vod_has_game(vod: &Vod, game_name: &str) -> bool {
+    if let Some(ref chapters) = vod.chapters {
+        chapters.iter().any(|ch| {
+            ch.name
+                .as_deref()
+                .map(|n| n.eq_ignore_ascii_case(game_name))
+                .unwrap_or(false)
+        })
+    } else {
+        false
+    }
+}
+
+pub(crate) fn find_game_image(games: &[Game], game_name: &str) -> Option<String> {
+    games
+        .iter()
+        .find(|g| g.name.eq_ignore_ascii_case(game_name))
+        .and_then(|g| g.image.clone())
+}
+
+pub(crate) fn get_game_tags(vod: &Vod) -> Vec<GameTag> {
+    let mut tags = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    if let Some(ref chapters) = vod.chapters {
+        for ch in chapters {
+            if let Some(ref name) = ch.name
+                && !name.is_empty()
+                && seen.insert(name.to_lowercase())
+            {
+                tags.push(GameTag {
+                    name: name.clone(),
+                    start_seconds: ch.start.map(|s| s as i64).unwrap_or(0),
+                });
+            }
+        }
+    }
+    tags
+}
+
+pub(crate) fn format_date(created_at: &str) -> String {
+    let Some(date_part) = created_at.get(..10) else {
+        return created_at.to_string();
+    };
+    if !date_part.is_ascii() {
+        return created_at.to_string();
+    }
+    let parts: Vec<&str> = date_part.split('-').collect();
+    if parts.len() != 3 {
+        return date_part.to_string();
+    }
+    let month = match parts[1] {
+        "01" => "Jan",
+        "02" => "Feb",
+        "03" => "Mar",
+        "04" => "Apr",
+        "05" => "May",
+        "06" => "Jun",
+        "07" => "Jul",
+        "08" => "Aug",
+        "09" => "Sep",
+        "10" => "Oct",
+        "11" => "Nov",
+        "12" => "Dec",
+        _ => parts[1],
+    };
+    let day = parts[2].trim_start_matches('0');
+    format!("{month} {day}, {}", parts[0])
+}
+
+pub(crate) fn parse_duration_minutes(duration: &str) -> i64 {
+    parse_duration_seconds(duration) / 60
+}
+
+pub(crate) fn parse_duration_seconds(duration: &str) -> i64 {
+    let parts: Vec<&str> = duration.split(':').collect();
+    if parts.len() == 3 {
+        let h = parts[0].parse::<i64>().unwrap_or(0);
+        let m = parts[1].parse::<i64>().unwrap_or(0);
+        let s = parts[2].parse::<i64>().unwrap_or(0);
+        return h * 3600 + m * 60 + s;
+    }
+    if parts.len() == 2 {
+        let m = parts[0].parse::<i64>().unwrap_or(0);
+        let s = parts[1].parse::<i64>().unwrap_or(0);
+        return m * 60 + s;
+    }
+    let mut total: i64 = 0;
+    let mut num_buf = String::new();
+    for ch in duration.chars() {
+        if ch.is_ascii_digit() {
+            num_buf.push(ch);
+        } else if ch == 'h' || ch == 'H' {
+            if let Ok(h) = num_buf.parse::<i64>() {
+                total += h * 3600;
+            }
+            num_buf.clear();
+        } else if ch == 'm' || ch == 'M' {
+            if let Ok(m) = num_buf.parse::<i64>() {
+                total += m * 60;
+            }
+            num_buf.clear();
+        } else if ch == 's' || ch == 'S' {
+            if let Ok(s) = num_buf.parse::<i64>() {
+                total += s;
+            }
+            num_buf.clear();
+        } else {
+            num_buf.clear();
+        }
+    }
+    total
+}
+
+pub(crate) fn paginate<T>(items: Vec<T>, page: usize, batch: usize) -> Vec<T> {
+    let start = page * batch;
+    if start >= items.len() {
+        return vec![];
+    }
+    let end = (start + batch).min(items.len());
+    items.into_iter().skip(start).take(end - start).collect()
+}
+
+pub(crate) fn build_next_url(base: &str, page: usize, params: &ListQuery) -> String {
+    let mut parts = vec![format!("page={page}")];
+    if let Some(ref s) = params.search
+        && !s.is_empty()
+    {
+        parts.push(format!("search={}", urlencoding::encode(s)));
+    }
+    if let Some(ref s) = params.sort {
+        parts.push(format!("sort={}", urlencoding::encode(s)));
+    }
+    if let Some(ref s) = params.from
+        && !s.is_empty()
+    {
+        parts.push(format!("from={}", urlencoding::encode(s)));
+    }
+    if let Some(ref s) = params.to
+        && !s.is_empty()
+    {
+        parts.push(format!("to={}", urlencoding::encode(s)));
+    }
+    format!("{base}?{}", parts.join("&"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_duration_minutes() {
+        assert_eq!(parse_duration_minutes("3h 20m"), 200);
+        assert_eq!(parse_duration_minutes("1h"), 60);
+        assert_eq!(parse_duration_minutes("45m"), 45);
+        assert_eq!(parse_duration_minutes(""), 0);
+        assert_eq!(parse_duration_minutes("10h 5m"), 605);
+        assert_eq!(parse_duration_minutes("07:02:52"), 422);
+        assert_eq!(parse_duration_minutes("09:28:29"), 568);
+    }
+
+    #[test]
+    fn test_parse_duration_seconds() {
+        assert_eq!(parse_duration_seconds("07:02:52"), 25372);
+        assert_eq!(parse_duration_seconds("09:28:29"), 34109);
+        assert_eq!(parse_duration_seconds("00:30:00"), 1800);
+        assert_eq!(parse_duration_seconds("3h 20m"), 12000);
+        assert_eq!(parse_duration_seconds(""), 0);
+    }
+
+    #[test]
+    fn test_format_date() {
+        assert_eq!(format_date("2025-01-15T00:00:00Z"), "Jan 15, 2025");
+        assert_eq!(format_date("2025-12-01T12:30:00Z"), "Dec 1, 2025");
+    }
+
+    #[test]
+    fn test_format_date_handles_non_ascii_without_panicking() {
+        assert_eq!(format_date("éééééé"), "éééééé");
+    }
+
+    #[test]
+    fn test_get_game_tags() {
+        let vod = Vod {
+            id: "1".into(),
+            title: Some("Test".into()),
+            created_at: "2025-01-01T00:00:00Z".into(),
+            duration: Some("2h".into()),
+            thumbnail_url: None,
+            chapters: Some(vec![
+                crate::vods::Chapter {
+                    name: Some("Game A".into()),
+                    image: None,
+                    start: Some(0.0),
+                },
+                crate::vods::Chapter {
+                    name: Some("Game A".into()),
+                    image: None,
+                    start: Some(100.0),
+                },
+                crate::vods::Chapter {
+                    name: Some("Game B".into()),
+                    image: None,
+                    start: Some(200.0),
+                },
+            ]),
+            youtube: None,
+        };
+        let tags = get_game_tags(&vod);
+        let names: Vec<&str> = tags.iter().map(|t| t.name.as_str()).collect();
+        assert_eq!(names, vec!["Game A", "Game B"]);
+        assert_eq!(tags[0].start_seconds, 0);
+        assert_eq!(tags[1].start_seconds, 200);
+    }
+
+    #[test]
+    fn test_get_game_tags_case_insensitive() {
+        let vod = Vod {
+            id: "1".into(),
+            title: Some("Test".into()),
+            created_at: "2025-01-01T00:00:00Z".into(),
+            duration: Some("2h".into()),
+            thumbnail_url: None,
+            chapters: Some(vec![
+                crate::vods::Chapter {
+                    name: Some("Elden Ring".into()),
+                    image: None,
+                    start: Some(0.0),
+                },
+                crate::vods::Chapter {
+                    name: Some("ELDEN RING".into()),
+                    image: None,
+                    start: Some(500.0),
+                },
+            ]),
+            youtube: None,
+        };
+        let tags = get_game_tags(&vod);
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].name, "Elden Ring");
+    }
+
+    #[test]
+    fn test_vod_has_game() {
+        let vod = Vod {
+            id: "1".into(),
+            title: Some("Test".into()),
+            created_at: "2025-01-01T00:00:00Z".into(),
+            duration: Some("2h".into()),
+            thumbnail_url: None,
+            chapters: Some(vec![crate::vods::Chapter {
+                name: Some("Elden Ring".into()),
+                image: None,
+                start: None,
+            }]),
+            youtube: None,
+        };
+        assert!(vod_has_game(&vod, "Elden Ring"));
+        assert!(vod_has_game(&vod, "elden ring"));
+        assert!(vod_has_game(&vod, "ELDEN RING"));
+        assert!(!vod_has_game(&vod, "Dark Souls"));
+    }
+
+    #[test]
+    fn test_find_game_image_is_case_insensitive() {
+        let games = vec![
+            Game {
+                name: "Elden Ring".into(),
+                image: Some("elden.jpg".into()),
+                vod_count: 2,
+            },
+            Game {
+                name: "Dark Souls".into(),
+                image: None,
+                vod_count: 1,
+            },
+        ];
+        assert_eq!(
+            find_game_image(&games, "elden ring").as_deref(),
+            Some("elden.jpg")
+        );
+        assert_eq!(
+            find_game_image(&games, "ELDEN RING").as_deref(),
+            Some("elden.jpg")
+        );
+        assert_eq!(find_game_image(&games, "Sekiro"), None);
+    }
+
+    #[test]
+    fn test_paginate() {
+        let items: Vec<i32> = (0..100).collect();
+        let page0 = paginate(items.clone(), 0, 36);
+        assert_eq!(page0.len(), 36);
+        assert_eq!(page0[0], 0);
+
+        let page2 = paginate(items.clone(), 2, 36);
+        assert_eq!(page2.len(), 28);
+
+        let page3 = paginate(items, 3, 36);
+        assert!(page3.is_empty());
+    }
+
+    #[test]
+    fn test_build_next_url() {
+        let params = ListQuery {
+            search: Some("test".into()),
+            sort: Some("most".into()),
+            from: None,
+            to: None,
+            page: None,
+        };
+        let url = build_next_url("/games", 1, &params);
+        assert!(url.starts_with("/games?"));
+        assert!(url.contains("page=1"));
+        assert!(url.contains("search=test"));
+        assert!(url.contains("sort=most"));
+    }
+}

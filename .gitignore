@@ -1,0 +1,6 @@
+/target
+/data
+.claude/
+.omc/
+.omx/
+.playwright-mcp/
