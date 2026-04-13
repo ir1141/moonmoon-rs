@@ -2,6 +2,10 @@
 name = "moonmoon"
 version = "0.1.0"
 edition = "2024"
+description = "Server-rendered VOD browser for the MOONMOON archive (axum + Askama + htmx)"
+repository = "https://github.com/ir1141/moonmoon-rs"
+license = "MIT"
+readme = "README.md"
 
 [dependencies]
 axum = "0.8"

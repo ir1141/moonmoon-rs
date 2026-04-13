@@ -1,6 +1,19 @@
 # moonmoon-rs
 
-A Rust rewrite of the [moonmoon](../) VOD browser — a small web app for exploring MOONMOON's archived streams by game, date, or calendar view. The original is a vanilla-JS single-page app; this version is server-rendered with axum + Askama and uses htmx for partial updates.
+A Rust port of [OP-Archives/MOONMOON-site](https://github.com/OP-Archives/MOONMOON-site) — a small web app for browsing [MOONMOON](https://www.twitch.tv/moonmoon)'s archived streams by game, date, or calendar view. The upstream is a React + Vite SPA; this version is server-rendered with axum + Askama and uses htmx for partial updates. All VOD data comes from the same `archive.overpowered.tv` API the upstream uses.
+
+## What it does
+
+- **Browse by game** — landing page is a grid of every game MOONMOON has streamed, sorted by VOD count, with search and alt sort orders.
+- **Browse all streams** — flat list of every VOD with full-text search, date range filter, and sort by newest / oldest / longest / shortest.
+- **Calendar view** — month-at-a-glance grid showing which days have streams.
+- **Player with resume** — picks up where you left off via `localStorage`; a progress bar overlays each thumbnail so you can see what you've already watched.
+- **Watch history** — a dedicated page listing everything you've started or finished, entirely client-side (no account, no server state).
+- **Synced chat replay with full emote support** — the player fetches upstream chat comments and scrolls them in time with the VOD. Twitch native emotes plus third-party emotes from **7TV**, **BTTV**, and **FFZ** are rendered inline (both global sets and MOONMOON's channel sets), with hover tooltips showing the emote name and provider.
+- **Jump to a game inside a VOD** — if a stream covered multiple games, each chapter is a direct timestamped link into the player.
+- **Random VOD** — `/random` sends you to one at random.
+
+Everything is server-rendered with htmx partials for pagination and search, so it's fast on cold loads and works without JavaScript for the read-only views.
 
 ## Stack
 
@@ -96,3 +109,16 @@ Each list view has two templates: a full-page one (e.g. `games.html`) and a grid
 ## No hot reload
 
 Templates are compiled into the binary by Askama, so edits to `templates/*.html` require `cargo run` again.
+
+## Credits
+
+- **[OP-Archives/MOONMOON-site](https://github.com/OP-Archives/MOONMOON-site)** — the original React SPA this project is ported from. The API endpoints, URL shapes, and the `40x53` → `285x380` thumbnail-upscaling trick were all learned from reading their source.
+- **archive.overpowered.tv** — the VOD archive and API this app reads from at runtime. All VOD metadata, thumbnails, chat, and video streams are served by them; this project is just a viewer.
+- **MOONMOON** ([twitch.tv/moonmoon](https://www.twitch.tv/moonmoon)) — the streamer whose VODs this app browses.
+
+Not affiliated with or endorsed by MOONMOON, OP-Archives, or overpowered.tv.
+
+## License
+
+[MIT](LICENSE)
+
