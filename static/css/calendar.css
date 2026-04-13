@@ -1,0 +1,235 @@
+/* ─── Calendar ─── */
+
+.calendar-page {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 1rem 3rem;
+}
+
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  margin: 2rem 0 1.5rem;
+}
+
+.cal-month-title {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  min-width: 280px;
+  text-align: center;
+  color: var(--text);
+}
+
+.cal-nav-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 1.2rem;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.cal-nav-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(108, 92, 231, 0.08);
+}
+
+.cal-nav-btn.disabled {
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.cal-weekday {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 0.5rem 0;
+}
+
+.cal-day {
+  aspect-ratio: 1;
+  background: var(--bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+  padding: 4px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+  display: block;
+}
+
+.cal-day.pad {
+  background: transparent;
+  border-color: transparent;
+}
+
+.cal-day.empty {
+  opacity: 0.35;
+  background: var(--bg-deep);
+  border-color: transparent;
+}
+
+.cal-day.has-streams {
+  cursor: pointer;
+  border-color: rgba(108, 92, 231, calc(0.15 + var(--glow, 0) * 0.55));
+  box-shadow: 0 0 calc(var(--glow, 0) * 18px) rgba(108, 92, 231, calc(var(--glow, 0) * 0.2));
+}
+
+.cal-day.has-streams:hover {
+  transform: scale(1.06);
+  border-color: var(--accent);
+  box-shadow: 0 0 22px var(--accent-glow);
+  z-index: 2;
+}
+
+.cal-date {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text);
+  z-index: 2;
+  line-height: 1;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+}
+
+.cal-date.dim {
+  color: var(--text-muted);
+}
+
+.cal-games {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 7px;
+}
+
+.cal-game-art {
+  flex: 1 1 40%;
+  min-width: 40%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.cal-day.has-streams:hover .cal-game-art {
+  opacity: 1;
+}
+
+/* Single game fills the whole cell */
+.cal-games .cal-game-art:only-child {
+  flex: 1 1 100%;
+  min-width: 100%;
+}
+
+/* Two games split 50/50 */
+.cal-games .cal-game-art:first-child:nth-last-child(2),
+.cal-games .cal-game-art:first-child:nth-last-child(2) ~ .cal-game-art {
+  flex: 1 1 50%;
+  min-width: 50%;
+}
+
+/* Three+ games: first takes left half, rest stack on right */
+.cal-games .cal-game-art:first-child:nth-last-child(n+3) {
+  flex: 1 1 50%;
+  min-width: 50%;
+}
+.cal-games .cal-game-art:first-child:nth-last-child(n+3) ~ .cal-game-art {
+  flex: 1 1 50%;
+  min-width: 50%;
+  height: 50%;
+}
+
+.cal-game-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.7;
+}
+
+.cal-duration {
+  position: absolute;
+  bottom: 4px;
+  left: 5px;
+  font-family: var(--font-body);
+  font-size: 0.55rem;
+  font-weight: 500;
+  color: var(--text-dim);
+  z-index: 2;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+}
+
+.cal-day.has-streams:hover .cal-duration {
+  color: var(--accent-soft);
+}
+
+/* Calendar responsive */
+@media (max-width: 768px) {
+  .cal-month-title {
+    font-size: 1.4rem;
+    min-width: auto;
+  }
+  .calendar-grid {
+    gap: 3px;
+  }
+  .cal-date {
+    font-size: 0.6rem;
+  }
+  .cal-duration {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .calendar-page {
+    padding: 0 0.5rem 2rem;
+  }
+  .calendar-grid {
+    gap: 2px;
+  }
+  .cal-day {
+    border-radius: 4px;
+  }
+  .cal-games {
+    border-radius: 3px;
+  }
+  .cal-nav-btn {
+    width: 34px;
+    height: 34px;
+  }
+  .calendar-nav {
+    gap: 0.75rem;
+  }
+}

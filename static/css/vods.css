@@ -1,0 +1,319 @@
+/* ─── Vods View ─── */
+.vods-view { display: none; }
+.vods-view.active { display: block; }
+.games-view.hidden { display: none; }
+
+.vods-hero {
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+  margin-bottom: 36px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+}
+.vods-hero .game-art {
+  width: 90px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  flex-shrink: 0;
+}
+.vods-hero .game-info {
+  flex: 1;
+  min-width: 0;
+}
+.vods-hero h2 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+.vods-hero .meta {
+  font-size: 13px;
+  color: var(--text-muted);
+  letter-spacing: 0.3px;
+}
+.vods-hero .meta span {
+  color: var(--accent-soft);
+  font-weight: 600;
+}
+
+/* ─── VOD Toolbar ─── */
+.vod-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.toolbar-search {
+  font-family: var(--font-body);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  width: 220px;
+  transition: all 0.25s;
+}
+.toolbar-search::placeholder { color: var(--text-muted); }
+.toolbar-search:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+  background: var(--bg-card);
+}
+
+.toolbar-select {
+  font-family: var(--font-body);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.toolbar-select:focus {
+  border-color: var(--accent);
+}
+
+.toolbar-dates {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.toolbar-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+.toolbar-date {
+  font-family: var(--font-body);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  color-scheme: dark;
+}
+.toolbar-date:focus {
+  border-color: var(--accent);
+}
+
+/* ─── Vod Grid ─── */
+.vod-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.vod-card {
+  background: var(--bg-card);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  transition: all 0.25s;
+  display: flex;
+  flex-direction: column;
+}
+.vod-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.35), 0 0 20px var(--accent-glow);
+  transform: translateY(-3px);
+}
+
+/* ─── Watched VODs ─── */
+.vod-card.watched {
+  opacity: 0.55 !important;
+}
+.vod-card.watched:hover {
+  opacity: 0.85 !important;
+}
+
+.watched-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  background: rgba(108, 92, 231, 0.9);
+  backdrop-filter: blur(6px);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+.watched-badge svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.vod-card .thumb-wrap {
+  position: relative;
+  overflow: hidden;
+}
+.vod-card .thumb {
+  width: 100%;
+  aspect-ratio: 16/9;
+  object-fit: cover;
+  background: var(--bg-elevated);
+  display: block;
+  transition: transform 0.4s;
+}
+.vod-card:hover .thumb { transform: scale(1.05); }
+
+.vod-card .thumb-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(8,8,10,0.7) 0%, transparent 50%);
+  pointer-events: none;
+}
+.vod-card .duration-badge {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(8, 8, 10, 0.88);
+  backdrop-filter: blur(6px);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.5px;
+}
+.vod-card .date-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(8, 8, 10, 0.88);
+  backdrop-filter: blur(6px);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
+}
+
+/* ─── Resume Progress Bar ─── */
+.resume-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 2;
+  display: none;
+}
+.resume-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 0 1px 1px 0;
+  box-shadow: 0 0 6px var(--accent-glow);
+  transition: width 0.3s ease;
+  width: 0%;
+}
+.vod-card.has-resume .resume-bar {
+  display: block;
+}
+
+.vod-card .play-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
+  width: 52px;
+  height: 52px;
+  background: var(--accent);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.25s;
+  box-shadow: 0 4px 20px var(--accent-glow);
+}
+.vod-card:hover .play-icon {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+.vod-card .play-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: #fff;
+  margin-left: 2px;
+}
+
+.vod-card .card-body {
+  padding: 14px 16px 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.vod-card .vod-title {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color 0.2s;
+}
+.vod-card:hover .vod-title { color: var(--accent-soft); }
+
+.vod-games {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.game-tag {
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 5px;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .vod-grid { grid-template-columns: 1fr; }
+  .vods-hero h2 { font-size: 22px; }
+  .vods-hero .game-art { width: 70px; height: 93px; }
+  .vod-toolbar { gap: 8px; }
+  .toolbar-search { width: 100%; }
+  .toolbar-dates { margin-left: 0; width: 100%; }
+}
+
+@media (max-width: 480px) {
+  .vod-grid { grid-template-columns: 1fr; }
+}
