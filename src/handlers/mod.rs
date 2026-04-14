@@ -278,8 +278,7 @@ pub(crate) fn resolve_watched_chapter(vod: &Vod, time_secs: Option<i64>) -> Opti
     let pick = match time_secs {
         Some(t) => named
             .iter()
-            .filter(|&&(_, s)| s <= t)
-            .last()
+            .rfind(|&&(_, s)| s <= t)
             .or_else(|| named.first())
             .copied(),
         None => named.first().copied(),
