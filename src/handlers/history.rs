@@ -1,4 +1,4 @@
-use super::{VodDisplay, render_template};
+use super::{Section, VodDisplay, render_template};
 use crate::SharedState;
 use askama::Template;
 use axum::extract::{Query, State};
@@ -8,10 +8,14 @@ use std::sync::Arc;
 
 #[derive(Template)]
 #[template(path = "history.html")]
-struct HistoryTemplate;
+struct HistoryTemplate {
+    active_section: Section,
+}
 
 pub async fn history_page() -> impl IntoResponse {
-    render_template(&HistoryTemplate)
+    render_template(&HistoryTemplate {
+        active_section: Section::History,
+    })
 }
 
 #[derive(Deserialize)]

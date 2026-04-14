@@ -1,4 +1,4 @@
-use super::render_template;
+use super::{Section, render_template};
 use crate::SharedState;
 use askama::Template;
 use axum::extract::{Path, State};
@@ -12,6 +12,7 @@ struct WatchTemplate {
     vod_id: String,
     vod_title: String,
     youtube_ids_json: String,
+    active_section: Section,
 }
 
 pub async fn watch_page(
@@ -35,6 +36,7 @@ pub async fn watch_page(
                 vod_id: v.id.clone(),
                 vod_title: v.title.clone().unwrap_or_else(|| "Untitled".into()),
                 youtube_ids_json,
+                active_section: Section::Streams,
             })
         }
         None => (axum::http::StatusCode::NOT_FOUND, "VOD not found").into_response(),

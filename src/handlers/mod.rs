@@ -21,6 +21,29 @@ pub(crate) const VOD_BATCH_SIZE: usize = 36;
 pub(crate) const GAME_BATCH_SIZE: usize = 60;
 pub(crate) const PERIOD_GAP_DAYS: i64 = 14;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Section {
+    Games,
+    Streams,
+    History,
+    Calendar,
+}
+
+impl Section {
+    pub(crate) fn is_games(&self) -> bool {
+        matches!(self, Section::Games)
+    }
+    pub(crate) fn is_streams(&self) -> bool {
+        matches!(self, Section::Streams)
+    }
+    pub(crate) fn is_history(&self) -> bool {
+        matches!(self, Section::History)
+    }
+    pub(crate) fn is_calendar(&self) -> bool {
+        matches!(self, Section::Calendar)
+    }
+}
+
 // ─── Query types ───
 
 #[derive(Deserialize, Default)]

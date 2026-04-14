@@ -1,4 +1,4 @@
-use super::{parse_duration_minutes, render_template};
+use super::{Section, parse_duration_minutes, render_template};
 use crate::SharedState;
 use askama::Template;
 use axum::extract::{Query, State};
@@ -37,6 +37,7 @@ struct CalendarPageTemplate {
     next_year: i32,
     next_month: u32,
     has_next: bool,
+    active_section: Section,
 }
 
 fn month_name(m: u32) -> &'static str {
@@ -216,6 +217,7 @@ pub async fn calendar_page(
         next_year,
         next_month,
         has_next,
+        active_section: Section::Calendar,
     };
     render_template(&tmpl)
 }

@@ -1,4 +1,6 @@
-use super::{GAME_BATCH_SIZE, ListQuery, build_next_url, filter_games, paginate, render_template};
+use super::{
+    GAME_BATCH_SIZE, ListQuery, Section, build_next_url, filter_games, paginate, render_template,
+};
 use crate::SharedState;
 use crate::vods::Game;
 use askama::Template;
@@ -15,6 +17,7 @@ struct GamesPageTemplate {
     to: Option<String>,
     has_more: bool,
     next_url: String,
+    active_section: Section,
 }
 
 #[derive(Template)]
@@ -47,6 +50,7 @@ pub async fn games_page(
         to: params.to,
         has_more,
         next_url,
+        active_section: Section::Games,
     };
     render_template(&tmpl)
 }

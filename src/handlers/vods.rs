@@ -1,5 +1,5 @@
 use super::{
-    ListQuery, VOD_BATCH_SIZE, VodDisplay, assign_period_headers, build_next_url,
+    ListQuery, Section, VOD_BATCH_SIZE, VodDisplay, assign_period_headers, build_next_url,
     filter_vod_displays, find_game_image, get_chapter_start, paginate, render_template,
     vod_has_game,
 };
@@ -22,6 +22,7 @@ struct VodsPageTemplate {
     has_more: bool,
     next_url: String,
     show_game_tags: bool,
+    active_section: Section,
 }
 
 #[derive(Template)]
@@ -44,6 +45,7 @@ struct AllStreamsPageTemplate {
     has_more: bool,
     next_url: String,
     show_game_tags: bool,
+    active_section: Section,
 }
 
 pub async fn game_vods_page(
@@ -94,6 +96,7 @@ pub async fn game_vods_page(
         has_more,
         next_url,
         show_game_tags: false,
+        active_section: Section::Games,
     };
     render_template(&tmpl)
 }
@@ -169,6 +172,7 @@ pub async fn all_streams_page(
         has_more,
         next_url,
         show_game_tags: true,
+        active_section: Section::Streams,
     };
     render_template(&tmpl)
 }

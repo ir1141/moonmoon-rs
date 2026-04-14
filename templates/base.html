@@ -20,11 +20,12 @@
     <a href="/" class="logo">Moonmoon</a>
     <div class="sep"></div>
     <span class="subtitle">{% block view_title %}Games{% endblock %}</span>
-    {% block header_actions %}
-    <a href="/streams" class="header-btn">All Streams</a>
-    <a href="/history" class="header-btn">History</a>
-    <a href="/calendar" class="header-btn">Calendar</a>
-    {% endblock %}
+    <nav class="header-nav">
+      <a href="/"         class="nav-link{% if active_section.is_games()    %} active{% endif %}">Games</a>
+      <a href="/streams"  class="nav-link{% if active_section.is_streams()  %} active{% endif %}">Streams</a>
+      <a href="/history"  class="nav-link{% if active_section.is_history()  %} active{% endif %}">History</a>
+      <a href="/calendar" class="nav-link{% if active_section.is_calendar() %} active{% endif %}">Calendar</a>
+    </nav>
     <div class="header-right">
       <button class="refresh-btn" id="refreshBtn" title="Refresh VODs" onclick="refreshVods(this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
