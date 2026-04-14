@@ -124,6 +124,20 @@
   gap: 20px;
 }
 
+.vod-period-header {
+  grid-column: 1 / -1;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 12px 0 10px;
+  border-bottom: 1px solid var(--border);
+  margin-top: 8px;
+}
+.vod-period-header:first-child { margin-top: 0; }
+
 .vod-card {
   background: var(--bg-card);
   border-radius: 12px;

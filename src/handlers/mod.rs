@@ -19,6 +19,7 @@ use serde::Deserialize;
 
 pub(crate) const VOD_BATCH_SIZE: usize = 36;
 pub(crate) const GAME_BATCH_SIZE: usize = 60;
+pub(crate) const PERIOD_GAP_DAYS: i64 = 14;
 
 // ─── Query types ───
 
@@ -49,6 +50,7 @@ pub(crate) struct VodDisplay {
     pub duration_minutes: i64,
     pub duration_seconds: i64,
     pub chapter_start: Option<i64>,
+    pub period_header: Option<String>,
 }
 
 impl VodDisplay {
@@ -72,6 +74,7 @@ impl VodDisplay {
             duration_minutes,
             duration_seconds,
             chapter_start: None,
+            period_header: None,
         }
     }
 }
@@ -143,6 +146,115 @@ pub(crate) fn filter_vod_displays(displays: &mut Vec<VodDisplay>, params: &ListQ
     }
 }
 
+pub(crate) fn assign_period_headers(displays: &mut [VodDisplay], sort: &str) {
+    if displays.len() < 2 {
+        return;
+    }
+    if sort != "newest" && sort != "oldest" {
+        return;
+    }
+
+    let days: Vec<Option<i64>> = displays
+        .iter()
+        .map(|d| parse_ymd_to_days(&d.created_at))
+        .collect();
+
+    let mut cluster_starts: Vec<usize> = vec![0];
+    for i in 1..displays.len() {
+        if let (Some(a), Some(b)) = (days[i - 1], days[i])
+            && (a - b).abs() > PERIOD_GAP_DAYS
+        {
+            cluster_starts.push(i);
+        }
+    }
+
+    if cluster_starts.len() < 2 {
+        return;
+    }
+
+    for (ci, &start) in cluster_starts.iter().enumerate() {
+        let end = cluster_starts
+            .get(ci + 1)
+            .copied()
+            .unwrap_or(displays.len());
+        let count = end - start;
+        let first_date = displays[start].created_at.clone();
+        let last_date = displays[end - 1].created_at.clone();
+        let (newest, oldest) = if sort == "newest" {
+            (first_date.as_str(), last_date.as_str())
+        } else {
+            (last_date.as_str(), first_date.as_str())
+        };
+        displays[start].period_header = Some(build_period_label(oldest, newest, count));
+    }
+}
+
+fn build_period_label(oldest: &str, newest: &str, count: usize) -> String {
+    let old_my = month_year(oldest);
+    let new_my = month_year(newest);
+    let range = if old_my == new_my {
+        old_my
+    } else {
+        format!("{old_my} – {new_my}")
+    };
+    let noun = if count == 1 { "stream" } else { "streams" };
+    format!("{range} · {count} {noun}")
+}
+
+fn month_year(created_at: &str) -> String {
+    let Some(date_part) = created_at.get(..10) else {
+        return created_at.to_string();
+    };
+    let parts: Vec<&str> = date_part.split('-').collect();
+    if parts.len() != 3 {
+        return date_part.to_string();
+    }
+    format!("{} {}", month_abbr(parts[1]), parts[0])
+}
+
+fn month_abbr(month_part: &str) -> &str {
+    match month_part {
+        "01" => "Jan",
+        "02" => "Feb",
+        "03" => "Mar",
+        "04" => "Apr",
+        "05" => "May",
+        "06" => "Jun",
+        "07" => "Jul",
+        "08" => "Aug",
+        "09" => "Sep",
+        "10" => "Oct",
+        "11" => "Nov",
+        "12" => "Dec",
+        other => other,
+    }
+}
+
+pub(crate) fn parse_ymd_to_days(created_at: &str) -> Option<i64> {
+    let date_part = created_at.get(..10)?;
+    let parts: Vec<&str> = date_part.split('-').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let y: i32 = parts[0].parse().ok()?;
+    let m: u32 = parts[1].parse().ok()?;
+    let d: u32 = parts[2].parse().ok()?;
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+        return None;
+    }
+    Some(civil_to_days(y, m, d))
+}
+
+fn civil_to_days(year: i32, month: u32, day: u32) -> i64 {
+    let y = if month <= 2 { year - 1 } else { year } as i64;
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let mp = if month > 2 { month - 3 } else { month + 9 } as i64;
+    let doy = (153 * mp + 2) / 5 + day as i64 - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146097 + doe - 719468
+}
+
 pub(crate) fn get_chapter_start(vod: &Vod, game_name: &str) -> Option<i64> {
     if let Some(ref chapters) = vod.chapters {
         for ch in chapters {
@@ -206,23 +318,8 @@ pub(crate) fn format_date(created_at: &str) -> String {
     if parts.len() != 3 {
         return date_part.to_string();
     }
-    let month = match parts[1] {
-        "01" => "Jan",
-        "02" => "Feb",
-        "03" => "Mar",
-        "04" => "Apr",
-        "05" => "May",
-        "06" => "Jun",
-        "07" => "Jul",
-        "08" => "Aug",
-        "09" => "Sep",
-        "10" => "Oct",
-        "11" => "Nov",
-        "12" => "Dec",
-        _ => parts[1],
-    };
     let day = parts[2].trim_start_matches('0');
-    format!("{month} {day}, {}", parts[0])
+    format!("{} {day}, {}", month_abbr(parts[1]), parts[0])
 }
 
 pub(crate) fn parse_duration_minutes(duration: &str) -> i64 {
@@ -455,6 +552,69 @@ mod tests {
 
         let page3 = paginate(items, 3, 36);
         assert!(page3.is_empty());
+    }
+
+    fn make_display(id: &str, created_at: &str) -> VodDisplay {
+        VodDisplay {
+            id: id.into(),
+            display_title: "t".into(),
+            formatted_date: "".into(),
+            duration: None,
+            thumbnail_url: None,
+            game_tags: vec![],
+            created_at: created_at.into(),
+            duration_minutes: 0,
+            duration_seconds: 0,
+            chapter_start: None,
+            period_header: None,
+        }
+    }
+
+    #[test]
+    fn test_parse_ymd_to_days() {
+        let a = parse_ymd_to_days("2024-01-01T00:00:00Z").unwrap();
+        let b = parse_ymd_to_days("2024-01-15T00:00:00Z").unwrap();
+        assert_eq!(b - a, 14);
+        let c = parse_ymd_to_days("2025-01-01T00:00:00Z").unwrap();
+        assert_eq!(c - a, 366); // 2024 is a leap year
+        assert!(parse_ymd_to_days("bogus").is_none());
+    }
+
+    #[test]
+    fn test_assign_period_headers_splits_by_gap() {
+        let mut displays = vec![
+            make_display("1", "2024-03-10T00:00:00Z"),
+            make_display("2", "2024-03-05T00:00:00Z"),
+            make_display("3", "2024-01-20T00:00:00Z"),
+            make_display("4", "2024-01-15T00:00:00Z"),
+        ];
+        assign_period_headers(&mut displays, "newest");
+        assert!(displays[0].period_header.is_some());
+        assert!(displays[1].period_header.is_none());
+        assert!(displays[2].period_header.is_some());
+        assert!(displays[3].period_header.is_none());
+        assert!(displays[0].period_header.as_ref().unwrap().contains("2 streams"));
+    }
+
+    #[test]
+    fn test_assign_period_headers_skips_when_single_cluster() {
+        let mut displays = vec![
+            make_display("1", "2024-03-10T00:00:00Z"),
+            make_display("2", "2024-03-05T00:00:00Z"),
+            make_display("3", "2024-03-01T00:00:00Z"),
+        ];
+        assign_period_headers(&mut displays, "newest");
+        assert!(displays.iter().all(|d| d.period_header.is_none()));
+    }
+
+    #[test]
+    fn test_assign_period_headers_skips_for_non_chronological_sort() {
+        let mut displays = vec![
+            make_display("1", "2024-03-10T00:00:00Z"),
+            make_display("2", "2024-01-01T00:00:00Z"),
+        ];
+        assign_period_headers(&mut displays, "longest");
+        assert!(displays.iter().all(|d| d.period_header.is_none()));
     }
 
     #[test]

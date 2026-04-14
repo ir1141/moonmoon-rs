@@ -1,6 +1,7 @@
 use super::{
-    ListQuery, VOD_BATCH_SIZE, VodDisplay, build_next_url, filter_vod_displays, find_game_image,
-    get_chapter_start, paginate, render_template, vod_has_game,
+    ListQuery, VOD_BATCH_SIZE, VodDisplay, assign_period_headers, build_next_url,
+    filter_vod_displays, find_game_image, get_chapter_start, paginate, render_template,
+    vod_has_game,
 };
 use crate::SharedState;
 use askama::Template;
@@ -70,6 +71,7 @@ pub async fn game_vods_page(
         .collect();
     let vod_count = displays.len();
     filter_vod_displays(&mut displays, &params);
+    assign_period_headers(&mut displays, &sort);
 
     let page = params.page.unwrap_or(0);
     let total = displays.len();
@@ -106,6 +108,7 @@ pub async fn game_vods_grid(
         Arc::clone(&*guard)
     };
 
+    let sort = params.sort.clone().unwrap_or_else(|| "newest".to_string());
     let mut displays: Vec<VodDisplay> = vods
         .iter()
         .filter(|v| vod_has_game(v, &name))
@@ -116,6 +119,7 @@ pub async fn game_vods_grid(
         })
         .collect();
     filter_vod_displays(&mut displays, &params);
+    assign_period_headers(&mut displays, &sort);
 
     let page = params.page.unwrap_or(0);
     let total = displays.len();

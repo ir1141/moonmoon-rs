@@ -1,4 +1,7 @@
 {% for vod in vods %}
+{% if let Some(header) = vod.period_header %}
+<div class="vod-period-header">{{ header }}</div>
+{% endif %}
 <a href="/watch/{{ vod.id }}{% if let Some(t) = vod.chapter_start %}?t={{ t }}{% endif %}" class="vod-card" data-vod-id="{{ vod.id }}" data-duration-secs="{{ vod.duration_seconds }}">
   <div class="thumb-wrap">
     {% if let Some(thumb) = vod.thumbnail_url %}
