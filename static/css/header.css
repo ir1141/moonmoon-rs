@@ -35,6 +35,12 @@
   letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--text-dim);
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .header-nav {
