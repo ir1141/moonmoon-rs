@@ -671,7 +671,13 @@ mod tests {
         assert!(displays[1].period_header.is_none());
         assert!(displays[2].period_header.is_some());
         assert!(displays[3].period_header.is_none());
-        assert!(displays[0].period_header.as_ref().unwrap().contains("2 streams"));
+        assert!(
+            displays[0]
+                .period_header
+                .as_ref()
+                .unwrap()
+                .contains("2 streams")
+        );
     }
 
     #[test]
