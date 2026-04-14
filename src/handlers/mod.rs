@@ -23,6 +23,7 @@ pub(crate) const PERIOD_GAP_DAYS: i64 = 14;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Section {
+    None,
     Games,
     Streams,
     History,
@@ -30,17 +31,14 @@ pub(crate) enum Section {
 }
 
 impl Section {
-    pub(crate) fn is_games(&self) -> bool {
-        matches!(self, Section::Games)
-    }
-    pub(crate) fn is_streams(&self) -> bool {
-        matches!(self, Section::Streams)
-    }
-    pub(crate) fn is_history(&self) -> bool {
-        matches!(self, Section::History)
-    }
-    pub(crate) fn is_calendar(&self) -> bool {
-        matches!(self, Section::Calendar)
+    pub(crate) fn slug(&self) -> &'static str {
+        match self {
+            Section::None => "",
+            Section::Games => "games",
+            Section::Streams => "streams",
+            Section::History => "history",
+            Section::Calendar => "calendar",
+        }
     }
 }
 

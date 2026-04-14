@@ -21,10 +21,10 @@
     <div class="sep"></div>
     <span class="subtitle">{% block view_title %}Games{% endblock %}</span>
     <nav class="header-nav">
-      <a href="/"         class="nav-link{% if active_section.is_games()    %} active{% endif %}">Games</a>
-      <a href="/streams"  class="nav-link{% if active_section.is_streams()  %} active{% endif %}">Streams</a>
-      <a href="/history"  class="nav-link{% if active_section.is_history()  %} active{% endif %}">History</a>
-      <a href="/calendar" class="nav-link{% if active_section.is_calendar() %} active{% endif %}">Calendar</a>
+      <a href="/"         class="nav-link{% if active_section.slug() == "games"    %} active{% endif %}">Games</a>
+      <a href="/streams"  class="nav-link{% if active_section.slug() == "streams"  %} active{% endif %}">Streams</a>
+      <a href="/history"  class="nav-link{% if active_section.slug() == "history"  %} active{% endif %}">History</a>
+      <a href="/calendar" class="nav-link{% if active_section.slug() == "calendar" %} active{% endif %}">Calendar</a>
     </nav>
     <div class="header-right">
       <button class="refresh-btn" id="refreshBtn" title="Refresh VODs" onclick="refreshVods(this)">

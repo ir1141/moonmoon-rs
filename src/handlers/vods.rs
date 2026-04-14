@@ -96,7 +96,7 @@ pub async fn game_vods_page(
         has_more,
         next_url,
         show_game_tags: false,
-        active_section: Section::Games,
+        active_section: Section::None,
     };
     render_template(&tmpl)
 }

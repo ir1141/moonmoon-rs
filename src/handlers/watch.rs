@@ -36,7 +36,7 @@ pub async fn watch_page(
                 vod_id: v.id.clone(),
                 vod_title: v.title.clone().unwrap_or_else(|| "Untitled".into()),
                 youtube_ids_json,
-                active_section: Section::Streams,
+                active_section: Section::None,
             })
         }
         None => (axum::http::StatusCode::NOT_FOUND, "VOD not found").into_response(),
