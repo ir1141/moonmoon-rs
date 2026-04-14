@@ -92,6 +92,17 @@
   border-color: transparent;
 }
 
+.cal-day.future {
+  opacity: 0.12;
+  background: transparent;
+  border: 1px dashed var(--border);
+}
+
+.cal-day.future .cal-date {
+  color: var(--text-muted);
+  text-shadow: none;
+}
+
 .cal-day.has-streams {
   cursor: pointer;
   border-color: rgba(108, 92, 231, calc(0.15 + var(--glow, 0) * 0.55));

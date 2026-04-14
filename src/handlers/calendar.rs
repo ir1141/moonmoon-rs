@@ -37,6 +37,7 @@ struct CalendarPageTemplate {
     next_year: i32,
     next_month: u32,
     has_next: bool,
+    today_day: usize,
     active_section: Section,
 }
 
@@ -89,7 +90,7 @@ pub async fn calendar_page(
         .unwrap_or_default()
         .as_secs();
     let days_since_epoch = (now / 86400) as i64;
-    let (cur_year, cur_month) = {
+    let (cur_year, cur_month, cur_day) = {
         let mut y = 1970i32;
         let mut remaining = days_since_epoch;
         loop {
@@ -113,7 +114,7 @@ pub async fn calendar_page(
             remaining -= mdays;
             m += 1;
         }
-        (y, m)
+        (y, m, (remaining + 1) as u32)
     };
 
     let year = params.year.unwrap_or(cur_year).clamp(2015, cur_year + 1);
@@ -217,6 +218,11 @@ pub async fn calendar_page(
         next_year,
         next_month,
         has_next,
+        today_day: if year == cur_year && month == cur_month {
+            cur_day as usize
+        } else {
+            usize::MAX
+        },
         active_section: Section::Calendar,
     };
     render_template(&tmpl)

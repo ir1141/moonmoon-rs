@@ -52,7 +52,7 @@
       <div class="cal-duration">{{ day.duration_display }}</div>
     </a>
     {% when None %}
-    <div class="cal-day empty">
+    <div class="cal-day empty{% if loop.index > today_day %} future{% endif %}">
       <span class="cal-date dim">{{ loop.index }}</span>
     </div>
     {% endmatch %}
