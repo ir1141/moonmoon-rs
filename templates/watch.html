@@ -33,7 +33,19 @@
   </div>
 </div>
 
-<div id="vod-data" data-vod-id="{{ vod_id }}" data-youtube-ids="{{ youtube_ids_json }}"></div>
+<div id="up-next-overlay" hidden>
+  <div class="up-next-card">
+    <div class="up-next-label">Up next</div>
+    <div class="up-next-title" id="up-next-title"></div>
+    <div class="up-next-countdown">Playing in <span id="up-next-seconds">10</span>s</div>
+    <div class="up-next-actions">
+      <button id="up-next-cancel" type="button">Cancel</button>
+      <button id="up-next-play-now" type="button">Play now</button>
+    </div>
+  </div>
+</div>
+
+<div id="vod-data" data-vod-id="{{ vod_id }}" data-youtube-ids="{{ youtube_ids_json }}" data-game-hint="{{ game_hint }}"></div>
 <script src="https://www.youtube.com/iframe_api"></script>
 <script src="/static/player.js"></script>
 {% endblock %}

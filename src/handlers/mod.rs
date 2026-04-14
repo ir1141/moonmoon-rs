@@ -10,7 +10,7 @@ pub use calendar::calendar_page;
 pub use games::{games_grid, games_page};
 pub use history::{history_page, history_vods_grid};
 pub use vods::{all_streams_grid, all_streams_page, game_vods_grid, game_vods_page};
-pub use watch::{random_vod, vod_detail, watch_page};
+pub use watch::{next_in_period, random_vod, vod_detail, watch_page};
 
 use crate::vods::{Game, Vod};
 use askama::Template;
@@ -70,12 +70,20 @@ pub(crate) struct VodDisplay {
     pub created_at: String,
     pub duration_minutes: i64,
     pub duration_seconds: i64,
-    pub chapter_start: Option<i64>,
     pub period_header: Option<String>,
+    pub watch_url: String,
 }
 
 impl VodDisplay {
     pub(crate) fn from_vod(vod: &Vod) -> Self {
+        Self::from_vod_with(vod, None, None)
+    }
+
+    pub(crate) fn from_vod_with(
+        vod: &Vod,
+        chapter_start: Option<i64>,
+        game_name_hint: Option<&str>,
+    ) -> Self {
         let display_title = vod
             .title
             .clone()
@@ -84,6 +92,7 @@ impl VodDisplay {
         let game_tags = get_game_tags(vod);
         let duration_minutes = parse_duration_minutes(vod.duration.as_deref().unwrap_or(""));
         let duration_seconds = parse_duration_seconds(vod.duration.as_deref().unwrap_or(""));
+        let watch_url = build_watch_url(&vod.id, chapter_start, game_name_hint);
         VodDisplay {
             id: vod.id.clone(),
             display_title,
@@ -94,10 +103,32 @@ impl VodDisplay {
             created_at: vod.created_at.clone(),
             duration_minutes,
             duration_seconds,
-            chapter_start: None,
             period_header: None,
+            watch_url,
         }
     }
+}
+
+pub(crate) fn build_watch_url(
+    vod_id: &str,
+    chapter_start: Option<i64>,
+    game_name_hint: Option<&str>,
+) -> String {
+    let mut url = format!("/watch/{vod_id}");
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(t) = chapter_start {
+        parts.push(format!("t={t}"));
+    }
+    if let Some(g) = game_name_hint
+        && !g.is_empty()
+    {
+        parts.push(format!("game={}", urlencoding::encode(g)));
+    }
+    if !parts.is_empty() {
+        url.push('?');
+        url.push_str(&parts.join("&"));
+    }
+    url
 }
 
 // ─── Render helper ───
@@ -287,6 +318,32 @@ pub(crate) fn get_chapter_start(vod: &Vod, game_name: &str) -> Option<i64> {
         }
     }
     None
+}
+
+pub(crate) struct NextVod {
+    pub id: String,
+    pub title: String,
+}
+
+pub(crate) fn next_vod_in_period(
+    vods: &[Vod],
+    current_id: &str,
+    game_name: &str,
+) -> Option<NextVod> {
+    let mut matches: Vec<&Vod> = vods.iter().filter(|v| vod_has_game(v, game_name)).collect();
+    matches.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    let idx = matches.iter().position(|v| v.id == current_id)?;
+    let next = matches.get(idx + 1)?;
+    let curr_days = parse_ymd_to_days(&matches[idx].created_at)?;
+    let next_days = parse_ymd_to_days(&next.created_at)?;
+    if (next_days - curr_days).abs() <= PERIOD_GAP_DAYS {
+        Some(NextVod {
+            id: next.id.clone(),
+            title: next.title.clone().unwrap_or_else(|| "Untitled".into()),
+        })
+    } else {
+        None
+    }
 }
 
 pub(crate) fn vod_has_game(vod: &Vod, game_name: &str) -> bool {
@@ -586,8 +643,8 @@ mod tests {
             created_at: created_at.into(),
             duration_minutes: 0,
             duration_seconds: 0,
-            chapter_start: None,
             period_header: None,
+            watch_url: format!("/watch/{id}"),
         }
     }
 
@@ -636,6 +693,98 @@ mod tests {
         ];
         assign_period_headers(&mut displays, "longest");
         assert!(displays.iter().all(|d| d.period_header.is_none()));
+    }
+
+    fn make_vod(id: &str, created_at: &str, games: &[&str]) -> Vod {
+        Vod {
+            id: id.into(),
+            title: Some(format!("vod {id}")),
+            created_at: created_at.into(),
+            duration: Some("1h".into()),
+            thumbnail_url: None,
+            chapters: Some(
+                games
+                    .iter()
+                    .map(|g| crate::vods::Chapter {
+                        name: Some((*g).into()),
+                        image: None,
+                        start: Some(0.0),
+                    })
+                    .collect(),
+            ),
+            youtube: None,
+        }
+    }
+
+    #[test]
+    fn test_next_vod_in_period_within_gap() {
+        let vods = vec![
+            make_vod("a", "2024-01-01T00:00:00Z", &["Elden Ring"]),
+            make_vod("b", "2024-01-05T00:00:00Z", &["Elden Ring"]),
+            make_vod("c", "2024-01-10T00:00:00Z", &["Elden Ring"]),
+        ];
+        let next = next_vod_in_period(&vods, "a", "Elden Ring").unwrap();
+        assert_eq!(next.id, "b");
+    }
+
+    #[test]
+    fn test_next_vod_in_period_beyond_gap_returns_none() {
+        let vods = vec![
+            make_vod("a", "2024-01-01T00:00:00Z", &["Elden Ring"]),
+            make_vod("b", "2024-03-01T00:00:00Z", &["Elden Ring"]),
+        ];
+        assert!(next_vod_in_period(&vods, "a", "Elden Ring").is_none());
+    }
+
+    #[test]
+    fn test_next_vod_in_period_last_in_period_returns_none() {
+        let vods = vec![
+            make_vod("a", "2024-01-01T00:00:00Z", &["Elden Ring"]),
+            make_vod("b", "2024-01-05T00:00:00Z", &["Elden Ring"]),
+        ];
+        assert!(next_vod_in_period(&vods, "b", "Elden Ring").is_none());
+    }
+
+    #[test]
+    fn test_next_vod_in_period_game_not_in_vod_returns_none() {
+        let vods = vec![make_vod("a", "2024-01-01T00:00:00Z", &["Dark Souls"])];
+        assert!(next_vod_in_period(&vods, "a", "Elden Ring").is_none());
+    }
+
+    #[test]
+    fn test_next_vod_in_period_is_case_insensitive() {
+        let vods = vec![
+            make_vod("a", "2024-01-01T00:00:00Z", &["Elden Ring"]),
+            make_vod("b", "2024-01-05T00:00:00Z", &["ELDEN RING"]),
+        ];
+        let next = next_vod_in_period(&vods, "a", "elden ring").unwrap();
+        assert_eq!(next.id, "b");
+    }
+
+    #[test]
+    fn test_next_vod_in_period_filters_out_other_games() {
+        let vods = vec![
+            make_vod("a", "2024-01-01T00:00:00Z", &["Elden Ring"]),
+            make_vod("b", "2024-01-03T00:00:00Z", &["Dark Souls"]),
+            make_vod("c", "2024-01-05T00:00:00Z", &["Elden Ring"]),
+        ];
+        let next = next_vod_in_period(&vods, "a", "Elden Ring").unwrap();
+        assert_eq!(next.id, "c");
+    }
+
+    #[test]
+    fn test_build_watch_url() {
+        assert_eq!(build_watch_url("abc", None, None), "/watch/abc");
+        assert_eq!(build_watch_url("abc", Some(42), None), "/watch/abc?t=42");
+        assert_eq!(
+            build_watch_url("abc", None, Some("Elden Ring")),
+            "/watch/abc?game=Elden%20Ring"
+        );
+        assert_eq!(
+            build_watch_url("abc", Some(42), Some("Elden Ring")),
+            "/watch/abc?t=42&game=Elden%20Ring"
+        );
+        assert_eq!(build_watch_url("abc", None, Some("")), "/watch/abc");
     }
 
     #[test]

@@ -65,11 +65,7 @@ pub async fn game_vods_page(
     let mut displays: Vec<VodDisplay> = vods
         .iter()
         .filter(|v| vod_has_game(v, &name))
-        .map(|v| {
-            let mut d = VodDisplay::from_vod(v);
-            d.chapter_start = get_chapter_start(v, &name);
-            d
-        })
+        .map(|v| VodDisplay::from_vod_with(v, get_chapter_start(v, &name), Some(&name)))
         .collect();
     let vod_count = displays.len();
     filter_vod_displays(&mut displays, &params);
@@ -115,11 +111,7 @@ pub async fn game_vods_grid(
     let mut displays: Vec<VodDisplay> = vods
         .iter()
         .filter(|v| vod_has_game(v, &name))
-        .map(|v| {
-            let mut d = VodDisplay::from_vod(v);
-            d.chapter_start = get_chapter_start(v, &name);
-            d
-        })
+        .map(|v| VodDisplay::from_vod_with(v, get_chapter_start(v, &name), Some(&name)))
         .collect();
     filter_vod_displays(&mut displays, &params);
     assign_period_headers(&mut displays, &sort);

@@ -7,6 +7,8 @@
     return;
   }
   var VOD_ID = dataEl.dataset.vodId;
+  var GAME_HINT = dataEl.dataset.gameHint || '';
+  var HAS_EXPLICIT_HINT = GAME_HINT.length > 0;
   var YOUTUBE_IDS;
   try {
     YOUTUBE_IDS = JSON.parse(dataEl.dataset.youtubeIds || '[]');
@@ -625,6 +627,20 @@
     lastTickTime = globalTime;
     savePosition();
     renderChat();
+
+    // Fallback: YouTube's ENDED event is unreliable in embeds, so also trigger
+    // up-next when the final part is within 2s of its duration. Do NOT clear
+    // resume here — the real ENDED branch owns that so a mid-window cancel
+    // leaves the saved position intact.
+    if (!upNextTriggered && currentPart === YOUTUBE_IDS.length - 1) {
+      try {
+        var dur = player.getDuration();
+        var cur = player.getCurrentTime();
+        if (dur > 0 && cur >= dur - 2) {
+          maybeShowUpNext();
+        }
+      } catch (e) { /* ignore */ }
+    }
   }
 
   // ─── YouTube IFrame API ───
@@ -692,16 +708,95 @@
       if (currentPart < YOUTUBE_IDS.length - 1) {
         switchPart(currentPart + 1);
       } else {
-        // All parts finished, clear resume
+        // All parts finished, clear resume and maybe offer next VOD in the same period
         clearResume();
+        maybeShowUpNext();
       }
     }
+  }
+
+  // ─── Up Next (auto-continue to next VOD in playing period) ───
+
+  var UP_NEXT_SECONDS = 10;
+  var upNextInterval = null;
+  var upNextTriggered = false;
+  var pendingNextId = null;
+  var upNextOverlay = document.getElementById('up-next-overlay');
+  var upNextTitleEl = document.getElementById('up-next-title');
+  var upNextSecondsEl = document.getElementById('up-next-seconds');
+  var upNextCancelBtn = document.getElementById('up-next-cancel');
+  var upNextPlayNowBtn = document.getElementById('up-next-play-now');
+
+  if (upNextPlayNowBtn) {
+    upNextPlayNowBtn.addEventListener('click', function () {
+      if (!pendingNextId) return;
+      var id = pendingNextId;
+      cancelUpNext();
+      navigateToNext(id);
+    });
+  }
+  if (upNextCancelBtn) {
+    upNextCancelBtn.addEventListener('click', cancelUpNext);
+  }
+
+  function cancelUpNext() {
+    if (upNextInterval) {
+      clearInterval(upNextInterval);
+      upNextInterval = null;
+    }
+    if (upNextOverlay) upNextOverlay.hidden = true;
+  }
+
+  function navigateToNext(nextId) {
+    var url = '/watch/' + encodeURIComponent(nextId);
+    // Only propagate the game hint if the user explicitly arrived with one —
+    // otherwise a single-chapter inference would lock them into a chain.
+    if (HAS_EXPLICIT_HINT && GAME_HINT) {
+      url += '?game=' + encodeURIComponent(GAME_HINT);
+    }
+    window.location.href = url;
+  }
+
+  function maybeShowUpNext() {
+    if (!upNextOverlay) return;
+    if (upNextTriggered) return;
+    upNextTriggered = true;
+    var url = '/api/next/' + encodeURIComponent(VOD_ID);
+    if (GAME_HINT) url += '?game=' + encodeURIComponent(GAME_HINT);
+    fetch(url)
+      .then(function (res) {
+        if (res.status === 204) return null;
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data || !data.next_id) return;
+        pendingNextId = data.next_id;
+        upNextTitleEl.textContent = data.next_title || 'Next stream';
+        var remaining = UP_NEXT_SECONDS;
+        upNextSecondsEl.textContent = remaining;
+        upNextOverlay.hidden = false;
+        upNextInterval = setInterval(function () {
+          remaining -= 1;
+          if (remaining <= 0) {
+            var id = pendingNextId;
+            cancelUpNext();
+            navigateToNext(id);
+            return;
+          }
+          upNextSecondsEl.textContent = remaining;
+        }, 1000);
+      })
+      .catch(function (err) {
+        console.warn('[UpNext] lookup failed:', err);
+      });
   }
 
   // ─── Save on unload ───
 
   window.addEventListener('beforeunload', function () {
     savePosition();
+    cancelUpNext();
   });
 
   // ─── Theatre Mode ───

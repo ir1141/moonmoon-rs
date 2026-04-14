@@ -56,6 +56,7 @@ async fn main() {
         .route("/watch/{vod_id}", get(handlers::watch_page))
         .route("/api/chat/{vod_id}", get(handlers::chat_proxy))
         .route("/api/vod/{vod_id}", get(handlers::vod_detail))
+        .route("/api/next/{vod_id}", get(handlers::next_in_period))
         .route("/calendar", get(handlers::calendar_page))
         .route("/history", get(handlers::history_page))
         .route("/history/vods", get(handlers::history_vods_grid))
