@@ -241,6 +241,52 @@ pub(crate) fn assign_period_headers(displays: &mut [VodDisplay], sort: &str) {
     }
 }
 
+pub(crate) fn assign_series_headers(displays: &mut [VodDisplay], keys: &[Option<String>]) {
+    if displays.is_empty() || keys.len() != displays.len() {
+        return;
+    }
+
+    let norm = |p: &Option<String>| p.as_deref().map(|s| s.to_lowercase());
+
+    let mut run_start = 0usize;
+    for i in 1..=displays.len() {
+        let boundary = i == displays.len() || norm(&keys[i]) != norm(&keys[run_start]);
+        if boundary {
+            let count = i - run_start;
+            let label_name = keys[run_start].as_deref().unwrap_or("Untagged").to_string();
+            let noun = if count == 1 { "stream" } else { "streams" };
+            displays[run_start].period_header = Some(format!("{label_name} · {count} {noun}"));
+            run_start = i;
+        }
+    }
+}
+
+/// Picks the chapter containing `time_secs` (the last chapter whose start ≤ time).
+/// Falls back to the first chapter if no time is given or none match. Returns
+/// (chapter_name, chapter_start_seconds) or None if the VOD has no chapters.
+pub(crate) fn resolve_watched_chapter(vod: &Vod, time_secs: Option<i64>) -> Option<(String, i64)> {
+    let named: Vec<(&str, i64)> = vod
+        .chapters
+        .as_ref()?
+        .iter()
+        .filter_map(|ch| {
+            let name = ch.name.as_deref().filter(|n| !n.is_empty())?;
+            Some((name, ch.start.map(|s| s as i64).unwrap_or(0)))
+        })
+        .collect();
+
+    let pick = match time_secs {
+        Some(t) => named
+            .iter()
+            .filter(|&&(_, s)| s <= t)
+            .last()
+            .or_else(|| named.first())
+            .copied(),
+        None => named.first().copied(),
+    };
+    pick.map(|(n, s)| (n.to_string(), s))
+}
+
 fn build_period_label(oldest: &str, newest: &str, count: usize) -> String {
     let old_my = month_year(oldest);
     let new_my = month_year(newest);
@@ -689,6 +735,144 @@ mod tests {
         ];
         assign_period_headers(&mut displays, "newest");
         assert!(displays.iter().all(|d| d.period_header.is_none()));
+    }
+
+    fn display_with_games(id: &str, games: &[&str]) -> VodDisplay {
+        let mut d = make_display(id, "2024-01-01T00:00:00Z");
+        d.game_tags = games
+            .iter()
+            .map(|g| GameTag {
+                name: (*g).into(),
+                start_seconds: 0,
+            })
+            .collect();
+        d
+    }
+
+    fn keys_from_first_tag(displays: &[VodDisplay]) -> Vec<Option<String>> {
+        displays
+            .iter()
+            .map(|d| d.game_tags.first().map(|t| t.name.clone()))
+            .collect()
+    }
+
+    #[test]
+    fn test_assign_series_headers_groups_consecutive() {
+        let mut displays = vec![
+            display_with_games("1", &["Elden Ring"]),
+            display_with_games("2", &["Elden Ring"]),
+            display_with_games("3", &["Dark Souls"]),
+            display_with_games("4", &["Elden Ring"]),
+        ];
+        let keys = keys_from_first_tag(&displays);
+        assign_series_headers(&mut displays, &keys);
+        assert_eq!(
+            displays[0].period_header.as_deref(),
+            Some("Elden Ring · 2 streams")
+        );
+        assert!(displays[1].period_header.is_none());
+        assert_eq!(
+            displays[2].period_header.as_deref(),
+            Some("Dark Souls · 1 stream")
+        );
+        assert_eq!(
+            displays[3].period_header.as_deref(),
+            Some("Elden Ring · 1 stream")
+        );
+    }
+
+    #[test]
+    fn test_assign_series_headers_handles_untagged() {
+        let mut displays = vec![
+            display_with_games("1", &[]),
+            display_with_games("2", &[]),
+            display_with_games("3", &["Elden Ring"]),
+        ];
+        let keys = keys_from_first_tag(&displays);
+        assign_series_headers(&mut displays, &keys);
+        assert_eq!(
+            displays[0].period_header.as_deref(),
+            Some("Untagged · 2 streams")
+        );
+        assert!(displays[1].period_header.is_none());
+        assert_eq!(
+            displays[2].period_header.as_deref(),
+            Some("Elden Ring · 1 stream")
+        );
+    }
+
+    #[test]
+    fn test_assign_series_headers_case_insensitive() {
+        let mut displays = vec![
+            display_with_games("1", &["Elden Ring"]),
+            display_with_games("2", &["elden ring"]),
+        ];
+        let keys = keys_from_first_tag(&displays);
+        assign_series_headers(&mut displays, &keys);
+        assert_eq!(
+            displays[0].period_header.as_deref(),
+            Some("Elden Ring · 2 streams")
+        );
+        assert!(displays[1].period_header.is_none());
+    }
+
+    #[test]
+    fn test_assign_series_headers_honours_custom_keys() {
+        // Same first-chapter on both VODs, but the resume time puts the user
+        // in a later chapter on one of them — the two VODs should land in
+        // separate groups.
+        let mut displays = vec![
+            display_with_games("1", &["Just Chatting", "Terraria"]),
+            display_with_games("2", &["Just Chatting", "Terraria"]),
+        ];
+        let keys = vec![
+            Some("Just Chatting".to_string()),
+            Some("Terraria".to_string()),
+        ];
+        assign_series_headers(&mut displays, &keys);
+        assert_eq!(
+            displays[0].period_header.as_deref(),
+            Some("Just Chatting · 1 stream")
+        );
+        assert_eq!(
+            displays[1].period_header.as_deref(),
+            Some("Terraria · 1 stream")
+        );
+    }
+
+    #[test]
+    fn test_resolve_watched_chapter_picks_containing_chapter() {
+        let vod = make_vod("a", "2024-01-01T00:00:00Z", &["Just Chatting", "Terraria"]);
+        // make_vod sets all chapter starts to 0.0 — override for this test.
+        let mut vod = vod;
+        if let Some(ref mut chs) = vod.chapters {
+            chs[0].start = Some(0.0);
+            chs[1].start = Some(3600.0);
+        }
+        let (name, start) = resolve_watched_chapter(&vod, Some(5000)).unwrap();
+        assert_eq!(name, "Terraria");
+        assert_eq!(start, 3600);
+
+        let (name, _) = resolve_watched_chapter(&vod, Some(100)).unwrap();
+        assert_eq!(name, "Just Chatting");
+
+        // No time → first chapter
+        let (name, _) = resolve_watched_chapter(&vod, None).unwrap();
+        assert_eq!(name, "Just Chatting");
+    }
+
+    #[test]
+    fn test_resolve_watched_chapter_none_for_empty() {
+        let vod = Vod {
+            id: "x".into(),
+            title: None,
+            created_at: "2024-01-01T00:00:00Z".into(),
+            duration: None,
+            thumbnail_url: None,
+            chapters: Some(vec![]),
+            youtube: None,
+        };
+        assert!(resolve_watched_chapter(&vod, Some(100)).is_none());
     }
 
     #[test]

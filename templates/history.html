@@ -20,7 +20,11 @@
   var entries = [];
   for (var id in store) {
     if (store[id] && store[id].updated) {
-      entries.push({ id: id, updated: store[id].updated });
+      entries.push({
+        id: id,
+        updated: store[id].updated,
+        time: Math.floor(store[id].time || 0)
+      });
     }
   }
 
@@ -40,7 +44,8 @@
   stats.textContent = entries.length + ' watched';
 
   var ids = entries.map(function(e) { return e.id; }).join(',');
-  fetch('/history/vods?ids=' + encodeURIComponent(ids))
+  var times = entries.map(function(e) { return e.time; }).join(',');
+  fetch('/history/vods?ids=' + encodeURIComponent(ids) + '&times=' + encodeURIComponent(times))
     .then(function(r) { return r.text(); })
     .then(function(html) {
       grid.replaceChildren();
