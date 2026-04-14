@@ -1,6 +1,4 @@
-use super::{
-    Section, VodDisplay, assign_series_headers, render_template, resolve_watched_chapter,
-};
+use super::{Section, VodDisplay, assign_series_headers, render_template, resolve_watched_chapter};
 use crate::SharedState;
 use askama::Template;
 use axum::extract::{Query, State};
