@@ -37,7 +37,7 @@
     {% for day_opt in days %}
     {% match day_opt %}
     {% when Some with (day) %}
-    <a href="/streams?from={{ day.date_str }}&amp;to={{ day.date_str }}" class="cal-day has-streams" style="--glow: {{ day.glow }}">
+    <a href="/streams?from={{ day.date_str }}&amp;to={{ day.date_str }}" class="cal-day has-streams{% if loop.index == today_day %} today{% endif %}" style="--glow: {{ day.glow }}">
       <span class="cal-date">{{ day.date }}</span>
       <div class="cal-games">
         {% for game in day.games %}
@@ -52,7 +52,7 @@
       <div class="cal-duration">{{ day.duration_display }}</div>
     </a>
     {% when None %}
-    <div class="cal-day empty{% if loop.index > today_day %} future{% endif %}">
+    <div class="cal-day empty{% if loop.index == today_day %} today{% elif loop.index > today_day %} future{% endif %}">
       <span class="cal-date dim">{{ loop.index }}</span>
     </div>
     {% endmatch %}

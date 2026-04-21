@@ -103,6 +103,17 @@
   text-shadow: none;
 }
 
+.cal-day.today {
+  border: 1.5px solid var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-glow), 0 0 14px var(--accent-glow);
+  opacity: 1;
+}
+
+.cal-day.today .cal-date {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .cal-day.has-streams {
   cursor: pointer;
   border-color: rgba(108, 92, 231, calc(0.15 + var(--glow, 0) * 0.55));
