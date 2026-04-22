@@ -1,7 +1,11 @@
 {% extends "base.html" %}
 
 {% block title %}{{ vod_title }}{% endblock %}
-{% block view_title %}{{ vod_title }}{% endblock %}
+
+{% block view_title %}
+<div class="sep"></div>
+<span class="subtitle">{{ vod_title }}</span>
+{% endblock %}
 
 {% block search %}{% endblock %}
 

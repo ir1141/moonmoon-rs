@@ -37,7 +37,7 @@
   color: var(--text-dim);
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 40ch;
+  max-width: 100ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
