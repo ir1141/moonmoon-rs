@@ -9,6 +9,12 @@
 <div class="games-view">
   <div class="games-toolbar">
     <div class="stats" id="history-stats"></div>
+    <div class="games-filters">
+      <select name="sort" id="history-sort" class="toolbar-select">
+        <option value="recent">Most recently watched</option>
+        <option value="game">By game</option>
+      </select>
+    </div>
   </div>
   <div id="history-grid" class="vod-grid"></div>
 </div>
@@ -30,6 +36,7 @@
 
   var stats = document.getElementById('history-stats');
   var grid = document.getElementById('history-grid');
+  var sortSel = document.getElementById('history-sort');
 
   if (entries.length === 0) {
     stats.textContent = 'No watch history';
@@ -45,23 +52,32 @@
 
   var ids = entries.map(function(e) { return e.id; }).join(',');
   var times = entries.map(function(e) { return e.time; }).join(',');
-  fetch('/history/vods?ids=' + encodeURIComponent(ids) + '&times=' + encodeURIComponent(times))
-    .then(function(r) { return r.text(); })
-    .then(function(html) {
-      grid.replaceChildren();
-      var temp = document.createElement('template');
-      temp.innerHTML = html;
-      grid.appendChild(temp.content);
-      var evt = new CustomEvent('htmx:afterSwap', { detail: { target: grid } });
-      document.body.dispatchEvent(evt);
-    })
-    .catch(function() {
-      grid.replaceChildren();
-      var msg = document.createElement('div');
-      msg.className = 'no-results';
-      msg.textContent = 'Failed to load history';
-      grid.appendChild(msg);
-    });
+
+  function load() {
+    var url = '/history/vods?ids=' + encodeURIComponent(ids) +
+              '&times=' + encodeURIComponent(times) +
+              '&sort=' + encodeURIComponent(sortSel.value);
+    fetch(url)
+      .then(function(r) { return r.text(); })
+      .then(function(html) {
+        grid.replaceChildren();
+        var temp = document.createElement('template');
+        temp.innerHTML = html;
+        grid.appendChild(temp.content);
+        var evt = new CustomEvent('htmx:afterSwap', { detail: { target: grid } });
+        document.body.dispatchEvent(evt);
+      })
+      .catch(function() {
+        grid.replaceChildren();
+        var msg = document.createElement('div');
+        msg.className = 'no-results';
+        msg.textContent = 'Failed to load history';
+        grid.appendChild(msg);
+      });
+  }
+
+  sortSel.addEventListener('change', load);
+  load();
 })();
 </script>
 {% endblock %}

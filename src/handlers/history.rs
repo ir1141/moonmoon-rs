@@ -22,6 +22,7 @@ pub async fn history_page() -> impl IntoResponse {
 pub struct HistoryVodsQuery {
     pub ids: Option<String>,
     pub times: Option<String>,
+    pub sort: Option<String>,
 }
 
 #[derive(Template)]
@@ -59,14 +60,25 @@ pub async fn history_vods_grid(
     for (i, id) in requested_ids.iter().enumerate() {
         if let Some(vod) = vods.iter().find(|v| v.id == *id) {
             let time = resume_times.get(i).copied().flatten();
-            let (name_opt, start_opt) = match (time, resolve_watched_chapter(vod, time)) {
-                (Some(_), Some((name, start))) => (Some(name), Some(start)),
-                _ => (None, None),
-            };
+            let (name_opt, start_opt) = time
+                .and_then(|t| resolve_watched_chapter(vod, Some(t)))
+                .unzip();
             let display = VodDisplay::from_vod_with(vod, start_opt, name_opt.as_deref());
             displays.push(display);
             keys.push(name_opt);
         }
+    }
+
+    if params.sort.as_deref() == Some("game") {
+        let mut paired: Vec<(VodDisplay, Option<String>)> =
+            displays.into_iter().zip(keys).collect();
+        paired.sort_by(|a, b| {
+            let ak = a.1.as_deref().unwrap_or("").to_lowercase();
+            let bk = b.1.as_deref().unwrap_or("").to_lowercase();
+            ak.cmp(&bk)
+                .then_with(|| b.0.created_at.cmp(&a.0.created_at))
+        });
+        (displays, keys) = paired.into_iter().unzip();
     }
 
     assign_series_headers(&mut displays, &keys);
