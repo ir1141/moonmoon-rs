@@ -1,4 +1,4 @@
-use super::{Section, parse_duration_minutes, render_template};
+use super::{Section, days_to_civil, parse_duration_minutes, render_template};
 use crate::SharedState;
 use askama::Template;
 use axum::extract::{Query, State};
@@ -90,32 +90,7 @@ pub async fn calendar_page(
         .unwrap_or_default()
         .as_secs();
     let days_since_epoch = (now / 86400) as i64;
-    let (cur_year, cur_month, cur_day) = {
-        let mut y = 1970i32;
-        let mut remaining = days_since_epoch;
-        loop {
-            let ydays = if (y % 4 == 0 && y % 100 != 0) || y % 400 == 0 {
-                366
-            } else {
-                365
-            };
-            if remaining < ydays {
-                break;
-            }
-            remaining -= ydays;
-            y += 1;
-        }
-        let mut m = 1u32;
-        loop {
-            let mdays = days_in_month(y, m) as i64;
-            if remaining < mdays {
-                break;
-            }
-            remaining -= mdays;
-            m += 1;
-        }
-        (y, m, (remaining + 1) as u32)
-    };
+    let (cur_year, cur_month, cur_day) = days_to_civil(days_since_epoch);
 
     let year = params.year.unwrap_or(cur_year).clamp(2015, cur_year + 1);
     let month = params.month.unwrap_or(cur_month).clamp(1, 12);
@@ -172,8 +147,8 @@ pub async fn calendar_page(
                                     name: name.clone(),
                                     image: ch
                                         .image
-                                        .as_ref()
-                                        .map(|img| img.replace("40x53", "285x380")),
+                                        .as_deref()
+                                        .map(crate::vods::upscale_chapter_image),
                                 });
                             }
                         }

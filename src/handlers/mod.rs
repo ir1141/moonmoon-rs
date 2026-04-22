@@ -90,8 +90,8 @@ impl VodDisplay {
             .unwrap_or_else(|| "Untitled Stream".to_string());
         let formatted_date = format_date(&vod.created_at);
         let game_tags = get_game_tags(vod);
-        let duration_minutes = parse_duration_minutes(vod.duration.as_deref().unwrap_or(""));
         let duration_seconds = parse_duration_seconds(vod.duration.as_deref().unwrap_or(""));
+        let duration_minutes = duration_seconds / 60;
         let watch_url = build_watch_url(&vod.id, chapter_start, game_name_hint);
         VodDisplay {
             id: vod.id.clone(),
@@ -352,6 +352,22 @@ fn civil_to_days(year: i32, month: u32, day: u32) -> i64 {
     era * 146097 + doe - 719468
 }
 
+/// Inverse of `civil_to_days`. Howard Hinnant's algorithm.
+/// Input is days since 1970-01-01; returns (year, month, day).
+pub(crate) fn days_to_civil(days: i64) -> (i32, u32, u32) {
+    let z = days + 719468;
+    let era = z.div_euclid(146097);
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    let year = if m <= 2 { y + 1 } else { y } as i32;
+    (year, m, d)
+}
+
 pub(crate) fn get_chapter_start(vod: &Vod, game_name: &str) -> Option<i64> {
     if let Some(ref chapters) = vod.chapters {
         for ch in chapters {
@@ -487,6 +503,20 @@ pub(crate) fn parse_duration_seconds(duration: &str) -> i64 {
         }
     }
     total
+}
+
+pub(crate) fn paginate_with_nav<T>(
+    items: Vec<T>,
+    base_url: &str,
+    batch: usize,
+    params: &ListQuery,
+) -> (Vec<T>, bool, String) {
+    let page = params.page.unwrap_or(0);
+    let total = items.len();
+    let paged = paginate(items, page, batch);
+    let has_more = (page + 1) * batch < total;
+    let next_url = build_next_url(base_url, page + 1, params);
+    (paged, has_more, next_url)
 }
 
 pub(crate) fn paginate<T>(items: Vec<T>, page: usize, batch: usize) -> Vec<T> {
@@ -690,6 +720,21 @@ mod tests {
             duration_seconds: 0,
             period_header: None,
             watch_url: format!("/watch/{id}"),
+        }
+    }
+
+    #[test]
+    fn test_days_to_civil_roundtrips() {
+        for &(y, m, d) in &[
+            (1970, 1, 1),
+            (2000, 2, 29),
+            (2024, 2, 29),
+            (2025, 3, 1),
+            (2026, 4, 22),
+            (2099, 12, 31),
+        ] {
+            let days = civil_to_days(y, m, d);
+            assert_eq!(days_to_civil(days), (y, m, d));
         }
     }
 

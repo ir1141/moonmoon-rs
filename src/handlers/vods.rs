@@ -1,7 +1,6 @@
 use super::{
-    ListQuery, Section, VOD_BATCH_SIZE, VodDisplay, assign_period_headers, build_next_url,
-    filter_vod_displays, find_game_image, get_chapter_start, paginate, render_template,
-    vod_has_game,
+    ListQuery, Section, VOD_BATCH_SIZE, VodDisplay, assign_period_headers, filter_vod_displays,
+    find_game_image, get_chapter_start, paginate_with_nav, render_template, vod_has_game,
 };
 use crate::SharedState;
 use askama::Template;
@@ -48,40 +47,43 @@ struct AllStreamsPageTemplate {
     active_section: Section,
 }
 
+async fn prepare_game_vods(
+    state: &SharedState,
+    name: &str,
+    params: &ListQuery,
+    sort: &str,
+) -> (Vec<VodDisplay>, usize, bool, String) {
+    let vods = {
+        let guard = state.vods.read().await;
+        Arc::clone(&*guard)
+    };
+    let mut displays: Vec<VodDisplay> = vods
+        .iter()
+        .filter(|v| vod_has_game(v, name))
+        .map(|v| VodDisplay::from_vod_with(v, get_chapter_start(v, name), Some(name)))
+        .collect();
+    let vod_count = displays.len();
+    filter_vod_displays(&mut displays, params);
+    assign_period_headers(&mut displays, sort);
+    let base = format!("/game/{}/vods", urlencoding::encode(name));
+    let (paged, has_more, next_url) = paginate_with_nav(displays, &base, VOD_BATCH_SIZE, params);
+    (paged, vod_count, has_more, next_url)
+}
+
 pub async fn game_vods_page(
     State(state): State<SharedState>,
     Path(name): Path<String>,
     Query(params): Query<ListQuery>,
 ) -> impl IntoResponse {
-    let (vods, games) = {
-        let v = state.vods.read().await;
-        let g = state.games.read().await;
-        (Arc::clone(&*v), Arc::clone(&*g))
+    let game_image = {
+        let guard = state.games.read().await;
+        find_game_image(&guard, &name)
     };
-
-    let game_image = find_game_image(&games, &name);
-
     let sort = params.sort.clone().unwrap_or_else(|| "newest".to_string());
-    let mut displays: Vec<VodDisplay> = vods
-        .iter()
-        .filter(|v| vod_has_game(v, &name))
-        .map(|v| VodDisplay::from_vod_with(v, get_chapter_start(v, &name), Some(&name)))
-        .collect();
-    let vod_count = displays.len();
-    filter_vod_displays(&mut displays, &params);
-    assign_period_headers(&mut displays, &sort);
+    let (paged, vod_count, has_more, next_url) =
+        prepare_game_vods(&state, &name, &params, &sort).await;
 
-    let page = params.page.unwrap_or(0);
-    let total = displays.len();
-    let paged = paginate(displays, page, VOD_BATCH_SIZE);
-    let has_more = (page + 1) * VOD_BATCH_SIZE < total;
-    let next_url = build_next_url(
-        &format!("/game/{}/vods", urlencoding::encode(&name)),
-        page + 1,
-        &params,
-    );
-
-    let tmpl = VodsPageTemplate {
+    render_template(&VodsPageTemplate {
         game_name: name,
         game_image,
         vod_count,
@@ -93,8 +95,7 @@ pub async fn game_vods_page(
         next_url,
         show_game_tags: false,
         active_section: Section::None,
-    };
-    render_template(&tmpl)
+    })
 }
 
 pub async fn game_vods_grid(
@@ -102,60 +103,41 @@ pub async fn game_vods_grid(
     Path(name): Path<String>,
     Query(params): Query<ListQuery>,
 ) -> impl IntoResponse {
-    let vods = {
-        let guard = state.vods.read().await;
-        Arc::clone(&*guard)
-    };
-
     let sort = params.sort.clone().unwrap_or_else(|| "newest".to_string());
-    let mut displays: Vec<VodDisplay> = vods
-        .iter()
-        .filter(|v| vod_has_game(v, &name))
-        .map(|v| VodDisplay::from_vod_with(v, get_chapter_start(v, &name), Some(&name)))
-        .collect();
-    filter_vod_displays(&mut displays, &params);
-    assign_period_headers(&mut displays, &sort);
+    let (paged, _, has_more, next_url) = prepare_game_vods(&state, &name, &params, &sort).await;
 
-    let page = params.page.unwrap_or(0);
-    let total = displays.len();
-    let paged = paginate(displays, page, VOD_BATCH_SIZE);
-    let has_more = (page + 1) * VOD_BATCH_SIZE < total;
-    let next_url = build_next_url(
-        &format!("/game/{}/vods", urlencoding::encode(&name)),
-        page + 1,
-        &params,
-    );
-
-    let tmpl = VodsGridTemplate {
+    render_template(&VodsGridTemplate {
         vods: paged,
         has_more,
         next_url,
         show_game_tags: false,
+    })
+}
+
+async fn prepare_all_streams(
+    state: &SharedState,
+    params: &ListQuery,
+) -> (Vec<VodDisplay>, usize, bool, String) {
+    let vods = {
+        let guard = state.vods.read().await;
+        Arc::clone(&*guard)
     };
-    render_template(&tmpl)
+    let total_count = vods.len();
+    let mut displays: Vec<VodDisplay> = vods.iter().map(VodDisplay::from_vod).collect();
+    filter_vod_displays(&mut displays, params);
+    let (paged, has_more, next_url) =
+        paginate_with_nav(displays, "/streams/vods", VOD_BATCH_SIZE, params);
+    (paged, total_count, has_more, next_url)
 }
 
 pub async fn all_streams_page(
     State(state): State<SharedState>,
     Query(params): Query<ListQuery>,
 ) -> impl IntoResponse {
-    let vods = {
-        let guard = state.vods.read().await;
-        Arc::clone(&*guard)
-    };
-    let total_count = vods.len();
     let sort = params.sort.clone().unwrap_or_else(|| "newest".to_string());
+    let (paged, total_count, has_more, next_url) = prepare_all_streams(&state, &params).await;
 
-    let mut displays: Vec<VodDisplay> = vods.iter().map(VodDisplay::from_vod).collect();
-    filter_vod_displays(&mut displays, &params);
-
-    let page = params.page.unwrap_or(0);
-    let total = displays.len();
-    let paged = paginate(displays, page, VOD_BATCH_SIZE);
-    let has_more = (page + 1) * VOD_BATCH_SIZE < total;
-    let next_url = build_next_url("/streams/vods", page + 1, &params);
-
-    let tmpl = AllStreamsPageTemplate {
+    render_template(&AllStreamsPageTemplate {
         total_count,
         vods: paged,
         sort,
@@ -165,33 +147,19 @@ pub async fn all_streams_page(
         next_url,
         show_game_tags: true,
         active_section: Section::Streams,
-    };
-    render_template(&tmpl)
+    })
 }
 
 pub async fn all_streams_grid(
     State(state): State<SharedState>,
     Query(params): Query<ListQuery>,
 ) -> impl IntoResponse {
-    let vods = {
-        let guard = state.vods.read().await;
-        Arc::clone(&*guard)
-    };
+    let (paged, _, has_more, next_url) = prepare_all_streams(&state, &params).await;
 
-    let mut displays: Vec<VodDisplay> = vods.iter().map(VodDisplay::from_vod).collect();
-    filter_vod_displays(&mut displays, &params);
-
-    let page = params.page.unwrap_or(0);
-    let total = displays.len();
-    let paged = paginate(displays, page, VOD_BATCH_SIZE);
-    let has_more = (page + 1) * VOD_BATCH_SIZE < total;
-    let next_url = build_next_url("/streams/vods", page + 1, &params);
-
-    let tmpl = VodsGridTemplate {
+    render_template(&VodsGridTemplate {
         vods: paged,
         has_more,
         next_url,
         show_game_tags: true,
-    };
-    render_template(&tmpl)
+    })
 }

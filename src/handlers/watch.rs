@@ -1,4 +1,4 @@
-use super::{Section, next_vod_in_period, render_template};
+use super::{Section, get_game_tags, next_vod_in_period, render_template};
 use crate::SharedState;
 use askama::Template;
 use axum::extract::{Path, Query, State};
@@ -86,19 +86,9 @@ pub async fn next_in_period(
     let game = match params.game.filter(|s| !s.is_empty()) {
         Some(g) => g,
         None => {
-            let mut names: Vec<String> = Vec::new();
-            if let Some(ref chapters) = current.chapters {
-                for ch in chapters {
-                    if let Some(ref n) = ch.name
-                        && !n.is_empty()
-                        && !names.iter().any(|x| x.eq_ignore_ascii_case(n))
-                    {
-                        names.push(n.clone());
-                    }
-                }
-            }
-            if names.len() == 1 {
-                names.remove(0)
+            let mut tags = get_game_tags(current);
+            if tags.len() == 1 {
+                tags.remove(0).name
             } else {
                 return StatusCode::NO_CONTENT.into_response();
             }

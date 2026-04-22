@@ -42,6 +42,10 @@ struct ApiResponse {
     pub total: usize,
 }
 
+pub fn upscale_chapter_image(url: &str) -> String {
+    url.replace("40x53", "285x380")
+}
+
 const API: &str = "https://archive.overpowered.tv/moonmoon/vods";
 const PAGE_SIZE: usize = 50;
 const MAX_429_RETRIES: usize = 3;
@@ -213,7 +217,7 @@ pub fn build_games(vods: &[Vod]) -> Vec<Game> {
                     });
                     entry.vod_count += 1;
                     if entry.image.is_none() {
-                        entry.image = ch.image.as_ref().map(|img| img.replace("40x53", "285x380"));
+                        entry.image = ch.image.as_deref().map(upscale_chapter_image);
                     }
                 }
             }
