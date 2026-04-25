@@ -35,7 +35,7 @@ Rust edition 2024.
 cargo run
 ```
 
-Serves on `http://0.0.0.0:3000`. On first launch it fetches every VOD from `https://archive.overpowered.tv/moonmoon/vods` and writes `data/vods.json`. Subsequent launches reuse that cache if it's younger than 24 hours.
+Serves on `http://0.0.0.0:3000`. Every boot fetches the full VOD catalog from `https://archive.overpowered.tv/moonmoon/vods` (concurrent paged fetch, ~2-3 seconds). A background task refreshes every 6 hours, gated by a cheap upstream `total`-changed check so idle ticks cost one tiny request.
 
 ```sh
 RUST_LOG=moonmoon=debug cargo run   # verbose logs
@@ -90,7 +90,6 @@ templates/               # Askama templates (compiled into the binary)
 static/
 ├── player.js            # Player logic, chat sync, emotes, resume, Up Next overlay
 └── css/                 # Split per concern: base, header, games, vods, calendar, player
-data/vods.json           # Cached upstream payload (gitignored)
 ```
 
 ### State
