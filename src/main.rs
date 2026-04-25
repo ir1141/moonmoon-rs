@@ -34,18 +34,17 @@ async fn main() {
         .expect("failed to build HTTP client");
 
     const BOOT_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
-    let all_vods = match tokio::time::timeout(BOOT_FETCH_TIMEOUT, vods::load_vods(&http_client))
-        .await
-    {
-        Ok(v) => v,
-        Err(_) => {
-            tracing::error!(
-                "boot fetch timed out after {:?}; starting with 0 vods",
-                BOOT_FETCH_TIMEOUT
-            );
-            Vec::new()
-        }
-    };
+    let all_vods =
+        match tokio::time::timeout(BOOT_FETCH_TIMEOUT, vods::load_vods(&http_client)).await {
+            Ok(v) => v,
+            Err(_) => {
+                tracing::error!(
+                    "boot fetch timed out after {:?}; starting with 0 vods",
+                    BOOT_FETCH_TIMEOUT
+                );
+                Vec::new()
+            }
+        };
     tracing::info!("ready with {} vods", all_vods.len());
 
     let games = vods::build_games(&all_vods);
@@ -56,6 +55,30 @@ async fn main() {
         games: RwLock::new(Arc::new(games)),
         http_client,
         refresh_lock: tokio::sync::Mutex::new(()),
+    });
+
+    const REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
+    let refresh_state = Arc::clone(&state);
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(REFRESH_INTERVAL);
+        tick.tick().await; // swallow the immediate first tick — boot just fetched
+        loop {
+            tick.tick().await;
+            match vods::refresh_in_place(&refresh_state).await {
+                vods::RefreshOutcome::Refreshed(n) => {
+                    tracing::info!("tick refresh: refreshed {n} vods")
+                }
+                vods::RefreshOutcome::Unchanged(n) => {
+                    tracing::debug!("tick refresh: unchanged ({n})")
+                }
+                vods::RefreshOutcome::Busy => {
+                    tracing::debug!("tick refresh: skipped (busy)")
+                }
+                vods::RefreshOutcome::Error(e) => {
+                    tracing::warn!("tick refresh: {e}")
+                }
+            }
+        }
     });
 
     let app = Router::new()
