@@ -57,6 +57,7 @@ pub fn upscale_chapter_image(url: &str) -> String {
 
 const API: &str = "https://archive.overpowered.tv/moonmoon/vods";
 const PAGE_SIZE: usize = 50;
+const MAX_CONCURRENT_PAGES: usize = 4;
 const MAX_429_RETRIES: usize = 3;
 const INITIAL_429_BACKOFF_MS: u64 = 250;
 
@@ -108,32 +109,56 @@ pub async fn fetch_vod_count(client: &reqwest::Client) -> Result<usize, reqwest:
 }
 
 pub async fn fetch_all_vods(client: &reqwest::Client) -> Result<Vec<Vod>, reqwest::Error> {
-    let first = fetch_api_response(client, &format!("{API}?$limit=1&$skip=0")).await?;
+    use std::sync::Arc;
+    use tokio::sync::Semaphore;
+    use tokio::task::JoinSet;
 
+    let first = fetch_api_response(client, &page_url(0)).await?;
     let total = first.total;
     tracing::info!("fetching {total} vods...");
-    let mut all_vods = Vec::with_capacity(total);
-    let mut skip = 0;
 
-    while skip < total {
-        let resp = fetch_api_response(
-            client,
-            &format!("{API}?$limit={PAGE_SIZE}&$skip={skip}&$sort[createdAt]=-1"),
-        )
-        .await?;
-        let got = resp.data.len();
-        if got == 0 {
-            break;
-        }
-        all_vods.extend(resp.data);
-        skip += got;
-        tracing::info!("{} / {} vods", all_vods.len().min(total), total);
-        if got < PAGE_SIZE {
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    let total_pages = pages(total);
+    if total_pages == 0 {
+        return Ok(Vec::new());
     }
-    Ok(all_vods)
+
+    let mut buckets: Vec<Option<Vec<Vod>>> = (0..total_pages).map(|_| None).collect();
+    buckets[0] = Some(first.data);
+
+    if total_pages > 1 {
+        let sem = Arc::new(Semaphore::new(MAX_CONCURRENT_PAGES));
+        let mut joins: JoinSet<Result<(usize, Vec<Vod>), reqwest::Error>> = JoinSet::new();
+
+        for page_idx in 1..total_pages {
+            let permit = Arc::clone(&sem)
+                .acquire_owned()
+                .await
+                .expect("semaphore not closed");
+            let client = client.clone();
+            joins.spawn(async move {
+                let _permit = permit;
+                let resp = fetch_api_response(&client, &page_url(page_idx * PAGE_SIZE)).await?;
+                Ok((page_idx, resp.data))
+            });
+        }
+
+        while let Some(res) = joins.join_next().await {
+            let (idx, data) = res.expect("page-fetch task panicked")?;
+            buckets[idx] = Some(data);
+            tracing::debug!("page {} of {} done", idx + 1, total_pages);
+        }
+    }
+
+    let result: Vec<Vod> = buckets
+        .into_iter()
+        .collect::<Option<Vec<Vec<Vod>>>>()
+        .expect("all page slots filled before flatten")
+        .into_iter()
+        .flatten()
+        .collect();
+
+    tracing::info!("{} / {} vods fetched", result.len(), total);
+    Ok(result)
 }
 
 fn read_cache() -> Option<Vec<Vod>> {
