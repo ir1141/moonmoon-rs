@@ -60,6 +60,10 @@ fn page_url(skip: usize) -> String {
     )
 }
 
+fn pages(total: usize) -> usize {
+    total.div_ceil(PAGE_SIZE)
+}
+
 fn backoff_delay(attempt: usize) -> Duration {
     Duration::from_millis(INITIAL_429_BACKOFF_MS.saturating_mul(1_u64 << attempt.min(6)))
 }
@@ -344,5 +348,15 @@ mod tests {
     fn test_page_url_skip_zero() {
         let url = page_url(0);
         assert!(url.contains("$skip=0"));
+    }
+
+    #[test]
+    fn test_pages_handles_edges() {
+        assert_eq!(pages(0), 0);
+        assert_eq!(pages(1), 1);
+        assert_eq!(pages(50), 1);
+        assert_eq!(pages(51), 2);
+        assert_eq!(pages(100), 2);
+        assert_eq!(pages(1419), 29);
     }
 }
