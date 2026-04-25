@@ -35,7 +35,7 @@ Rust edition 2024.
 cargo run
 ```
 
-Serves on `http://0.0.0.0:3000`. Every boot fetches the full VOD catalog from `https://archive.overpowered.tv/moonmoon/vods` (concurrent paged fetch, ~2-3 seconds). A background task refreshes every 6 hours, gated by a cheap upstream `total`-changed check so idle ticks cost one tiny request.
+Serves on `http://0.0.0.0:3000`. Every boot fetches the full VOD catalog from `https://archive.overpowered.tv/moonmoon/vods` (sequential paged fetch, 50 VODs per page). A background task refreshes every 6 hours, gated by a cheap upstream `total`-changed check so idle ticks cost one tiny request.
 
 ```sh
 RUST_LOG=moonmoon=debug cargo run   # verbose logs

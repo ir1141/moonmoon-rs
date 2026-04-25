@@ -53,8 +53,7 @@ pub fn upscale_chapter_image(url: &str) -> String {
 
 const API: &str = "https://archive.overpowered.tv/moonmoon/vods";
 const PAGE_SIZE: usize = 50;
-const MAX_CONCURRENT_PAGES: usize = 4;
-const MAX_429_RETRIES: usize = 3;
+const MAX_429_RETRIES: usize = 6;
 const INITIAL_429_BACKOFF_MS: u64 = 250;
 
 fn page_url(skip: usize) -> String {
@@ -74,6 +73,28 @@ fn backoff_delay(attempt: usize) -> Duration {
     Duration::from_millis(INITIAL_429_BACKOFF_MS.saturating_mul(1_u64 << attempt.min(6)))
 }
 
+// Spread retries randomly across [0.5x, 1.5x] of `base` so concurrent
+// in-flight requests that all hit 429 don't wake up at the same instant
+// and re-collide on the upstream.
+fn jittered(base: Duration) -> Duration {
+    use rand::Rng;
+    let ms = u64::try_from(base.as_millis()).unwrap_or(u64::MAX);
+    let half = ms / 2;
+    let span = ms; // 0..=ms added to half → 0.5x..1.5x of base
+    let extra = rand::rng().random_range(0..=span);
+    Duration::from_millis(half.saturating_add(extra))
+}
+
+fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
+    headers
+        .get(reqwest::header::RETRY_AFTER)?
+        .to_str()
+        .ok()?
+        .parse::<u64>()
+        .ok()
+        .map(Duration::from_secs)
+}
+
 fn should_retry(status: reqwest::StatusCode, attempt: usize) -> bool {
     status == reqwest::StatusCode::TOO_MANY_REQUESTS && attempt < MAX_429_RETRIES
 }
@@ -86,10 +107,13 @@ async fn fetch_api_response(
     loop {
         let resp = client.get(url).send().await?;
         if should_retry(resp.status(), attempt) {
-            let delay = backoff_delay(attempt);
+            let base = parse_retry_after(resp.headers()).unwrap_or_else(|| backoff_delay(attempt));
+            let delay = jittered(base);
             tracing::warn!(
-                "rate limited fetching {url}; retrying in {}ms",
-                delay.as_millis()
+                "rate limited fetching {url}; retrying in {}ms (attempt {}/{})",
+                delay.as_millis(),
+                attempt + 1,
+                MAX_429_RETRIES
             );
             tokio::time::sleep(delay).await;
             attempt += 1;
@@ -105,10 +129,6 @@ pub async fn fetch_vod_count(client: &reqwest::Client) -> Result<usize, reqwest:
 }
 
 pub async fn fetch_all_vods(client: &reqwest::Client) -> Result<Vec<Vod>, reqwest::Error> {
-    use std::sync::Arc;
-    use tokio::sync::Semaphore;
-    use tokio::task::JoinSet;
-
     let first = fetch_api_response(client, &page_url(0)).await?;
     let total = first.total;
     tracing::info!("fetching {total} vods...");
@@ -118,40 +138,14 @@ pub async fn fetch_all_vods(client: &reqwest::Client) -> Result<Vec<Vod>, reqwes
         return Ok(Vec::new());
     }
 
-    let mut buckets: Vec<Option<Vec<Vod>>> = (0..total_pages).map(|_| None).collect();
-    buckets[0] = Some(first.data);
+    let mut result: Vec<Vod> = Vec::with_capacity(total);
+    result.extend(first.data);
 
-    if total_pages > 1 {
-        let sem = Arc::new(Semaphore::new(MAX_CONCURRENT_PAGES));
-        let mut joins: JoinSet<Result<(usize, Vec<Vod>), reqwest::Error>> = JoinSet::new();
-
-        for page_idx in 1..total_pages {
-            let permit = Arc::clone(&sem)
-                .acquire_owned()
-                .await
-                .expect("semaphore not closed");
-            let client = client.clone();
-            joins.spawn(async move {
-                let _permit = permit;
-                let resp = fetch_api_response(&client, &page_url(page_idx * PAGE_SIZE)).await?;
-                Ok((page_idx, resp.data))
-            });
-        }
-
-        while let Some(res) = joins.join_next().await {
-            let (idx, data) = res.expect("page-fetch task panicked")?;
-            buckets[idx] = Some(data);
-            tracing::debug!("page {} of {} done", idx + 1, total_pages);
-        }
+    for page_idx in 1..total_pages {
+        let resp = fetch_api_response(client, &page_url(page_idx * PAGE_SIZE)).await?;
+        result.extend(resp.data);
+        tracing::debug!("page {} of {} done", page_idx + 1, total_pages);
     }
-
-    let result: Vec<Vod> = buckets
-        .into_iter()
-        .collect::<Option<Vec<Vec<Vod>>>>()
-        .expect("all page slots filled before flatten")
-        .into_iter()
-        .flatten()
-        .collect();
 
     tracing::info!("{} / {} vods fetched", result.len(), total);
     Ok(result)
@@ -331,6 +325,50 @@ mod tests {
         assert_eq!(backoff_delay(0), Duration::from_millis(250));
         assert_eq!(backoff_delay(1), Duration::from_millis(500));
         assert_eq!(backoff_delay(2), Duration::from_millis(1000));
+    }
+
+    #[test]
+    fn test_jittered_stays_in_band() {
+        let base = Duration::from_millis(1000);
+        for _ in 0..100 {
+            let d = jittered(base);
+            assert!(
+                d >= Duration::from_millis(500) && d <= Duration::from_millis(1500),
+                "jittered out of [0.5x, 1.5x]: {d:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_jittered_varies() {
+        let base = Duration::from_millis(1000);
+        let samples: std::collections::HashSet<_> = (0..50).map(|_| jittered(base)).collect();
+        assert!(samples.len() > 1, "jitter produced identical values");
+    }
+
+    #[test]
+    fn test_parse_retry_after_seconds() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(reqwest::header::RETRY_AFTER, "3".parse().unwrap());
+        assert_eq!(parse_retry_after(&headers), Some(Duration::from_secs(3)));
+    }
+
+    #[test]
+    fn test_parse_retry_after_missing() {
+        let headers = reqwest::header::HeaderMap::new();
+        assert_eq!(parse_retry_after(&headers), None);
+    }
+
+    #[test]
+    fn test_parse_retry_after_non_numeric() {
+        // HTTP-date format is valid per spec but we don't handle it; should
+        // gracefully fall through to our exponential backoff instead of panicking.
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            reqwest::header::RETRY_AFTER,
+            "Wed, 21 Oct 2026 07:28:00 GMT".parse().unwrap(),
+        );
+        assert_eq!(parse_retry_after(&headers), None);
     }
 
     #[test]
