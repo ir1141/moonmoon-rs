@@ -80,16 +80,16 @@ Removing the cache also nudges us to fix latent inefficiency in `fetch_all_vods`
     &$select[]=duration&$select[]=thumbnail_url
     &$select[]=chapters&$select[]=youtube
   ```
-- `pages(total: usize) -> usize` (ceiling division).
+- `pages(total: usize) -> usize` — implemented as `total.div_ceil(PAGE_SIZE)` (stable in edition 2024).
 - `pub async fn refresh_in_place(state: &SharedState) -> RefreshOutcome` containing the body of today's `handlers::api::refresh_vods` minus the cache-write step. Used by both the HTTP handler and the 6h ticker.
-- `pub enum RefreshOutcome { Busy, Unchanged(usize), Refreshed(usize), Error(String) }`.
+- `#[must_use] pub enum RefreshOutcome { Busy, Unchanged(usize), Refreshed(usize), Error(String) }`.
 
 **Rewrite `fetch_all_vods`:**
 1. Fetch page 0 synchronously; learn `total` from its response (no priming `$limit=1` request).
 2. Pre-allocate `Vec<Option<Vec<Vod>>>` of length `pages(total)`; set slot 0 from step 1.
-3. Spawn the remaining pages onto a `JoinSet`, gated by `Arc<Semaphore::new(MAX_CONCURRENT_PAGES)>`. Each task acquires an owned permit, calls `fetch_api_response`, and returns `(idx, Vec<Vod>)`.
-4. Drain the `JoinSet`. Any task error → return `Err` immediately; partial results are discarded (all-or-nothing).
-5. Flatten the index-ordered slots into a single `Vec<Vod>`.
+3. Spawn the remaining pages onto a `JoinSet`, gated by `Arc<Semaphore::new(MAX_CONCURRENT_PAGES)>`. Each task acquires an owned permit (`.expect("semaphore not closed")` — never closed by us), calls `fetch_api_response`, and returns `(idx, Vec<Vod>)`.
+4. Drain the `JoinSet`. Any task error → return `Err` immediately; partial results are discarded (all-or-nothing). On `JoinError` (task panic), `.expect("page-fetch task panicked")` propagates with a descriptive message rather than a bare `.unwrap()`.
+5. Flatten the index-ordered slots into a single `Vec<Vod>`. (Implementation tip: `collect::<Option<Vec<_>>>()` will fail fast if any slot is unexpectedly `None`, surfacing a logic bug instead of silently dropping pages.)
 
 `fetch_api_response`, `fetch_vod_count`, `should_retry`, `backoff_delay`, `build_games`, `upscale_chapter_image`: unchanged.
 
