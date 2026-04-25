@@ -103,18 +103,27 @@ mod tests {
     #[test]
     fn test_outcome_to_json_unchanged() {
         let v = outcome_to_json(RefreshOutcome::Unchanged(1419));
-        assert_eq!(v, serde_json::json!({ "status": "unchanged", "count": 1419 }));
+        assert_eq!(
+            v,
+            serde_json::json!({ "status": "unchanged", "count": 1419 })
+        );
     }
 
     #[test]
     fn test_outcome_to_json_refreshed() {
         let v = outcome_to_json(RefreshOutcome::Refreshed(1420));
-        assert_eq!(v, serde_json::json!({ "status": "refreshed", "count": 1420 }));
+        assert_eq!(
+            v,
+            serde_json::json!({ "status": "refreshed", "count": 1420 })
+        );
     }
 
     #[test]
     fn test_outcome_to_json_error() {
         let v = outcome_to_json(RefreshOutcome::Error("boom".into()));
-        assert_eq!(v, serde_json::json!({ "status": "error", "message": "boom" }));
+        assert_eq!(
+            v,
+            serde_json::json!({ "status": "error", "message": "boom" })
+        );
     }
 }

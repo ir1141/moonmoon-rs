@@ -1,9 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::path::Path;
-use std::time::{Duration, SystemTime};
-
-const CACHE_PATH: &str = "data/vods.json";
-const CACHE_MAX_AGE_SECS: u64 = 86400;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Vod {
@@ -161,85 +157,13 @@ pub async fn fetch_all_vods(client: &reqwest::Client) -> Result<Vec<Vod>, reqwes
     Ok(result)
 }
 
-fn read_cache() -> Option<Vec<Vod>> {
-    let path = Path::new(CACHE_PATH);
-    if !path.exists() {
-        return None;
-    }
-    let metadata = match std::fs::metadata(path) {
-        Ok(m) => m,
-        Err(e) => {
-            tracing::warn!("cache metadata error: {e}");
-            return None;
-        }
-    };
-    let modified = match metadata.modified() {
-        Ok(m) => m,
-        Err(e) => {
-            tracing::warn!("cache modified time error: {e}");
-            return None;
-        }
-    };
-    let age = match SystemTime::now().duration_since(modified) {
-        Ok(a) => a,
-        Err(e) => {
-            tracing::warn!("cache time error (clock skew?): {e}");
-            return None;
-        }
-    };
-    if age.as_secs() > CACHE_MAX_AGE_SECS {
-        tracing::info!("cache is {}s old, refreshing", age.as_secs());
-        return None;
-    }
-    tracing::info!("loading from cache ({}s old)", age.as_secs());
-    let data = match std::fs::read_to_string(path) {
-        Ok(d) => d,
-        Err(e) => {
-            tracing::warn!("cache read error: {e}");
-            return None;
-        }
-    };
-    match serde_json::from_str(&data) {
-        Ok(vods) => Some(vods),
-        Err(e) => {
-            tracing::warn!("cache parse error: {e}");
-            None
-        }
-    }
-}
-
-pub fn write_cache(vods: &[Vod]) {
-    if let Some(parent) = Path::new(CACHE_PATH).parent()
-        && let Err(e) = std::fs::create_dir_all(parent)
-    {
-        tracing::warn!("failed to create cache directory {:?}: {e}", parent);
-    }
-    match serde_json::to_string(vods) {
-        Ok(json) => {
-            if let Err(e) = std::fs::write(CACHE_PATH, json) {
-                tracing::warn!("failed to write cache: {e}");
-            } else {
-                tracing::info!("cache written ({} vods)", vods.len());
-            }
-        }
-        Err(e) => tracing::warn!("failed to serialize cache: {e}"),
-    }
-}
-
 pub async fn load_vods(client: &reqwest::Client) -> Vec<Vod> {
-    if let Some(vods) = read_cache() {
-        tracing::info!("loaded {} vods from cache", vods.len());
-        return vods;
-    }
     match fetch_all_vods(client).await {
-        Ok(vods) => {
-            write_cache(&vods);
-            vods
-        }
+        Ok(vods) => vods,
         Err(e) => {
             tracing::error!("failed to fetch vods: {e}");
-            tracing::error!("starting with 0 vods — site will be empty");
-            vec![]
+            tracing::error!("starting with 0 vods — site will be empty until next refresh");
+            Vec::new()
         }
     }
 }
@@ -311,11 +235,6 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
     let new_vods = std::sync::Arc::new(new_vods);
     let new_games = std::sync::Arc::new(build_games(&new_vods));
     let count = new_vods.len();
-
-    let vods_for_cache = std::sync::Arc::clone(&new_vods);
-    if let Err(e) = tokio::task::spawn_blocking(move || write_cache(&vods_for_cache)).await {
-        tracing::warn!("refresh: cache write task join error: {e}");
-    }
 
     {
         let mut vods_w = state.vods.write().await;
@@ -422,7 +341,13 @@ mod tests {
         assert!(url.contains("$skip=100"), "missing $skip=100: {url}");
         assert!(url.contains("$sort[createdAt]=-1"), "missing $sort: {url}");
         for field in [
-            "id", "title", "createdAt", "duration", "thumbnail_url", "chapters", "youtube",
+            "id",
+            "title",
+            "createdAt",
+            "duration",
+            "thumbnail_url",
+            "chapters",
+            "youtube",
         ] {
             assert!(
                 url.contains(&format!("$select[]={field}")),
