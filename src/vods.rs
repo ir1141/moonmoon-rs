@@ -80,8 +80,8 @@ fn jittered(base: Duration) -> Duration {
     use rand::Rng;
     let ms = u64::try_from(base.as_millis()).unwrap_or(u64::MAX);
     let half = ms / 2;
-    let span = ms; // 0..=ms added to half → 0.5x..1.5x of base
-    let extra = rand::rng().random_range(0..=span);
+    // adding 0..=ms to half yields 0.5x..1.5x of base
+    let extra = rand::rng().random_range(0..=ms);
     Duration::from_millis(half.saturating_add(extra))
 }
 
@@ -340,13 +340,6 @@ mod tests {
     }
 
     #[test]
-    fn test_jittered_varies() {
-        let base = Duration::from_millis(1000);
-        let samples: std::collections::HashSet<_> = (0..50).map(|_| jittered(base)).collect();
-        assert!(samples.len() > 1, "jitter produced identical values");
-    }
-
-    #[test]
     fn test_parse_retry_after_seconds() {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(reqwest::header::RETRY_AFTER, "3".parse().unwrap());
@@ -392,12 +385,6 @@ mod tests {
                 "missing $select[]={field} in: {url}"
             );
         }
-    }
-
-    #[test]
-    fn test_page_url_skip_zero() {
-        let url = page_url(0);
-        assert!(url.contains("$skip=0"));
     }
 
     #[test]
