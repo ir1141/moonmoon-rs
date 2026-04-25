@@ -33,7 +33,19 @@ async fn main() {
         .build()
         .expect("failed to build HTTP client");
 
-    let all_vods = vods::load_vods(&http_client).await;
+    const BOOT_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+    let all_vods = match tokio::time::timeout(BOOT_FETCH_TIMEOUT, vods::load_vods(&http_client))
+        .await
+    {
+        Ok(v) => v,
+        Err(_) => {
+            tracing::error!(
+                "boot fetch timed out after {:?}; starting with 0 vods",
+                BOOT_FETCH_TIMEOUT
+            );
+            Vec::new()
+        }
+    };
     tracing::info!("ready with {} vods", all_vods.len());
 
     let games = vods::build_games(&all_vods);
