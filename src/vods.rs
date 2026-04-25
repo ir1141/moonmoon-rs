@@ -36,6 +36,15 @@ pub struct Game {
     pub vod_count: usize,
 }
 
+#[must_use]
+#[derive(Debug, Clone)]
+pub enum RefreshOutcome {
+    Busy,
+    Unchanged(usize),
+    Refreshed(usize),
+    Error(String),
+}
+
 #[derive(Deserialize)]
 struct ApiResponse {
     pub data: Vec<Vod>,
@@ -239,6 +248,59 @@ pub fn build_games(vods: &[Vod]) -> Vec<Game> {
     let mut games: Vec<Game> = games.into_values().collect();
     games.sort_by(|a, b| b.vod_count.cmp(&a.vod_count));
     games
+}
+
+pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
+    let _refresh_guard = match state.refresh_lock.try_lock() {
+        Ok(g) => g,
+        Err(_) => {
+            tracing::info!("refresh: already in progress, skipping");
+            return RefreshOutcome::Busy;
+        }
+    };
+
+    let cached_count = state.vods.read().await.len();
+
+    let remote_count = match fetch_vod_count(&state.http_client).await {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("refresh: failed to check vod count: {e}");
+            return RefreshOutcome::Error(format!("failed to check vod count: {e}"));
+        }
+    };
+
+    if remote_count == cached_count {
+        tracing::info!("refresh: vod count unchanged ({cached_count})");
+        return RefreshOutcome::Unchanged(cached_count);
+    }
+
+    tracing::info!("refresh: vod count changed ({cached_count} -> {remote_count}), fetching...");
+    let new_vods = match fetch_all_vods(&state.http_client).await {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!("refresh: failed to fetch vods: {e}");
+            return RefreshOutcome::Error(format!("failed to fetch vods: {e}"));
+        }
+    };
+
+    let new_vods = std::sync::Arc::new(new_vods);
+    let new_games = std::sync::Arc::new(build_games(&new_vods));
+    let count = new_vods.len();
+
+    let vods_for_cache = std::sync::Arc::clone(&new_vods);
+    if let Err(e) = tokio::task::spawn_blocking(move || write_cache(&vods_for_cache)).await {
+        tracing::warn!("refresh: cache write task join error: {e}");
+    }
+
+    {
+        let mut vods_w = state.vods.write().await;
+        let mut games_w = state.games.write().await;
+        *vods_w = new_vods;
+        *games_w = new_games;
+    }
+
+    tracing::info!("refresh: complete ({count} vods)");
+    RefreshOutcome::Refreshed(count)
 }
 
 #[cfg(test)]

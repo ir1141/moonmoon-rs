@@ -3,7 +3,6 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
 use serde::Deserialize;
-use std::sync::Arc;
 
 // ─── Chat proxy ───
 
@@ -70,65 +69,52 @@ pub async fn chat_proxy(
 // ─── Manual Refresh ───
 
 pub async fn refresh_vods(State(state): State<SharedState>) -> Json<serde_json::Value> {
-    let _refresh_guard = match state.refresh_lock.try_lock() {
-        Ok(g) => g,
-        Err(_) => {
-            tracing::info!("refresh: already in progress, skipping");
-            return Json(serde_json::json!({ "status": "busy" }));
+    let outcome = crate::vods::refresh_in_place(&state).await;
+    Json(outcome_to_json(outcome))
+}
+
+fn outcome_to_json(outcome: crate::vods::RefreshOutcome) -> serde_json::Value {
+    use crate::vods::RefreshOutcome;
+    match outcome {
+        RefreshOutcome::Busy => serde_json::json!({ "status": "busy" }),
+        RefreshOutcome::Unchanged(count) => {
+            serde_json::json!({ "status": "unchanged", "count": count })
         }
-    };
-
-    let cached_count = state.vods.read().await.len();
-
-    let remote_count = match crate::vods::fetch_vod_count(&state.http_client).await {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::error!("refresh: failed to check vod count: {e}");
-            return Json(serde_json::json!({
-                "status": "error",
-                "message": format!("failed to check vod count: {e}")
-            }));
+        RefreshOutcome::Refreshed(count) => {
+            serde_json::json!({ "status": "refreshed", "count": count })
         }
-    };
+        RefreshOutcome::Error(message) => {
+            serde_json::json!({ "status": "error", "message": message })
+        }
+    }
+}
 
-    if remote_count == cached_count {
-        tracing::info!("refresh: vod count unchanged ({cached_count})");
-        return Json(serde_json::json!({
-            "status": "unchanged",
-            "count": cached_count
-        }));
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::vods::RefreshOutcome;
+
+    #[test]
+    fn test_outcome_to_json_busy() {
+        let v = outcome_to_json(RefreshOutcome::Busy);
+        assert_eq!(v, serde_json::json!({ "status": "busy" }));
     }
 
-    tracing::info!("refresh: vod count changed ({cached_count} -> {remote_count}), fetching...");
-    let new_vods = match crate::vods::fetch_all_vods(&state.http_client).await {
-        Ok(v) => v,
-        Err(e) => {
-            tracing::error!("refresh: failed to fetch vods: {e}");
-            return Json(serde_json::json!({
-                "status": "error",
-                "message": format!("failed to fetch vods: {e}")
-            }));
-        }
-    };
-
-    let new_vods = Arc::new(new_vods);
-    let new_games = Arc::new(crate::vods::build_games(&new_vods));
-    let count = new_vods.len();
-
-    let vods_for_cache = Arc::clone(&new_vods);
-    if let Err(e) =
-        tokio::task::spawn_blocking(move || crate::vods::write_cache(&vods_for_cache)).await
-    {
-        tracing::warn!("refresh: cache write task join error: {e}");
+    #[test]
+    fn test_outcome_to_json_unchanged() {
+        let v = outcome_to_json(RefreshOutcome::Unchanged(1419));
+        assert_eq!(v, serde_json::json!({ "status": "unchanged", "count": 1419 }));
     }
 
-    {
-        let mut vods_w = state.vods.write().await;
-        let mut games_w = state.games.write().await;
-        *vods_w = new_vods;
-        *games_w = new_games;
+    #[test]
+    fn test_outcome_to_json_refreshed() {
+        let v = outcome_to_json(RefreshOutcome::Refreshed(1420));
+        assert_eq!(v, serde_json::json!({ "status": "refreshed", "count": 1420 }));
     }
 
-    tracing::info!("refresh: complete ({count} vods)");
-    Json(serde_json::json!({ "status": "refreshed", "count": count }))
+    #[test]
+    fn test_outcome_to_json_error() {
+        let v = outcome_to_json(RefreshOutcome::Error("boom".into()));
+        assert_eq!(v, serde_json::json!({ "status": "error", "message": "boom" }));
+    }
 }
