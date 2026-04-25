@@ -51,6 +51,15 @@ const PAGE_SIZE: usize = 50;
 const MAX_429_RETRIES: usize = 3;
 const INITIAL_429_BACKOFF_MS: u64 = 250;
 
+fn page_url(skip: usize) -> String {
+    format!(
+        "{API}?$limit={PAGE_SIZE}&$skip={skip}&$sort[createdAt]=-1\
+         &$select[]=id&$select[]=title&$select[]=createdAt\
+         &$select[]=duration&$select[]=thumbnail_url\
+         &$select[]=chapters&$select[]=youtube"
+    )
+}
+
 fn backoff_delay(attempt: usize) -> Duration {
     Duration::from_millis(INITIAL_429_BACKOFF_MS.saturating_mul(1_u64 << attempt.min(6)))
 }
@@ -312,5 +321,28 @@ mod tests {
         assert_eq!(backoff_delay(0), Duration::from_millis(250));
         assert_eq!(backoff_delay(1), Duration::from_millis(500));
         assert_eq!(backoff_delay(2), Duration::from_millis(1000));
+    }
+
+    #[test]
+    fn test_page_url_includes_required_params() {
+        let url = page_url(100);
+        assert!(url.starts_with("https://archive.overpowered.tv/moonmoon/vods?"));
+        assert!(url.contains("$limit=50"), "missing $limit=50: {url}");
+        assert!(url.contains("$skip=100"), "missing $skip=100: {url}");
+        assert!(url.contains("$sort[createdAt]=-1"), "missing $sort: {url}");
+        for field in [
+            "id", "title", "createdAt", "duration", "thumbnail_url", "chapters", "youtube",
+        ] {
+            assert!(
+                url.contains(&format!("$select[]={field}")),
+                "missing $select[]={field} in: {url}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_page_url_skip_zero() {
+        let url = page_url(0);
+        assert!(url.contains("$skip=0"));
     }
 }
