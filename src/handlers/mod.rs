@@ -70,6 +70,9 @@ pub(crate) struct VodDisplay {
     pub created_at: String,
     pub duration_minutes: i64,
     pub duration_seconds: i64,
+    /// Set by exactly one of [`assign_period_headers`] (for chronological views)
+    /// or [`assign_series_headers`] (for game-grouped views). Do not call both
+    /// on the same display list — the later call overwrites the earlier.
     pub period_header: Option<String>,
     pub watch_url: String,
 }

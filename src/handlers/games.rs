@@ -41,7 +41,7 @@ pub async fn games_page(
     State(state): State<SharedState>,
     Query(params): Query<ListQuery>,
 ) -> impl IntoResponse {
-    let sort = params.sort.clone().unwrap_or_else(|| "most".to_string());
+    let sort = params.sort.clone().unwrap_or("most".to_string());
     let (paged, has_more, next_url) = prepare_games(&state, &params).await;
     render_template(&GamesPageTemplate {
         games: paged,

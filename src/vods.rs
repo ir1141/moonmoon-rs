@@ -167,6 +167,7 @@ pub fn build_games(vods: &[Vod]) -> Vec<Game> {
     let mut games: HashMap<String, Game> = HashMap::new();
 
     for vod in vods {
+        // Deduplicate chapters within this VOD (cross-VOD merges happen in the outer HashMap)
         let mut seen = std::collections::HashSet::new();
         if let Some(chapters) = &vod.chapters {
             for ch in chapters {

@@ -79,7 +79,7 @@ pub async fn game_vods_page(
         let guard = state.games.read().await;
         find_game_image(&guard, &name)
     };
-    let sort = params.sort.clone().unwrap_or_else(|| "newest".to_string());
+    let sort = params.sort.clone().unwrap_or("newest".to_string());
     let (paged, vod_count, has_more, next_url) =
         prepare_game_vods(&state, &name, &params, &sort).await;
 
@@ -103,7 +103,7 @@ pub async fn game_vods_grid(
     Path(name): Path<String>,
     Query(params): Query<ListQuery>,
 ) -> impl IntoResponse {
-    let sort = params.sort.clone().unwrap_or_else(|| "newest".to_string());
+    let sort = params.sort.clone().unwrap_or("newest".to_string());
     let (paged, _, has_more, next_url) = prepare_game_vods(&state, &name, &params, &sort).await;
 
     render_template(&VodsGridTemplate {
@@ -134,7 +134,7 @@ pub async fn all_streams_page(
     State(state): State<SharedState>,
     Query(params): Query<ListQuery>,
 ) -> impl IntoResponse {
-    let sort = params.sort.clone().unwrap_or_else(|| "newest".to_string());
+    let sort = params.sort.clone().unwrap_or("newest".to_string());
     let (paged, total_count, has_more, next_url) = prepare_all_streams(&state, &params).await;
 
     render_template(&AllStreamsPageTemplate {

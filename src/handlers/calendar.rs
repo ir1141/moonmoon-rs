@@ -81,6 +81,22 @@ fn day_of_week(year: i32, month: u32, day: u32) -> u32 {
     ((y + y / 4 - y / 100 + y / 400 + t[(month - 1) as usize] + day as i32) % 7) as u32
 }
 
+fn prev_month(year: i32, month: u32) -> (i32, u32) {
+    if month == 1 {
+        (year - 1, 12)
+    } else {
+        (year, month - 1)
+    }
+}
+
+fn next_month(year: i32, month: u32) -> (i32, u32) {
+    if month == 12 {
+        (year + 1, 1)
+    } else {
+        (year, month + 1)
+    }
+}
+
 pub async fn calendar_page(
     State(state): State<SharedState>,
     Query(params): Query<CalendarQuery>,
@@ -171,16 +187,8 @@ pub async fn calendar_page(
         })
         .collect();
 
-    let (prev_year, prev_month) = if month == 1 {
-        (year - 1, 12u32)
-    } else {
-        (year, month - 1)
-    };
-    let (next_year, next_month) = if month == 12 {
-        (year + 1, 1u32)
-    } else {
-        (year, month + 1)
-    };
+    let (prev_year, prev_month) = prev_month(year, month);
+    let (next_year, next_month) = next_month(year, month);
     let has_next = year < cur_year || (year == cur_year && month < cur_month);
 
     let tmpl = CalendarPageTemplate {
