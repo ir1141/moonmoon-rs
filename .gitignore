@@ -5,3 +5,4 @@ CLAUDE.md
 .omx/
 .playwright-mcp/
 docs/
+.worktrees/
