@@ -33,7 +33,7 @@ async fn prepare_games(state: &SharedState, params: &ListQuery) -> (Vec<Game>, b
         let guard = state.games.read().await;
         Arc::clone(&*guard)
     };
-    let filtered = filter_games(games.to_vec(), params);
+    let filtered = filter_games(&games, params);
     paginate_with_nav(filtered, "/games", GAME_BATCH_SIZE, params)
 }
 

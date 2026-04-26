@@ -149,23 +149,31 @@ pub(crate) fn render_template(tmpl: &impl Template) -> axum::response::Response 
 
 // ─── Helpers ───
 
-pub(crate) fn filter_games(mut games: Vec<Game>, params: &ListQuery) -> Vec<Game> {
-    if let Some(ref search) = params.search {
+pub(crate) fn filter_games(games: &[Game], params: &ListQuery) -> Vec<Game> {
+    let mut filtered: Vec<Game> = if let Some(ref search) = params.search {
         let search_lower = search.to_lowercase();
         if !search_lower.is_empty() {
-            games.retain(|g| g.name.to_lowercase().contains(&search_lower));
+            games
+                .iter()
+                .filter(|g| g.name.to_lowercase().contains(&search_lower))
+                .cloned()
+                .collect()
+        } else {
+            games.to_vec()
         }
-    }
+    } else {
+        games.to_vec()
+    };
 
     let sort = params.sort.as_deref().unwrap_or("most");
     match sort {
-        "fewest" => games.sort_by(|a, b| a.vod_count.cmp(&b.vod_count)),
-        "az" => games.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
-        "za" => games.sort_by(|a, b| b.name.to_lowercase().cmp(&a.name.to_lowercase())),
-        _ => games.sort_by(|a, b| b.vod_count.cmp(&a.vod_count)),
+        "fewest" => filtered.sort_by(|a, b| a.vod_count.cmp(&b.vod_count)),
+        "az" => filtered.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
+        "za" => filtered.sort_by(|a, b| b.name.to_lowercase().cmp(&a.name.to_lowercase())),
+        _ => filtered.sort_by(|a, b| b.vod_count.cmp(&a.vod_count)),
     }
 
-    games
+    filtered
 }
 
 pub(crate) fn filter_vod_displays(displays: &mut Vec<VodDisplay>, params: &ListQuery) {
