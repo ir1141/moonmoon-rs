@@ -94,7 +94,6 @@ async fn main() {
     let governor_limiter = api_governor.limiter().clone();
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
-        tick.tick().await;
         loop {
             tick.tick().await;
             governor_limiter.retain_recent();
