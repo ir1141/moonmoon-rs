@@ -1,6 +1,10 @@
 use axum::{Router, routing::get};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tower_governor::{
+    GovernorLayer, governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor,
+};
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
@@ -78,6 +82,31 @@ async fn main() {
         }
     });
 
+    let api_governor = Arc::new(
+        GovernorConfigBuilder::default()
+            .key_extractor(SmartIpKeyExtractor)
+            .per_second(2)
+            .burst_size(20)
+            .finish()
+            .expect("valid governor config"),
+    );
+
+    let governor_limiter = api_governor.limiter().clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+        tick.tick().await;
+        loop {
+            tick.tick().await;
+            governor_limiter.retain_recent();
+        }
+    });
+
+    let api_routes = Router::new()
+        .route("/api/chat/{vod_id}", get(handlers::chat_proxy))
+        .route("/api/vod/{vod_id}", get(handlers::vod_detail))
+        .route("/api/next/{vod_id}", get(handlers::next_in_period))
+        .layer(GovernorLayer::new(api_governor));
+
     let app = Router::new()
         .route("/", get(handlers::games_page))
         .route("/games", get(handlers::games_grid))
@@ -86,13 +115,11 @@ async fn main() {
         .route("/streams", get(handlers::all_streams_page))
         .route("/streams/vods", get(handlers::all_streams_grid))
         .route("/watch/{vod_id}", get(handlers::watch_page))
-        .route("/api/chat/{vod_id}", get(handlers::chat_proxy))
-        .route("/api/vod/{vod_id}", get(handlers::vod_detail))
-        .route("/api/next/{vod_id}", get(handlers::next_in_period))
         .route("/calendar", get(handlers::calendar_page))
         .route("/history", get(handlers::history_page))
         .route("/history/vods", get(handlers::history_vods_grid))
         .route("/random", get(handlers::random_vod))
+        .merge(api_routes)
         .nest_service("/static", ServeDir::new("static"))
         .layer(
             TraceLayer::new_for_http()
@@ -113,10 +140,13 @@ async fn main() {
     let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     tracing::info!("listening on http://localhost:{port}");
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .unwrap();
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .unwrap();
 }
 
 async fn shutdown_signal() {
