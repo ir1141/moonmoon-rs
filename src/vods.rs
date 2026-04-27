@@ -190,7 +190,7 @@ pub fn build_games(vods: &[Vod]) -> Vec<Game> {
         }
     }
     let mut games: Vec<Game> = games.into_values().collect();
-    games.sort_by(|a, b| b.vod_count.cmp(&a.vod_count));
+    games.sort_by_key(|g| std::cmp::Reverse(g.vod_count));
     games
 }
 

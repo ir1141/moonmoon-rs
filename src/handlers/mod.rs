@@ -170,10 +170,10 @@ pub(crate) fn filter_games(games: &[Game], params: &ListQuery) -> Vec<Game> {
 
     let sort = params.sort.as_deref().unwrap_or("most");
     match sort {
-        "fewest" => filtered.sort_by(|a, b| a.vod_count.cmp(&b.vod_count)),
-        "az" => filtered.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
-        "za" => filtered.sort_by(|a, b| b.name.to_lowercase().cmp(&a.name.to_lowercase())),
-        _ => filtered.sort_by(|a, b| b.vod_count.cmp(&a.vod_count)),
+        "fewest" => filtered.sort_by_key(|a| a.vod_count),
+        "az" => filtered.sort_by_key(|a| a.name.to_lowercase()),
+        "za" => filtered.sort_by_key(|a| std::cmp::Reverse(a.name.to_lowercase())),
+        _ => filtered.sort_by_key(|a| std::cmp::Reverse(a.vod_count)),
     }
 
     filtered
@@ -203,8 +203,8 @@ pub(crate) fn filter_vod_displays(displays: &mut Vec<VodDisplay>, params: &ListQ
     let sort = params.sort.as_deref().unwrap_or("newest");
     match sort {
         "oldest" => displays.sort_by(|a, b| a.created_at.cmp(&b.created_at)),
-        "longest" => displays.sort_by(|a, b| b.duration_minutes.cmp(&a.duration_minutes)),
-        "shortest" => displays.sort_by(|a, b| a.duration_minutes.cmp(&b.duration_minutes)),
+        "longest" => displays.sort_by_key(|a| std::cmp::Reverse(a.duration_minutes)),
+        "shortest" => displays.sort_by_key(|a| a.duration_minutes),
         _ => displays.sort_by(|a, b| b.created_at.cmp(&a.created_at)),
     }
 }
