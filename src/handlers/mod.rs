@@ -5,7 +5,7 @@ mod history;
 mod vods;
 mod watch;
 
-pub use api::{chat_proxy, refresh_vods};
+pub use api::chat_proxy;
 pub use calendar::calendar_page;
 pub use games::{games_grid, games_page};
 pub use history::{history_page, history_vods_grid};

@@ -1,7 +1,4 @@
-use axum::{
-    Router,
-    routing::{get, post},
-};
+use axum::{Router, routing::get};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_http::services::ServeDir;
@@ -96,7 +93,6 @@ async fn main() {
         .route("/history", get(handlers::history_page))
         .route("/history/vods", get(handlers::history_vods_grid))
         .route("/random", get(handlers::random_vod))
-        .route("/api/refresh", post(handlers::refresh_vods))
         .nest_service("/static", ServeDir::new("static"))
         .layer(
             TraceLayer::new_for_http()

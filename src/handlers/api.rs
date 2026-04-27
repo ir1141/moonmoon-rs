@@ -1,5 +1,4 @@
 use crate::SharedState;
-use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
 use serde::Deserialize;
@@ -63,67 +62,5 @@ pub async fn chat_proxy(
             format!("proxy error: {e}"),
         )
             .into_response(),
-    }
-}
-
-// ─── Manual Refresh ───
-
-pub async fn refresh_vods(State(state): State<SharedState>) -> Json<serde_json::Value> {
-    let outcome = crate::vods::refresh_in_place(&state).await;
-    Json(outcome_to_json(outcome))
-}
-
-fn outcome_to_json(outcome: crate::vods::RefreshOutcome) -> serde_json::Value {
-    use crate::vods::RefreshOutcome;
-    match outcome {
-        RefreshOutcome::Busy => serde_json::json!({ "status": "busy" }),
-        RefreshOutcome::Unchanged(count) => {
-            serde_json::json!({ "status": "unchanged", "count": count })
-        }
-        RefreshOutcome::Refreshed(count) => {
-            serde_json::json!({ "status": "refreshed", "count": count })
-        }
-        RefreshOutcome::Error(message) => {
-            serde_json::json!({ "status": "error", "message": message })
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::vods::RefreshOutcome;
-
-    #[test]
-    fn test_outcome_to_json_busy() {
-        let v = outcome_to_json(RefreshOutcome::Busy);
-        assert_eq!(v, serde_json::json!({ "status": "busy" }));
-    }
-
-    #[test]
-    fn test_outcome_to_json_unchanged() {
-        let v = outcome_to_json(RefreshOutcome::Unchanged(1419));
-        assert_eq!(
-            v,
-            serde_json::json!({ "status": "unchanged", "count": 1419 })
-        );
-    }
-
-    #[test]
-    fn test_outcome_to_json_refreshed() {
-        let v = outcome_to_json(RefreshOutcome::Refreshed(1420));
-        assert_eq!(
-            v,
-            serde_json::json!({ "status": "refreshed", "count": 1420 })
-        );
-    }
-
-    #[test]
-    fn test_outcome_to_json_error() {
-        let v = outcome_to_json(RefreshOutcome::Error("boom".into()));
-        assert_eq!(
-            v,
-            serde_json::json!({ "status": "error", "message": "boom" })
-        );
     }
 }
