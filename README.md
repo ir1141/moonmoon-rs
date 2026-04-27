@@ -1,22 +1,21 @@
 # moonmoon-rs
 
-A Rust port of [OP-Archives/MOONMOON-site](https://github.com/OP-Archives/MOONMOON-site) — a small web app for browsing [MOONMOON](https://www.twitch.tv/moonmoon)'s archived streams by game, date, or calendar view. The upstream is a React + Vite SPA; this version is server-rendered with axum + Askama and uses htmx for partial updates. All VOD data comes from the same `archive.overpowered.tv` API the upstream uses.
+Live at **<https://moonmoon.gamma.observer>**.
+
+A Rust port of [OP-Archives/MOONMOON-site](https://github.com/OP-Archives/MOONMOON-site) — a web app for browsing [MOONMOON](https://www.twitch.tv/moonmoon)'s archived streams by game, date, or calendar view. The upstream is a React + Vite SPA; this version is server-rendered with axum + Askama and uses htmx for partial updates. All VOD data comes from the same `archive.overpowered.tv` API the upstream uses.
 
 ## What it does
 
-- **Browse by game** — landing page is a grid of every game MOONMOON has streamed, sorted by VOD count, with search and alt sort orders.
+- **Browse by game** — grid of every game MOONMOON has streamed, sorted by VOD count, with search and alt sort orders.
 - **Browse all streams** — flat list of every VOD with full-text search, date range filter, and sort by newest / oldest / longest / shortest.
 - **Calendar view** — month-at-a-glance grid showing which days have streams.
 - **Game pages grouped by playing period** — per-game VOD lists are split into contiguous playing periods so long-running games read as distinct seasons instead of one flat stream.
-- **Persistent top nav** — every page shares a header with the active section highlighted.
-- **Player with resume** — picks up where you left off via `localStorage`; a progress bar overlays each thumbnail so you can see what you've already watched.
+- **Player with resume** — picks up where you left off via `localStorage`; a progress bar overlays each thumbnail.
 - **Up Next auto-continue** — when a VOD ends inside a game's playing period, an overlay offers the next VOD from that same period and auto-advances.
-- **Watch history** — a dedicated page listing everything you've started or finished, entirely client-side (no account, no server state).
-- **Synced chat replay with full emote support** — the player fetches upstream chat comments and scrolls them in time with the VOD. Twitch native emotes plus third-party emotes from **7TV**, **BTTV**, and **FFZ** are rendered inline (both global sets and MOONMOON's channel sets), with hover tooltips showing the emote name and provider.
-- **Jump to a game inside a VOD** — if a stream covered multiple games, each chapter is a direct timestamped link into the player.
-- **Random VOD** — `/random` sends you to one at random.
-
-Everything is server-rendered with htmx partials for pagination and search, so it's fast on cold loads and works without JavaScript for the read-only views.
+- **Watch history** — page listing everything you've started or finished, entirely client-side (no account, no server state).
+- **Synced chat replay with emotes** — chat comments scroll in time with the VOD. Twitch native emotes plus 7TV / BTTV / FFZ (global + channel sets) render inline, with hover tooltips.
+- **Jump to a game inside a VOD** — if a stream covered multiple games, each chapter is a direct timestamped link.
+- **Random VOD** — `/random` redirects to one at random.
 
 ## Stack
 
@@ -35,21 +34,16 @@ Rust edition 2024.
 cargo run
 ```
 
-Serves on `http://0.0.0.0:3000`. Every boot fetches the full VOD catalog from `https://archive.overpowered.tv/moonmoon/vods` (sequential paged fetch, 50 VODs per page). A background task refreshes every 6 hours, gated by a cheap upstream `total`-changed check so idle ticks cost one tiny request.
+Serves on `http://0.0.0.0:3000` (override with `PORT`). Every boot fetches the full VOD catalog from `https://archive.overpowered.tv/moonmoon/vods` (sequential paged fetch, 50 VODs per page). A background task refreshes every 6 hours, gated by a cheap upstream `total`-changed check so idle ticks cost one tiny request.
 
 ```sh
+PORT=8080 cargo run                 # custom port
 RUST_LOG=moonmoon=debug cargo run   # verbose logs
 cargo test                          # unit tests
 cargo clippy                        # lints
 ```
 
-Force a refresh without restarting:
-
-```sh
-curl -XPOST localhost:3000/api/refresh
-```
-
-It cheaply re-checks the upstream `total` first and no-ops if nothing changed.
+`/api/*` routes are rate-limited (2 rps, burst 20) per smart-detected client IP via `tower_governor`.
 
 ## Routes
 
@@ -69,7 +63,6 @@ It cheaply re-checks the upstream `total` first and no-ops if nothing changed.
 | `/api/vod/{vod_id}` | VOD metadata as JSON |
 | `/api/next/{vod_id}` | Next VOD in the same game's playing period (powers the Up Next overlay) |
 | `/api/chat/{vod_id}` | Proxies upstream chat comments |
-| `POST /api/refresh` | Re-fetches from upstream |
 
 ## Architecture
 
@@ -84,7 +77,7 @@ src/
     ├── watch.rs         # /watch/{id}, /random, /api/vod, /api/next
     ├── calendar.rs      # /calendar
     ├── history.rs       # /history
-    └── api.rs           # /api/chat, /api/refresh
+    └── api.rs           # /api/chat
 
 templates/               # Askama templates (compiled into the binary)
 static/
@@ -94,11 +87,11 @@ static/
 
 ### State
 
-`AppState { vods, games, http_client }` holds both datasets behind `tokio::sync::RwLock<Arc<Vec<…>>>`. Handlers take a read lock just long enough to clone the cheap `Arc` and drop the guard before rendering — the guard never crosses an `.await`. The only writer is `/api/refresh`, which atomically swaps both `Arc`s.
+`AppState { vods, games, http_client, refresh_lock }` holds both datasets behind `tokio::sync::RwLock<Arc<Vec<…>>>`. Handlers take a read lock just long enough to clone the cheap `Arc` and drop the guard before rendering — the guard never crosses an `.await`. The only writer is the 6-hour background refresh task, which atomically swaps both `Arc`s. `refresh_lock` serializes refreshes so concurrent ticks can't stomp each other.
 
 ### Templates
 
-Each list view has two templates: a full-page one (e.g. `games.html`) and a grid-only partial (`games_grid.html`) that htmx swaps in for pagination and search. Resume/watched state lives in `localStorage` (`moonmoon_resume`, `moonmoon_watched`) and is reapplied after every `htmx:afterSwap`.
+Each list view has two templates: a full-page one (e.g. `games.html`) and a grid-only partial (`games_grid.html`) that htmx swaps in for pagination and search. Resume/watched state lives in `localStorage` (`moonmoon_resume`, `moonmoon_watched`) and is reapplied after every `htmx:afterSwap`. Templates are compiled into the binary by Askama, so edits to `templates/*.html` require a rebuild.
 
 ### Upstream quirks
 
@@ -113,10 +106,6 @@ Each list view has two templates: a full-page one (e.g. `games.html`) and a grid
 - `vod_id` is sanitized (alphanumeric + `-_` only) before being interpolated into outbound URLs. See `chat_proxy` for the reference pattern.
 - Keep handler bodies thin; push filtering, sorting, pagination, and URL-building into `handlers/mod.rs` helpers.
 - Prefer cloning `Arc<Vec<Vod>>` out of the `RwLock` guard over holding the guard across `.await`.
-
-## No hot reload
-
-Templates are compiled into the binary by Askama, so edits to `templates/*.html` require `cargo run` again.
 
 ## Credits
 
