@@ -88,7 +88,7 @@ pub async fn next_in_period(
         None => {
             let mut tags = get_game_tags(current);
             if tags.len() == 1 {
-                tags.remove(0).name
+                tags.remove(0)
             } else {
                 return StatusCode::NO_CONTENT.into_response();
             }
