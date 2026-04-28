@@ -69,7 +69,7 @@
   box-shadow: inset 0 -2px 0 var(--accent);
 }
 
-.random-btn {
+.icon-btn {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   color: var(--text-muted);
@@ -77,19 +77,28 @@
   height: 34px;
   border-radius: 8px;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
 }
-.random-btn:hover {
+.icon-btn:hover {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
 }
-.random-btn svg {
+.icon-btn svg {
   width: 16px;
   height: 16px;
+}
+.icon-btn.connected {
+  color: #6ee7a8;
+  border-color: #2f5f47;
+}
+.icon-btn.connected:hover {
+  background: #2f5f47;
+  border-color: #6ee7a8;
+  color: #fff;
 }
 
 .header-right {
