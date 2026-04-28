@@ -156,7 +156,6 @@
     }
   });
 
-  // Expose for the settings UI (Task 11).
   window.__moonmoonSync = {
     getToken: getToken,
     setToken: setToken,
@@ -166,7 +165,6 @@
     push: push
   };
 
-  // Initial pull on every page load.
   pull();
 
   // ─── Settings UI ───
