@@ -187,10 +187,36 @@
     el('sync-import-block').hidden = true;
   }
 
+  function positionDialog() {
+    var btnRect = btn.getBoundingClientRect();
+    var dlgRect = dlg.getBoundingClientRect();
+    var gap = 8;
+    var pad = 8;
+    var left = btnRect.right - dlgRect.width;
+    var top = btnRect.bottom + gap;
+    if (left < pad) left = pad;
+    var maxLeft = window.innerWidth - dlgRect.width - pad;
+    if (left > maxLeft) left = maxLeft;
+    if (top + dlgRect.height > window.innerHeight - pad) {
+      top = Math.max(pad, window.innerHeight - dlgRect.height - pad);
+    }
+    dlg.style.top = top + 'px';
+    dlg.style.left = left + 'px';
+  }
+
   btn.addEventListener('click', function () {
     refreshUi();
     if (typeof dlg.showModal === 'function') dlg.showModal();
     else dlg.setAttribute('open', '');
+    positionDialog();
+  });
+
+  window.addEventListener('resize', function () {
+    if (dlg.open) positionDialog();
+  });
+
+  dlg.addEventListener('click', function (e) {
+    if (e.target === dlg) dlg.close();
   });
 
   el('sync-generate').addEventListener('click', function () {
