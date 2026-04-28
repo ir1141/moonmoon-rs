@@ -57,9 +57,11 @@ pub struct ListQuery {
 
 // ─── Display types ───
 
-pub(crate) struct GameTag {
+pub(crate) struct ChapterSegment {
     pub name: String,
-    pub start_seconds: i64,
+    pub width_pct: f64,
+    pub watch_url: String,
+    pub color_idx: u8,
 }
 
 pub(crate) struct VodDisplay {
@@ -68,7 +70,7 @@ pub(crate) struct VodDisplay {
     pub formatted_date: String,
     pub duration: Option<String>,
     pub thumbnail_url: Option<String>,
-    pub game_tags: Vec<GameTag>,
+    pub chapter_segments: Vec<ChapterSegment>,
     pub created_at: String,
     pub duration_minutes: i64,
     pub duration_seconds: i64,
@@ -94,17 +96,17 @@ impl VodDisplay {
             .clone()
             .unwrap_or_else(|| "Untitled Stream".to_string());
         let formatted_date = format_date(&vod.created_at);
-        let game_tags = get_game_tags(vod);
         let duration_seconds = parse_duration_seconds(vod.duration.as_deref().unwrap_or(""));
         let duration_minutes = duration_seconds / 60;
         let watch_url = build_watch_url(&vod.id, chapter_start, game_name_hint);
+        let chapter_segments = get_chapter_segments(vod, duration_seconds);
         VodDisplay {
             id: vod.id.clone(),
             display_title,
             formatted_date,
             duration: vod.duration.clone(),
             thumbnail_url: vod.thumbnail_url.clone(),
-            game_tags,
+            chapter_segments,
             created_at: vod.created_at.clone(),
             duration_minutes,
             duration_seconds,
@@ -440,7 +442,50 @@ pub(crate) fn find_game_image(games: &[Game], game_name: &str) -> Option<String>
         .and_then(|g| g.image.clone())
 }
 
-pub(crate) fn get_game_tags(vod: &Vod) -> Vec<GameTag> {
+pub(crate) fn get_chapter_segments(vod: &Vod, total_duration_secs: i64) -> Vec<ChapterSegment> {
+    let Some(chapters) = vod.chapters.as_ref() else {
+        return Vec::new();
+    };
+    if chapters.is_empty() || total_duration_secs <= 0 {
+        return Vec::new();
+    }
+
+    let mut named: Vec<(usize, &str, i64)> = Vec::new();
+    for (i, ch) in chapters.iter().enumerate() {
+        if let Some(name) = ch.name.as_deref().filter(|n| !n.is_empty()) {
+            let start = ch.start.map(|s| s as i64).unwrap_or(0);
+            named.push((i, name, start));
+        }
+    }
+    if named.is_empty() {
+        return Vec::new();
+    }
+
+    let mut out = Vec::with_capacity(named.len());
+    for (k, &(_, name, start)) in named.iter().enumerate() {
+        let end = named.get(k + 1).map(|n| n.2).unwrap_or(total_duration_secs);
+        let len = (end - start).max(0);
+        if len == 0 {
+            continue;
+        }
+        let width_pct = (len as f64 / total_duration_secs as f64) * 100.0;
+        let mut h: u32 = 5381;
+        for b in name.as_bytes() {
+            h = h
+                .wrapping_mul(33)
+                .wrapping_add(b.to_ascii_lowercase() as u32);
+        }
+        out.push(ChapterSegment {
+            name: name.to_string(),
+            width_pct,
+            watch_url: build_watch_url(&vod.id, Some(start), None),
+            color_idx: (h % 8) as u8,
+        });
+    }
+    out
+}
+
+pub(crate) fn get_game_tags(vod: &Vod) -> Vec<String> {
     let mut tags = Vec::new();
     let mut seen = std::collections::HashSet::new();
     if let Some(ref chapters) = vod.chapters {
@@ -449,10 +494,7 @@ pub(crate) fn get_game_tags(vod: &Vod) -> Vec<GameTag> {
                 && !name.is_empty()
                 && seen.insert(name.to_lowercase())
             {
-                tags.push(GameTag {
-                    name: name.clone(),
-                    start_seconds: ch.start.map(|s| s as i64).unwrap_or(0),
-                });
+                tags.push(name.clone());
             }
         }
     }
@@ -627,10 +669,7 @@ mod tests {
             youtube: None,
         };
         let tags = get_game_tags(&vod);
-        let names: Vec<&str> = tags.iter().map(|t| t.name.as_str()).collect();
-        assert_eq!(names, vec!["Game A", "Game B"]);
-        assert_eq!(tags[0].start_seconds, 0);
-        assert_eq!(tags[1].start_seconds, 200);
+        assert_eq!(tags, vec!["Game A".to_string(), "Game B".to_string()]);
     }
 
     #[test]
@@ -656,8 +695,7 @@ mod tests {
             youtube: None,
         };
         let tags = get_game_tags(&vod);
-        assert_eq!(tags.len(), 1);
-        assert_eq!(tags[0].name, "Elden Ring");
+        assert_eq!(tags, vec!["Elden Ring".to_string()]);
     }
 
     #[test]
@@ -727,7 +765,7 @@ mod tests {
             formatted_date: "".into(),
             duration: None,
             thumbnail_url: None,
-            game_tags: vec![],
+            chapter_segments: vec![],
             created_at: created_at.into(),
             duration_minutes: 0,
             duration_seconds: 0,
@@ -796,11 +834,13 @@ mod tests {
 
     fn display_with_games(id: &str, games: &[&str]) -> VodDisplay {
         let mut d = make_display(id, "2024-01-01T00:00:00Z");
-        d.game_tags = games
+        d.chapter_segments = games
             .iter()
-            .map(|g| GameTag {
+            .map(|g| ChapterSegment {
                 name: (*g).into(),
-                start_seconds: 0,
+                width_pct: 0.0,
+                watch_url: String::new(),
+                color_idx: 0,
             })
             .collect();
         d
@@ -809,7 +849,7 @@ mod tests {
     fn keys_from_first_tag(displays: &[VodDisplay]) -> Vec<Option<String>> {
         displays
             .iter()
-            .map(|d| d.game_tags.first().map(|t| t.name.clone()))
+            .map(|d| d.chapter_segments.first().map(|s| s.name.clone()))
             .collect()
     }
 

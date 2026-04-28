@@ -111,7 +111,6 @@
   outline: none;
   cursor: pointer;
   transition: border-color 0.2s;
-  color-scheme: dark;
 }
 .toolbar-date:focus {
   border-color: var(--accent);
@@ -189,6 +188,10 @@
   position: relative;
   overflow: hidden;
 }
+.vod-card .thumb-link {
+  display: block;
+  position: relative;
+}
 .vod-card .thumb {
   width: 100%;
   aspect-ratio: 16/9;
@@ -216,7 +219,7 @@
   font-family: var(--font-display);
   font-size: 12px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--on-overlay);
   letter-spacing: 0.5px;
 }
 .vod-card .date-badge {
@@ -229,7 +232,7 @@
   border-radius: 6px;
   font-size: 11px;
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--on-overlay-dim);
   letter-spacing: 0.3px;
 }
 
@@ -302,22 +305,109 @@
 }
 .vod-card:hover .vod-title { color: var(--accent-soft); }
 
-.vod-games {
+/* ─── Chapter Strip (streams page) ─── */
+.chapter-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 5px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 1px;
+  z-index: 3;
+  background: rgba(8, 8, 10, 0.55);
+  opacity: 0.7;
+  transition: height 0.25s ease, opacity 0.25s ease, bottom 0.25s ease;
+  pointer-events: auto;
 }
-.game-tag {
-  background: var(--bg-elevated);
-  color: var(--text-dim);
+.vod-card.has-resume .chapter-strip { bottom: 3px; }
+.vod-card:hover .chapter-strip {
+  height: 16px;
+  opacity: 1;
+}
+.chapter-seg {
+  position: relative;
+  height: 100%;
+  min-width: 2px;
+  background-color: var(--accent);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.15));
+  transition: filter 0.15s ease;
+}
+.chapter-seg:hover { filter: brightness(1.35) saturate(1.1); }
+
+.chapter-seg.color-0 { background-color: #ef4d5b; }
+.chapter-seg.color-1 { background-color: #f08a3a; }
+.chapter-seg.color-2 { background-color: #e8c247; }
+.chapter-seg.color-3 { background-color: #6dcf4a; }
+.chapter-seg.color-4 { background-color: #38c79a; }
+.chapter-seg.color-5 { background-color: #2fb3d8; }
+.chapter-seg.color-6 { background-color: #4d8ee8; }
+.chapter-seg.color-7 { background-color: #d650b0; }
+
+.chapter-seg-tip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: rgba(8, 8, 10, 0.96);
+  color: var(--on-overlay);
+  font-family: var(--font-display);
   font-size: 11px;
-  font-weight: 500;
-  padding: 3px 8px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  padding: 5px 9px;
   border-radius: 5px;
-  letter-spacing: 0.2px;
   white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  border: 1px solid var(--border);
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
 }
+.chapter-seg-tip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: rgba(8, 8, 10, 0.96);
+}
+.chapter-seg:hover .chapter-seg-tip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Edge-anchor tooltips so narrow first/last segments don't get clipped */
+.chapter-seg:first-child .chapter-seg-tip {
+  left: 0;
+  transform: translateX(0) translateY(4px);
+}
+.chapter-seg:first-child:hover .chapter-seg-tip {
+  transform: translateX(0) translateY(0);
+}
+.chapter-seg:first-child .chapter-seg-tip::after {
+  left: 14px;
+  transform: translateX(0);
+}
+.chapter-seg:last-child:not(:first-child) .chapter-seg-tip {
+  left: auto;
+  right: 0;
+  transform: translateX(0) translateY(4px);
+}
+.chapter-seg:last-child:not(:first-child):hover .chapter-seg-tip {
+  transform: translateX(0) translateY(0);
+}
+.chapter-seg:last-child:not(:first-child) .chapter-seg-tip::after {
+  left: auto;
+  right: 14px;
+  transform: translateX(0);
+}
+
+.vod-card.has-chapters .duration-badge { bottom: 14px; }
 
 @media (max-width: 768px) {
   .vod-grid { grid-template-columns: 1fr; }
