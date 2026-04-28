@@ -1,3 +1,7 @@
+// `#[allow(dead_code)]` is removed in Task 7 once handlers/main.rs reference
+// these items. Until then, the bin target sees them as dead.
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -34,6 +38,28 @@ impl SyncStore {
         }
     }
 
+    pub async fn load(path: PathBuf) -> Self {
+        let map = match tokio::fs::read(&path).await {
+            Ok(bytes) => match serde_json::from_slice::<HashMap<String, SyncBlob>>(&bytes) {
+                Ok(m) => m,
+                Err(e) => {
+                    tracing::warn!("sync store parse failed: {e}; starting empty");
+                    HashMap::new()
+                }
+            },
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => HashMap::new(),
+            Err(e) => {
+                tracing::warn!("sync store read failed: {e}; starting empty");
+                HashMap::new()
+            }
+        };
+        tracing::info!("sync store loaded: {} entries", map.len());
+        Self {
+            path,
+            inner: Mutex::new(map),
+        }
+    }
+
     pub async fn get(&self, token: &str) -> Option<SyncBlob> {
         self.inner.lock().await.get(token).cloned()
     }
@@ -44,6 +70,33 @@ impl SyncStore {
 
     pub async fn len(&self) -> usize {
         self.inner.lock().await.len()
+    }
+
+    /// Persist the current map to `self.path` via temp-file + rename.
+    pub async fn save_to_disk(&self) -> std::io::Result<()> {
+        let snapshot = {
+            let g = self.inner.lock().await;
+            serde_json::to_vec(&*g)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
+        };
+        let tmp = self.path.with_extension("json.tmp");
+        tokio::fs::write(&tmp, &snapshot).await?;
+        tokio::fs::rename(&tmp, &self.path).await?;
+        Ok(())
+    }
+
+    /// Insert + persist atomically — the file write happens under the same
+    /// lock, so two concurrent PUTs can't produce an interleaved on-disk
+    /// snapshot.
+    pub async fn put(&self, token: String, blob: SyncBlob) -> std::io::Result<()> {
+        let mut g = self.inner.lock().await;
+        g.insert(token, blob);
+        let bytes = serde_json::to_vec(&*g)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let tmp = self.path.with_extension("json.tmp");
+        tokio::fs::write(&tmp, &bytes).await?;
+        tokio::fs::rename(&tmp, &self.path).await?;
+        Ok(())
     }
 }
 
@@ -82,5 +135,62 @@ mod tests {
         assert_eq!(got.updated_at, 200);
         assert_eq!(got.blob["resume"]["v"], "second");
         assert_eq!(s.len().await, 1);
+    }
+
+    #[tokio::test]
+    async fn save_then_load_roundtrips() {
+        let dir = tempdir();
+        let path = dir.join("sync.json");
+
+        let s1 = SyncStore::new_in_memory(path.clone());
+        s1.insert_in_memory("AAA".into(), blob("alpha", 1)).await;
+        s1.insert_in_memory("BBB".into(), blob("beta", 2)).await;
+        s1.save_to_disk().await.unwrap();
+
+        let s2 = SyncStore::load(path).await;
+        assert_eq!(s2.len().await, 2);
+        let a = s2.get("AAA").await.unwrap();
+        assert_eq!(a.blob["resume"]["v"], "alpha");
+    }
+
+    #[tokio::test]
+    async fn load_missing_file_starts_empty() {
+        let dir = tempdir();
+        let path = dir.join("does-not-exist.json");
+        let s = SyncStore::load(path).await;
+        assert_eq!(s.len().await, 0);
+    }
+
+    #[tokio::test]
+    async fn load_corrupt_file_starts_empty() {
+        let dir = tempdir();
+        let path = dir.join("sync.json");
+        tokio::fs::write(&path, b"not valid json").await.unwrap();
+        let s = SyncStore::load(path).await;
+        assert_eq!(s.len().await, 0);
+    }
+
+    #[tokio::test]
+    async fn put_persists_atomically() {
+        let dir = tempdir();
+        let path = dir.join("sync.json");
+        let s = SyncStore::new_in_memory(path.clone());
+        s.put("ZZZ".into(), blob("via-put", 42)).await.unwrap();
+        let s2 = SyncStore::load(path).await;
+        let got = s2.get("ZZZ").await.unwrap();
+        assert_eq!(got.updated_at, 42);
+        assert_eq!(got.blob["resume"]["v"], "via-put");
+    }
+
+    /// Make a unique tempdir under target/ — the project has no `tempfile`
+    /// crate and we don't want to add one for these tests.
+    fn tempdir() -> PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let p = std::env::temp_dir().join(format!("moonmoon-sync-test-{nanos}"));
+        std::fs::create_dir_all(&p).unwrap();
+        p
     }
 }
