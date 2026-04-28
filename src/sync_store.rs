@@ -1,7 +1,3 @@
-// `#[allow(dead_code)]` is removed in Task 7 once handlers/main.rs reference
-// these items. Until then, the bin target sees them as dead.
-#![allow(dead_code)]
-
 use std::collections::HashMap;
 use std::path::PathBuf;
 
