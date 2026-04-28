@@ -6,3 +6,7 @@ CLAUDE.md
 .playwright-mcp/
 docs/
 .worktrees/
+
+# Cross-device sync store (operator-managed, not source data)
+sync.json
+sync.json.tmp

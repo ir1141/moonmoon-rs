@@ -17,6 +17,7 @@ pub struct AppState {
     pub games: RwLock<Arc<Vec<vods::Game>>>,
     pub http_client: reqwest::Client,
     pub refresh_lock: tokio::sync::Mutex<()>,
+    pub sync_store: Arc<sync_store::SyncStore>,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -52,11 +53,17 @@ async fn main() {
     let games = vods::build_games(&all_vods);
     tracing::info!("found {} games", games.len());
 
+    let sync_store_path: std::path::PathBuf = std::env::var("SYNC_STORE_PATH")
+        .unwrap_or_else(|_| "sync.json".to_string())
+        .into();
+    let sync_store = Arc::new(sync_store::SyncStore::load(sync_store_path).await);
+
     let state = Arc::new(AppState {
         vods: RwLock::new(Arc::new(all_vods)),
         games: RwLock::new(Arc::new(games)),
         http_client,
         refresh_lock: tokio::sync::Mutex::new(()),
+        sync_store,
     });
 
     const REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
