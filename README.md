@@ -13,6 +13,7 @@ A Rust port of [OP-Archives/MOONMOON-site](https://github.com/OP-Archives/MOONMO
 - **Player with resume** — picks up where you left off via `localStorage`; a progress bar overlays each thumbnail.
 - **Up Next auto-continue** — when a VOD ends inside a game's playing period, an overlay offers the next VOD from that same period and auto-advances.
 - **Watch history** — page listing everything you've started or finished, entirely client-side (no account, no server state).
+- **Cross-device sync (optional)** — generate a token in one browser, paste it in another, and your watch history follows you. Token is the only credential; no accounts, no email.
 - **Synced chat replay with emotes** — chat comments scroll in time with the VOD. Twitch native emotes plus 7TV / BTTV / FFZ (global + channel sets) render inline, with hover tooltips.
 - **Jump to a game inside a VOD** — if a stream covered multiple games, each chapter is a direct timestamped link.
 - **Random VOD** — `/random` redirects to one at random.
@@ -37,10 +38,11 @@ cargo run
 Serves on `http://0.0.0.0:3000` (override with `PORT`). Every boot fetches the full VOD catalog from `https://archive.overpowered.tv/moonmoon/vods` (sequential paged fetch, 50 VODs per page). A background task refreshes every 6 hours, gated by a cheap upstream `total`-changed check so idle ticks cost one tiny request.
 
 ```sh
-PORT=8080 cargo run                 # custom port
-RUST_LOG=moonmoon=debug cargo run   # verbose logs
-cargo test                          # unit tests
-cargo clippy                        # lints
+PORT=8080 cargo run                          # custom port
+RUST_LOG=moonmoon=debug cargo run            # verbose logs
+SYNC_STORE_PATH=/var/lib/moonmoon/sync.json cargo run  # sync store location (default ./sync.json)
+cargo test                                   # unit tests
+cargo clippy                                 # lints
 ```
 
 `/api/*` routes are rate-limited (2 rps, burst 20) per smart-detected client IP via `tower_governor`.
@@ -63,6 +65,8 @@ cargo clippy                        # lints
 | `/api/vod/{vod_id}` | VOD metadata as JSON |
 | `/api/next/{vod_id}` | Next VOD in the same game's playing period (powers the Up Next overlay) |
 | `/api/chat/{vod_id}` | Proxies upstream chat comments |
+| `GET /api/sync/{token}` | Fetch a stored sync blob (404 if unknown) |
+| `PUT /api/sync/{token}` | Replace the blob for `token` (256 KiB body cap) |
 
 ## Architecture
 
@@ -70,6 +74,7 @@ cargo clippy                        # lints
 src/
 ├── main.rs              # AppState, router, tracing
 ├── vods.rs              # Upstream API client, cache, Vod/Game models
+├── sync_store.rs        # In-memory sync blob store, atomic JSON persistence
 └── handlers/
     ├── mod.rs           # Shared helpers: VodDisplay, pagination, filters, date/duration parsing
     ├── games.rs         # /, /games
@@ -77,12 +82,14 @@ src/
     ├── watch.rs         # /watch/{id}, /random, /api/vod, /api/next
     ├── calendar.rs      # /calendar
     ├── history.rs       # /history
+    ├── sync.rs          # /api/sync/{token} GET/PUT
     └── api.rs           # /api/chat
 
 templates/               # Askama templates (compiled into the binary)
 static/
 ├── player.js            # Player logic, chat sync, emotes, resume, Up Next overlay
-└── css/                 # Split per concern: base, header, games, vods, calendar, player
+├── sync.js              # Cross-device sync: token storage, pull/push, settings dialog
+└── css/                 # Split per concern: base, header, games, vods, calendar, player, sync
 ```
 
 ### State
@@ -92,6 +99,16 @@ static/
 ### Templates
 
 Each list view has two templates: a full-page one (e.g. `games.html`) and a grid-only partial (`games_grid.html`) that htmx swaps in for pagination and search. Resume/watched state lives in `localStorage` (`moonmoon_resume`, `moonmoon_watched`) and is reapplied after every `htmx:afterSwap`. Templates are compiled into the binary by Askama, so edits to `templates/*.html` require a rebuild.
+
+### Cross-device sync
+
+Click the ⟳ icon in the top-right of any page to open the sync dialog.
+
+- **Generate new token** creates a 26-character base32 token, stores it in this device's `localStorage`, and immediately uploads your current watch history.
+- **Use existing token** lets a second device paste the same token and pull the history down. After that, both devices push debounced updates whenever `moonmoon_resume` changes.
+- **Disconnect this device** removes the token from this browser. Your local history stays put; the remote copy is untouched.
+
+The token is the only credential — anyone holding it can read and overwrite the history. Treat it like a password. Tokens never expire on the server. Server stores blobs (opaque JSON) at `$SYNC_STORE_PATH` (default `./sync.json`, gitignored). The endpoint pair is hosted under the existing API rate limiter (2 req/s, burst 20, per IP) and bodies are capped at 256 KiB. Per-VOD merge logic is last-write-wins by `updated` timestamp, so two devices watching the same VOD at the same time won't fully clobber each other.
 
 ### Upstream quirks
 
