@@ -168,4 +168,78 @@
 
   // Initial pull on every page load.
   pull();
+
+  // ─── Settings UI ───
+  function el(id) { return document.getElementById(id); }
+  var btn = el('sync-btn');
+  var dlg = el('sync-dialog');
+  if (!btn || !dlg) return;
+
+  function refreshUi() {
+    var token = getToken();
+    var connected = !!token;
+    btn.classList.toggle('connected', connected);
+    btn.title = connected ? 'Sync: connected' : 'Cross-device sync';
+    el('sync-status').textContent = connected
+      ? 'Connected. Your watch history syncs to any device using this token.'
+      : 'Not connected. Generate a token and copy it to your other devices.';
+    el('sync-token-block').hidden = !connected;
+    el('sync-disconnect').hidden = !connected;
+    if (connected) el('sync-token-value').value = token;
+    el('sync-import-block').hidden = true;
+  }
+
+  btn.addEventListener('click', function () {
+    refreshUi();
+    if (typeof dlg.showModal === 'function') dlg.showModal();
+    else dlg.setAttribute('open', '');
+  });
+
+  el('sync-generate').addEventListener('click', function () {
+    var t = generateToken();
+    setToken(t);
+    refreshUi();
+    // Push immediately so a fresh token is registered server-side.
+    push();
+  });
+
+  el('sync-import-show').addEventListener('click', function () {
+    el('sync-import-block').hidden = false;
+    el('sync-import-input').focus();
+  });
+
+  el('sync-import-confirm').addEventListener('click', function () {
+    var raw = (el('sync-import-input').value || '').trim().replace(/[\s-]/g, '').toUpperCase();
+    if (!isValidToken(raw)) {
+      el('sync-status').textContent = 'Invalid token. Expected 26+ characters of A–Z, 2–7.';
+      return;
+    }
+    setToken(raw);
+    refreshUi();
+    pull().then(function () {
+      el('sync-status').textContent = 'Connected. Pulled remote history.';
+    });
+  });
+
+  el('sync-disconnect').addEventListener('click', function () {
+    setToken('');
+    refreshUi();
+  });
+
+  el('sync-copy').addEventListener('click', function () {
+    var v = el('sync-token-value').value;
+    if (!v) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(v);
+    } else {
+      el('sync-token-value').select();
+      try { document.execCommand('copy'); } catch (e) { /* ignore */ }
+    }
+    var copyBtn = el('sync-copy');
+    var orig = copyBtn.textContent;
+    copyBtn.textContent = 'Copied!';
+    setTimeout(function () { copyBtn.textContent = orig; }, 1200);
+  });
+
+  refreshUi();
 })();
