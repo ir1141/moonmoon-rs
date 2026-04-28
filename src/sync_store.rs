@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -7,23 +7,39 @@ use tokio::sync::Mutex;
 /// Hard cap for incoming sync blobs. The full payload (including JSON
 /// envelope) must fit. 256 KiB is ~150x the size of a fully-populated
 /// 500-entry resume map, so this is generous but still bounded.
-pub const MAX_BLOB_BYTES: usize = 256 * 1024;
+pub(crate) const MAX_BLOB_BYTES: usize = 256 * 1024;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SyncBlob {
     /// Opaque blob the server never inspects — currently `{ "resume": {...} }`.
-    pub blob: serde_json::Value,
+    pub(crate) blob: serde_json::Value,
     /// Client-supplied milliseconds since epoch. Used for last-write-wins
     /// across the whole blob; per-VOD merging is the client's job.
-    pub updated_at: i64,
+    pub(crate) updated_at: i64,
 }
 
 pub struct SyncStore {
     path: PathBuf,
-    /// Single Mutex covers both the map and the on-disk file — file writes
-    /// happen while holding the lock so concurrent PUTs serialize cleanly
-    /// without an interleaved-snapshot race. Throughput is not a concern.
+    /// Single Mutex covers both the map and the on-disk file — see `put`.
     inner: Mutex<HashMap<String, SyncBlob>>,
+}
+
+/// Read and parse the on-disk map. Returns the underlying `io::Error`
+/// (including `NotFound`) so callers can distinguish first-boot from
+/// corruption.
+async fn read_map(path: &Path) -> std::io::Result<HashMap<String, SyncBlob>> {
+    let bytes = tokio::fs::read(path).await?;
+    serde_json::from_slice(&bytes)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+}
+
+/// `path` with `.tmp` appended (not substituted). `with_extension("json.tmp")`
+/// would silently rewrite a pathless `sync` to `sync.json.tmp` and rename
+/// to `sync` — surprising. Appending preserves whatever path was given.
+fn tmp_path(path: &Path) -> PathBuf {
+    let mut s = path.as_os_str().to_owned();
+    s.push(".tmp");
+    s.into()
 }
 
 impl SyncStore {
@@ -35,17 +51,11 @@ impl SyncStore {
     }
 
     pub async fn load(path: PathBuf) -> Self {
-        let map = match tokio::fs::read(&path).await {
-            Ok(bytes) => match serde_json::from_slice::<HashMap<String, SyncBlob>>(&bytes) {
-                Ok(m) => m,
-                Err(e) => {
-                    tracing::warn!("sync store parse failed: {e}; starting empty");
-                    HashMap::new()
-                }
-            },
+        let map = match read_map(&path).await {
+            Ok(m) => m,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => HashMap::new(),
             Err(e) => {
-                tracing::warn!("sync store read failed: {e}; starting empty");
+                tracing::warn!("sync store load failed: {e}; starting empty");
                 HashMap::new()
             }
         };
@@ -60,37 +70,40 @@ impl SyncStore {
         self.inner.lock().await.get(token).cloned()
     }
 
+    /// Insert and persist under a single lock. We *deliberately* hold the
+    /// mutex across the file I/O so concurrent PUTs serialize and can't
+    /// produce an interleaved on-disk snapshot. Throughput isn't a concern
+    /// — the route is rate-limited and writes are small.
+    pub async fn put(&self, token: String, blob: SyncBlob) -> std::io::Result<()> {
+        let mut g = self.inner.lock().await;
+        g.insert(token, blob);
+        let bytes = serde_json::to_vec(&*g)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let tmp = tmp_path(&self.path);
+        tokio::fs::write(&tmp, &bytes).await?;
+        tokio::fs::rename(&tmp, &self.path).await?;
+        Ok(())
+    }
+
+    #[cfg(test)]
     pub async fn insert_in_memory(&self, token: String, blob: SyncBlob) {
         self.inner.lock().await.insert(token, blob);
     }
 
+    #[cfg(test)]
     pub async fn len(&self) -> usize {
         self.inner.lock().await.len()
     }
 
-    /// Persist the current map to `self.path` via temp-file + rename.
+    #[cfg(test)]
     pub async fn save_to_disk(&self) -> std::io::Result<()> {
         let snapshot = {
             let g = self.inner.lock().await;
             serde_json::to_vec(&*g)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
         };
-        let tmp = self.path.with_extension("json.tmp");
+        let tmp = tmp_path(&self.path);
         tokio::fs::write(&tmp, &snapshot).await?;
-        tokio::fs::rename(&tmp, &self.path).await?;
-        Ok(())
-    }
-
-    /// Insert + persist atomically — the file write happens under the same
-    /// lock, so two concurrent PUTs can't produce an interleaved on-disk
-    /// snapshot.
-    pub async fn put(&self, token: String, blob: SyncBlob) -> std::io::Result<()> {
-        let mut g = self.inner.lock().await;
-        g.insert(token, blob);
-        let bytes = serde_json::to_vec(&*g)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        let tmp = self.path.with_extension("json.tmp");
-        tokio::fs::write(&tmp, &bytes).await?;
         tokio::fs::rename(&tmp, &self.path).await?;
         Ok(())
     }
@@ -104,6 +117,32 @@ mod tests {
         SyncBlob {
             blob: serde_json::json!({ "resume": { "v": value } }),
             updated_at,
+        }
+    }
+
+    /// Self-cleaning tempdir. Avoids adding a `tempfile` dep just for a
+    /// few round-trip tests.
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new() -> Self {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let p = std::env::temp_dir().join(format!("moonmoon-sync-test-{nanos}"));
+            std::fs::create_dir_all(&p).unwrap();
+            Self(p)
+        }
+
+        fn join(&self, name: &str) -> PathBuf {
+            self.0.join(name)
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
         }
     }
 
@@ -135,7 +174,7 @@ mod tests {
 
     #[tokio::test]
     async fn save_then_load_roundtrips() {
-        let dir = tempdir();
+        let dir = TempDir::new();
         let path = dir.join("sync.json");
 
         let s1 = SyncStore::new_in_memory(path.clone());
@@ -151,7 +190,7 @@ mod tests {
 
     #[tokio::test]
     async fn load_missing_file_starts_empty() {
-        let dir = tempdir();
+        let dir = TempDir::new();
         let path = dir.join("does-not-exist.json");
         let s = SyncStore::load(path).await;
         assert_eq!(s.len().await, 0);
@@ -159,7 +198,7 @@ mod tests {
 
     #[tokio::test]
     async fn load_corrupt_file_starts_empty() {
-        let dir = tempdir();
+        let dir = TempDir::new();
         let path = dir.join("sync.json");
         tokio::fs::write(&path, b"not valid json").await.unwrap();
         let s = SyncStore::load(path).await;
@@ -168,7 +207,7 @@ mod tests {
 
     #[tokio::test]
     async fn put_persists_atomically() {
-        let dir = tempdir();
+        let dir = TempDir::new();
         let path = dir.join("sync.json");
         let s = SyncStore::new_in_memory(path.clone());
         s.put("ZZZ".into(), blob("via-put", 42)).await.unwrap();
@@ -178,15 +217,16 @@ mod tests {
         assert_eq!(got.blob["resume"]["v"], "via-put");
     }
 
-    /// Make a unique tempdir under target/ — the project has no `tempfile`
-    /// crate and we don't want to add one for these tests.
-    fn tempdir() -> PathBuf {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let p = std::env::temp_dir().join(format!("moonmoon-sync-test-{nanos}"));
-        std::fs::create_dir_all(&p).unwrap();
-        p
+    #[test]
+    fn tmp_path_appends_rather_than_replaces() {
+        assert_eq!(
+            tmp_path(Path::new("sync.json")),
+            PathBuf::from("sync.json.tmp")
+        );
+        assert_eq!(tmp_path(Path::new("sync")), PathBuf::from("sync.tmp"));
+        assert_eq!(
+            tmp_path(Path::new("/data/sync.json")),
+            PathBuf::from("/data/sync.json.tmp")
+        );
     }
 }
