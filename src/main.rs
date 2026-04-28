@@ -9,6 +9,7 @@ use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
 mod handlers;
+mod sync_store;
 mod vods;
 
 pub struct AppState {
