@@ -150,8 +150,17 @@
   left: 13px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--text-muted);
+  color: var(--text-dim);
   pointer-events: none;
+}
+
+@keyframes headerFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.header { animation: headerFadeIn 0.32s ease 0.06s both; }
+@media (prefers-reduced-motion: reduce) {
+  .header { animation: none; }
 }
 
 @media (max-width: 1024px) {
