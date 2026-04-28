@@ -617,7 +617,7 @@
   function tick() {
     try {
       var state = player.getPlayerState();
-      if (state === YT.PlayerState.PAUSED || state === YT.PlayerState.BUFFERING) return;
+      if (state !== YT.PlayerState.PLAYING) return;
     } catch (e) { /* ignore */ }
     var globalTime = getGlobalTime();
     // Detect seek: time jumped by more than 3 seconds
