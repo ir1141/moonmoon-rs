@@ -1,8 +1,12 @@
 //! Sync endpoints. Tokens are base32 (RFC 4648 alphabet) so they survive
 //! double-click selection, copy-paste between browsers, and QR codes.
 
-// Removed in Task 7 once main.rs registers the routes.
-#![allow(dead_code)]
+use crate::SharedState;
+use crate::sync_store::{MAX_BLOB_BYTES, SyncBlob};
+use axum::Json;
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 
 const TOKEN_MIN_LEN: usize = 26;
 const TOKEN_MAX_LEN: usize = 32;
@@ -18,6 +22,41 @@ pub(crate) fn is_valid_token(token: &str) -> bool {
     token
         .chars()
         .all(|c| c.is_ascii_uppercase() || ('2'..='7').contains(&c))
+}
+
+pub async fn sync_get(
+    State(state): State<SharedState>,
+    Path(token): Path<String>,
+) -> axum::response::Response {
+    if !is_valid_token(&token) {
+        return (StatusCode::BAD_REQUEST, "invalid token").into_response();
+    }
+    match state.sync_store.get(&token).await {
+        Some(blob) => Json(blob).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+pub async fn sync_put(
+    State(state): State<SharedState>,
+    Path(token): Path<String>,
+    body: axum::body::Bytes,
+) -> axum::response::Response {
+    if !is_valid_token(&token) {
+        return (StatusCode::BAD_REQUEST, "invalid token").into_response();
+    }
+    if body.len() > MAX_BLOB_BYTES {
+        return (StatusCode::PAYLOAD_TOO_LARGE, "blob too large").into_response();
+    }
+    let blob: SyncBlob = match serde_json::from_slice(&body) {
+        Ok(b) => b,
+        Err(_) => return (StatusCode::BAD_REQUEST, "invalid json").into_response(),
+    };
+    if let Err(e) = state.sync_store.put(token, blob).await {
+        tracing::error!("sync put failed: {e}");
+        return (StatusCode::INTERNAL_SERVER_ERROR, "store error").into_response();
+    }
+    StatusCode::NO_CONTENT.into_response()
 }
 
 #[cfg(test)]

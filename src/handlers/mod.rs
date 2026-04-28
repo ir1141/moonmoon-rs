@@ -10,6 +10,7 @@ pub use api::chat_proxy;
 pub use calendar::calendar_page;
 pub use games::{games_grid, games_page};
 pub use history::{history_page, history_vods_grid};
+pub use sync::{sync_get, sync_put};
 pub use vods::{all_streams_grid, all_streams_page, game_vods_grid, game_vods_page};
 pub use watch::{next_in_period, random_vod, vod_detail, watch_page};
 
