@@ -9,6 +9,7 @@ use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
 mod handlers;
+mod sync_store;
 mod vods;
 
 pub struct AppState {
@@ -16,6 +17,7 @@ pub struct AppState {
     pub games: RwLock<Arc<Vec<vods::Game>>>,
     pub http_client: reqwest::Client,
     pub refresh_lock: tokio::sync::Mutex<()>,
+    pub sync_store: Arc<sync_store::SyncStore>,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -51,11 +53,17 @@ async fn main() {
     let games = vods::build_games(&all_vods);
     tracing::info!("found {} games", games.len());
 
+    let sync_store_path: std::path::PathBuf = std::env::var("SYNC_STORE_PATH")
+        .unwrap_or_else(|_| "sync.json".to_string())
+        .into();
+    let sync_store = Arc::new(sync_store::SyncStore::load(sync_store_path).await);
+
     let state = Arc::new(AppState {
         vods: RwLock::new(Arc::new(all_vods)),
         games: RwLock::new(Arc::new(games)),
         http_client,
         refresh_lock: tokio::sync::Mutex::new(()),
+        sync_store,
     });
 
     const REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
@@ -104,6 +112,10 @@ async fn main() {
         .route("/api/chat/{vod_id}", get(handlers::chat_proxy))
         .route("/api/vod/{vod_id}", get(handlers::vod_detail))
         .route("/api/next/{vod_id}", get(handlers::next_in_period))
+        .route(
+            "/api/sync/{token}",
+            get(handlers::sync_get).put(handlers::sync_put),
+        )
         .layer(GovernorLayer::new(api_governor));
 
     let app = Router::new()
