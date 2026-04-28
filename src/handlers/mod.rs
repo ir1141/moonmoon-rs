@@ -2,6 +2,7 @@ mod api;
 mod calendar;
 mod games;
 mod history;
+mod sync;
 mod vods;
 mod watch;
 
