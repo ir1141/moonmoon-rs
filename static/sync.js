@@ -105,13 +105,65 @@
       });
   }
 
+  var DEBOUNCE_MS = 3000;
+  var POLL_MS = 2000;
+  var pushTimer = null;
+
+  function push() {
+    pushTimer = null;
+    var token = getToken();
+    if (!token) return;
+    var blob = { resume: getResume() };
+    var body = JSON.stringify({ blob: blob, updated_at: Date.now() });
+    fetch('/api/sync/' + encodeURIComponent(token), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: body,
+      keepalive: true
+    }).catch(function (err) { console.warn('[Sync] push failed:', err); });
+  }
+
+  function schedulePush() {
+    if (!getToken()) return;
+    if (pushTimer) clearTimeout(pushTimer);
+    pushTimer = setTimeout(push, DEBOUNCE_MS);
+  }
+
+  // localStorage `storage` events fire on OTHER tabs only, so we also poll
+  // the resume key in this tab. 2s is fine — the debounce already coalesces.
+  var lastResumeStr = localStorage.getItem(RESUME_KEY) || '';
+  setInterval(function () {
+    var cur = localStorage.getItem(RESUME_KEY) || '';
+    if (cur !== lastResumeStr) {
+      lastResumeStr = cur;
+      schedulePush();
+    }
+  }, POLL_MS);
+
+  window.addEventListener('storage', function (e) {
+    if (e.key === RESUME_KEY) {
+      lastResumeStr = e.newValue || '';
+      schedulePush();
+    }
+  });
+
+  // Flush any pending push when the user navigates away. `keepalive: true`
+  // on the fetch lets it survive page unload.
+  window.addEventListener('beforeunload', function () {
+    if (pushTimer) {
+      clearTimeout(pushTimer);
+      push();
+    }
+  });
+
   // Expose for the settings UI (Task 11).
   window.__moonmoonSync = {
     getToken: getToken,
     setToken: setToken,
     isValidToken: isValidToken,
     generateToken: generateToken,
-    pull: pull
+    pull: pull,
+    push: push
   };
 
   // Initial pull on every page load.
