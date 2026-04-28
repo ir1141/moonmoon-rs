@@ -172,6 +172,12 @@
 
 .chat-name {
   font-weight: 600;
+  color: var(--user-color, inherit);
+}
+/* Twitch user_color values were chosen for dark backgrounds; mix toward black
+   in light mode so bright/yellow names remain legible against cream bg. */
+[data-theme="light"] .chat-name {
+  color: color-mix(in oklab, var(--user-color, currentColor) 55%, #000);
 }
 
 .chat-body {

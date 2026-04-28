@@ -11,8 +11,37 @@
   --text: #e8e6f0;
   --text-dim: #8b8a96;
   --text-muted: #5c5b66;
+  --header-bg: rgba(8, 8, 10, 0.82);
+  --input-bg: #0c0b13;
+  --button-hover-bg: #25232f;
+  --on-overlay: #e8e6f0;
+  --on-overlay-dim: #b8b6c4;
+  --shadow-card-hover: 0 20px 40px rgba(0, 0, 0, 0.5);
+  --shadow-vod-hover: 0 12px 32px rgba(0, 0, 0, 0.35);
   --font-display: 'Chakra Petch', sans-serif;
   --font-body: 'Outfit', sans-serif;
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg-deep: #f1ede2;
+  --bg-surface: #faf6ec;
+  --bg-card: #ffffff;
+  --bg-elevated: #ece6d6;
+  --border: #d6cfbd;
+  --border-hover: #5b4bd1;
+  --accent: #5b4bd1;
+  --accent-glow: rgba(91, 75, 209, 0.22);
+  --accent-soft: #6c5ce7;
+  --text: #1a1620;
+  --text-dim: #4f4a5c;
+  --text-muted: #6f6a82;
+  --header-bg: rgba(241, 237, 226, 0.82);
+  --input-bg: #faf6ec;
+  --button-hover-bg: #e2dcc9;
+  --shadow-card-hover: 0 18px 36px rgba(40, 30, 70, 0.18);
+  --shadow-vod-hover: 0 10px 28px rgba(40, 30, 70, 0.14);
+  color-scheme: light;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }

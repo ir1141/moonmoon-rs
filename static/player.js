@@ -449,7 +449,7 @@
       name.className = 'chat-name';
       name.textContent = (entry.display_name || 'Anonymous') + ': ';
       if (entry.user_color && /^#[0-9a-fA-F]{3,8}$/.test(entry.user_color)) {
-        name.style.color = entry.user_color;
+        name.style.setProperty('--user-color', entry.user_color);
       }
       row.appendChild(name);
 
@@ -483,7 +483,7 @@
       nameSpan.className = 'chat-name';
       nameSpan.textContent = (msg.display_name || 'Anonymous') + ': ';
       if (msg.user_color && /^#[0-9a-fA-F]{3,8}$/.test(msg.user_color)) {
-        nameSpan.style.color = msg.user_color;
+        nameSpan.style.setProperty('--user-color', msg.user_color);
       }
 
       var bodySpan = document.createElement('span');
