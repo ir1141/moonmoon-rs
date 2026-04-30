@@ -18,8 +18,8 @@ export function mergeResume(local, remote) {
       merged[k] = l;
       continue;
     }
-    const lt = (l && l.updated) || 0;
-    const rt = (r && r.updated) || 0;
+    const lt = l.updated || 0;
+    const rt = r.updated || 0;
     if (rt > lt) {
       merged[k] = r;
       changed = true;

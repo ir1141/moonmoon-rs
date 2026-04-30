@@ -152,9 +152,12 @@ pull();
 function el(id) {
   return document.getElementById(id);
 }
-var btn = el("sync-btn");
-var dlg = el("sync-dialog");
-if (btn && dlg) {
+
+function initSettingsUi() {
+  var btn = el("sync-btn");
+  var dlg = el("sync-dialog");
+  if (!btn || !dlg) return;
+
   function refreshUi() {
     var token = getToken();
     var connected = !!token;
@@ -259,3 +262,5 @@ if (btn && dlg) {
 
   refreshUi();
 }
+
+initSettingsUi();
