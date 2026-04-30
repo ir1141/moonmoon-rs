@@ -18,6 +18,8 @@
   }
   var STORAGE_KEY = 'moonmoon_resume';
   var MAX_RESUME_ENTRIES = 500;
+  var PART_DURATIONS_KEY = 'moonmoon_part_durations';
+  var MAX_PART_DURATION_ENTRIES = 500;
   var MAX_CHAT_DOM_NODES = 2000;
 
   var MAX_PART_DURATION = 10800; // 3 hours
@@ -294,6 +296,57 @@
         buttons[i].classList.remove('active');
       }
     }
+  }
+
+  // ─── Part duration cache (localStorage) ───
+  // Cache real YouTube part durations as we observe them, so multi-part resumes
+  // can align chat against actual durations instead of MAX_PART_DURATION
+  // placeholders. Sentinel: 0 means "unknown for this index".
+
+  function getPartDurationsStore() {
+    try {
+      return JSON.parse(localStorage.getItem(PART_DURATIONS_KEY)) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function getCachedPartDurations() {
+    var store = getPartDurationsStore();
+    var entry = store[VOD_ID];
+    if (!entry || !Array.isArray(entry.durations)) return null;
+    if (entry.durations.length !== YOUTUBE_IDS.length) return null;
+    return entry.durations;
+  }
+
+  function savePartDuration(index, duration) {
+    if (!(duration > 0)) return;
+    if (index < 0 || index >= YOUTUBE_IDS.length) return;
+    try {
+      var store = getPartDurationsStore();
+      var entry = store[VOD_ID];
+      var durations;
+      if (entry && Array.isArray(entry.durations)
+          && entry.durations.length === YOUTUBE_IDS.length) {
+        durations = entry.durations.slice();
+      } else {
+        durations = [];
+        for (var i = 0; i < YOUTUBE_IDS.length; i++) durations.push(0);
+      }
+      durations[index] = duration;
+      store[VOD_ID] = { durations: durations, updated: Date.now() };
+      // Cap entries (LRU by `updated`).
+      var keys = Object.keys(store);
+      if (keys.length > MAX_PART_DURATION_ENTRIES) {
+        keys.sort(function (a, b) {
+          return (store[a].updated || 0) - (store[b].updated || 0);
+        });
+        while (keys.length > MAX_PART_DURATION_ENTRIES) {
+          delete store[keys.shift()];
+        }
+      }
+      localStorage.setItem(PART_DURATIONS_KEY, JSON.stringify(store));
+    } catch (e) { /* quota exceeded or similar */ }
   }
 
   // ─── Resume (localStorage) ───
