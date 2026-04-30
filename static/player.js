@@ -672,21 +672,23 @@
   function onPlayerReady() {
     buildPartSelector();
 
-    // Check for ?t= param (chapter deep-link) — takes priority over resume
+    // Resolve the initial position. Priority: ?t= deep-link > saved resume > start.
     var urlParams = new URLSearchParams(window.location.search);
-    var startTime = parseInt(urlParams.get('t'), 10);
-    if (startTime > 0) {
-      seekToGlobal(startTime);
-    } else {
-      // Auto-resume
-      var resume = getResumePosition();
-      if (resume && resume.time > 10) {
-        seekToGlobal(resume.time);
-      }
+    var deepLinkT = parseInt(urlParams.get('t'), 10);
+    var resume = getResumePosition();
+    var initialOffset = 0;
+    if (deepLinkT > 0) {
+      seekToGlobal(deepLinkT);
+      initialOffset = deepLinkT;
+    } else if (resume && resume.time > 10) {
+      seekToGlobal(resume.time);
+      initialOffset = resume.time;
     }
 
-    // Start chat loading
-    loadChat(0);
+    // Load chat from the same offset the player will be at, NOT 0. Otherwise the
+    // tick loop pages through every chat message from 0 → initialOffset trying to
+    // catch up, which floods the DOM and visibly desyncs from the video.
+    loadChat(initialOffset);
 
     // Start tick
     tickInterval = setInterval(tick, 1000);
