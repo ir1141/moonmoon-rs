@@ -18,6 +18,8 @@
   }
   var STORAGE_KEY = 'moonmoon_resume';
   var MAX_RESUME_ENTRIES = 500;
+  var PART_DURATIONS_KEY = 'moonmoon_part_durations';
+  var MAX_PART_DURATION_ENTRIES = 500;
   var MAX_CHAT_DOM_NODES = 2000;
 
   var MAX_PART_DURATION = 10800; // 3 hours
@@ -255,7 +257,16 @@
       player.addEventListener('onStateChange', waitForPlay);
     }
     updatePartSelector();
-    loadChat(0);
+
+    // Compute the global time we're switching TO so chat loads aligned with
+    // the new playhead. Without this, chat reloads from offset 0 and the
+    // tick loop has to page forward through every prior message.
+    var cumulative = 0;
+    for (var p = 0; p < index; p++) {
+      cumulative += (partDurations[p] || 0);
+    }
+    var localStart = (typeof seekTime === 'number' && seekTime > 0) ? seekTime : 0;
+    loadChat(cumulative + localStart);
   }
 
   function buildPartSelector() {
@@ -287,6 +298,57 @@
     }
   }
 
+  // ─── Part duration cache (localStorage) ───
+  // Cache real YouTube part durations as we observe them, so multi-part resumes
+  // can align chat against actual durations instead of MAX_PART_DURATION
+  // placeholders. Sentinel: 0 means "unknown for this index".
+
+  function getPartDurationsStore() {
+    try {
+      return JSON.parse(localStorage.getItem(PART_DURATIONS_KEY)) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function getCachedPartDurations() {
+    var store = getPartDurationsStore();
+    var entry = store[VOD_ID];
+    if (!entry || !Array.isArray(entry.durations)) return null;
+    if (entry.durations.length !== YOUTUBE_IDS.length) return null;
+    return entry.durations;
+  }
+
+  function savePartDuration(index, duration) {
+    if (!(duration > 0)) return;
+    if (index < 0 || index >= YOUTUBE_IDS.length) return;
+    try {
+      var store = getPartDurationsStore();
+      var entry = store[VOD_ID];
+      var durations;
+      if (entry && Array.isArray(entry.durations)
+          && entry.durations.length === YOUTUBE_IDS.length) {
+        durations = entry.durations.slice();
+      } else {
+        durations = [];
+        for (var i = 0; i < YOUTUBE_IDS.length; i++) durations.push(0);
+      }
+      durations[index] = duration;
+      store[VOD_ID] = { durations: durations, updated: Date.now() };
+      // Cap entries (LRU by `updated`).
+      var keys = Object.keys(store);
+      if (keys.length > MAX_PART_DURATION_ENTRIES) {
+        keys.sort(function (a, b) {
+          return (store[a].updated || 0) - (store[b].updated || 0);
+        });
+        while (keys.length > MAX_PART_DURATION_ENTRIES) {
+          delete store[keys.shift()];
+        }
+      }
+      localStorage.setItem(PART_DURATIONS_KEY, JSON.stringify(store));
+    } catch (e) { /* quota exceeded or similar */ }
+  }
+
   // ─── Resume (localStorage) ───
 
   function getResumeStore() {
@@ -301,9 +363,14 @@
     try {
       if (!player || !player.getCurrentTime) return;
       var store = getResumeStore();
+      var localTime = 0;
+      try {
+        localTime = player.getCurrentTime();
+      } catch (e) { /* ignore */ }
       store[VOD_ID] = {
         time: getGlobalTime(),
         part: currentPart,
+        localTime: localTime,
         updated: Date.now()
       };
       // Enforce max entries
@@ -620,8 +687,14 @@
       if (state !== YT.PlayerState.PLAYING) return;
     } catch (e) { /* ignore */ }
     var globalTime = getGlobalTime();
-    // Detect seek: time jumped by more than 3 seconds
-    if (lastTickTime >= 0 && Math.abs(globalTime - lastTickTime) > 3) {
+    // Detect seek: time jumped by more than 3 seconds. Also treat the very first
+    // tick after PLAYING as a potential seek if globalTime is non-trivial — this
+    // catches the autoplay-blocked path where the resume seek happened during
+    // UNSTARTED (which the tick guard skips), so we never observed the jump.
+    var jumped = lastTickTime >= 0 && Math.abs(globalTime - lastTickTime) > 3;
+    var firstTickAtOffset = lastTickTime < 0 && globalTime > 10
+      && chatMessages.length === 0;
+    if (jumped || firstTickAtOffset) {
       resetChat(globalTime);
     }
     lastTickTime = globalTime;
@@ -670,23 +743,60 @@
   };
 
   function onPlayerReady() {
-    buildPartSelector();
-
-    // Check for ?t= param (chapter deep-link) — takes priority over resume
-    var urlParams = new URLSearchParams(window.location.search);
-    var startTime = parseInt(urlParams.get('t'), 10);
-    if (startTime > 0) {
-      seekToGlobal(startTime);
-    } else {
-      // Auto-resume
-      var resume = getResumePosition();
-      if (resume && resume.time > 10) {
-        seekToGlobal(resume.time);
+    // Prefill partDurations from any cached real durations BEFORE any seek
+    // logic runs. Without this, multi-part resumes compute global offsets
+    // against the 3h MAX_PART_DURATION placeholder and chat lands on the
+    // wrong content offset.
+    var cachedDurations = getCachedPartDurations();
+    if (cachedDurations) {
+      for (var ci = 0; ci < cachedDurations.length; ci++) {
+        if (cachedDurations[ci] > 0) {
+          partDurations[ci] = cachedDurations[ci];
+        }
       }
     }
 
-    // Start chat loading
-    loadChat(0);
+    buildPartSelector();
+
+    // Resolve the initial position. Priority: ?t= deep-link > saved resume > start.
+    var urlParams = new URLSearchParams(window.location.search);
+    var deepLinkT = parseInt(urlParams.get('t'), 10);
+    var resume = getResumePosition();
+    var initialOffset = 0;
+    if (deepLinkT > 0) {
+      seekToGlobal(deepLinkT);
+      initialOffset = deepLinkT;
+    } else if (resume && resume.time > 10) {
+      var hasLocal = typeof resume.localTime === 'number' && resume.part != null
+        && resume.part >= 0 && resume.part < YOUTUBE_IDS.length;
+      if (hasLocal) {
+        // Precise resume: jump to the exact part + local offset, sidestepping
+        // the partDurations placeholder entirely.
+        if (resume.part !== currentPart) {
+          switchPart(resume.part, resume.localTime);
+          // switchPart already loaded chat with the correct offset, and we
+          // still need the tick loop running. Skip the boot loadChat below.
+          tickInterval = setInterval(tick, 1000);
+          return;
+        }
+        if (resume.localTime > 0) {
+          player.seekTo(resume.localTime, true);
+        }
+        // Same-part resume: this branch is only reached when resume.part ===
+        // currentPart, and currentPart is always 0 here, so resume.part === 0
+        // and the cumulative offset reduces to localTime.
+        initialOffset = resume.localTime;
+      } else {
+        // Legacy entry (no localTime): fall back to global-time seek.
+        seekToGlobal(resume.time);
+        initialOffset = resume.time;
+      }
+    }
+
+    // Load chat from the same offset the player will be at, NOT 0. Otherwise the
+    // tick loop pages through every chat message from 0 → initialOffset trying to
+    // catch up, which floods the DOM and visibly desyncs from the video.
+    loadChat(initialOffset);
 
     // Start tick
     tickInterval = setInterval(tick, 1000);
@@ -694,11 +804,11 @@
 
   function onPlayerStateChange(event) {
     if (event.data === YT.PlayerState.PLAYING) {
-      // Update duration for current part
       try {
         var dur = player.getDuration();
         if (dur > 0) {
           partDurations[currentPart] = dur;
+          savePartDuration(currentPart, dur);
         }
       } catch (e) { /* ignore */ }
     }
