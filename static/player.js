@@ -634,8 +634,13 @@
       if (state !== YT.PlayerState.PLAYING) return;
     } catch (e) { /* ignore */ }
     var globalTime = getGlobalTime();
-    // Detect seek: time jumped by more than 3 seconds
-    if (lastTickTime >= 0 && Math.abs(globalTime - lastTickTime) > 3) {
+    // Detect seek: time jumped by more than 3 seconds. Also treat the very first
+    // tick after PLAYING as a potential seek if globalTime is non-trivial — this
+    // catches the autoplay-blocked path where the resume seek happened during
+    // UNSTARTED (which the tick guard skips), so we never observed the jump.
+    var jumped = lastTickTime >= 0 && Math.abs(globalTime - lastTickTime) > 3;
+    var firstTickAtOffset = lastTickTime < 0 && globalTime > 10;
+    if (jumped || firstTickAtOffset) {
       resetChat(globalTime);
     }
     lastTickTime = globalTime;
