@@ -1,10 +1,11 @@
-(function () {
-  'use strict';
+import {
+  getCachedPartDurations as getCachedPartDurationsPure,
+  savePartDuration as savePartDurationPure,
+} from './lib/part-durations.js';
 
-  var dataEl = document.getElementById('vod-data');
+var dataEl = document.getElementById('vod-data');
   if (!dataEl) {
-    console.error('[Player] Missing #vod-data element');
-    return;
+    throw new Error('[Player] Missing #vod-data element');
   }
   var VOD_ID = dataEl.dataset.vodId;
   var GAME_HINT = dataEl.dataset.gameHint || '';
@@ -312,40 +313,18 @@
   }
 
   function getCachedPartDurations() {
-    var store = getPartDurationsStore();
-    var entry = store[VOD_ID];
-    if (!entry || !Array.isArray(entry.durations)) return null;
-    if (entry.durations.length !== YOUTUBE_IDS.length) return null;
-    return entry.durations;
+    return getCachedPartDurationsPure(getPartDurationsStore(), VOD_ID, YOUTUBE_IDS.length);
   }
 
   function savePartDuration(index, duration) {
-    if (!(duration > 0)) return;
-    if (index < 0 || index >= YOUTUBE_IDS.length) return;
+    var store = getPartDurationsStore();
+    var next = savePartDurationPure(
+      store, VOD_ID, YOUTUBE_IDS.length, index, duration,
+      MAX_PART_DURATION_ENTRIES, Date.now()
+    );
+    if (next === store) return;
     try {
-      var store = getPartDurationsStore();
-      var entry = store[VOD_ID];
-      var durations;
-      if (entry && Array.isArray(entry.durations)
-          && entry.durations.length === YOUTUBE_IDS.length) {
-        durations = entry.durations.slice();
-      } else {
-        durations = [];
-        for (var i = 0; i < YOUTUBE_IDS.length; i++) durations.push(0);
-      }
-      durations[index] = duration;
-      store[VOD_ID] = { durations: durations, updated: Date.now() };
-      // Cap entries (LRU by `updated`).
-      var keys = Object.keys(store);
-      if (keys.length > MAX_PART_DURATION_ENTRIES) {
-        keys.sort(function (a, b) {
-          return (store[a].updated || 0) - (store[b].updated || 0);
-        });
-        while (keys.length > MAX_PART_DURATION_ENTRIES) {
-          delete store[keys.shift()];
-        }
-      }
-      localStorage.setItem(PART_DURATIONS_KEY, JSON.stringify(store));
+      localStorage.setItem(PART_DURATIONS_KEY, JSON.stringify(next));
     } catch (e) { /* quota exceeded or similar */ }
   }
 
@@ -934,5 +913,3 @@
       setTheatre(!document.body.classList.contains('theatre-mode'));
     }
   });
-
-})();
