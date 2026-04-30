@@ -34,11 +34,13 @@ a.game-card {
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s;
+  transition:
+    transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.3s;
   border: 1px solid transparent;
 }
 .game-card::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   border-radius: 12px;
@@ -48,9 +50,13 @@ a.game-card {
 }
 .game-card:hover {
   transform: translateY(-6px) scale(1.02);
-  box-shadow: 0 20px 40px rgba(0,0,0,0.5), 0 0 30px var(--accent-glow);
+  box-shadow:
+    0 20px 40px rgba(0, 0, 0, 0.5),
+    0 0 30px var(--accent-glow);
 }
-.game-card:hover::after { border-color: var(--accent); }
+.game-card:hover::after {
+  border-color: var(--accent);
+}
 
 .game-card .art-wrap {
   position: relative;
@@ -64,7 +70,9 @@ a.game-card {
   display: block;
   transition: transform 0.4s cubic-bezier(0.25, 0, 0.25, 1);
 }
-.game-card:hover .art { transform: scale(1.08); }
+.game-card:hover .art {
+  transform: scale(1.08);
+}
 
 .game-card .stream-badge {
   position: absolute;
@@ -80,7 +88,9 @@ a.game-card {
   letter-spacing: 0.3px;
 }
 
-.game-card .info { padding: 12px 14px 14px; }
+.game-card .info {
+  padding: 12px 14px 14px;
+}
 .game-card .name {
   font-family: var(--font-body);
   font-size: 13px;
@@ -92,11 +102,25 @@ a.game-card {
 }
 
 @media (max-width: 768px) {
-  .games-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
-  .games-toolbar { flex-direction: column; align-items: flex-start; gap: 12px; }
-  .games-filters { margin-left: 0; width: 100%; flex-wrap: wrap; }
+  .games-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+  }
+  .games-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .games-filters {
+    margin-left: 0;
+    width: 100%;
+    flex-wrap: wrap;
+  }
 }
 
 @media (max-width: 480px) {
-  .games-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .games-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
 }

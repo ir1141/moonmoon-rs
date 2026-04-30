@@ -10,3 +10,5 @@ docs/
 # Cross-device sync store (operator-managed, not source data)
 sync.json
 sync.json.tmp
+
+node_modules/

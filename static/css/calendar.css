@@ -105,7 +105,9 @@
 
 .cal-day.today {
   border: 1.5px solid var(--accent);
-  box-shadow: 0 0 0 1px var(--accent-glow), 0 0 14px var(--accent-glow);
+  box-shadow:
+    0 0 0 1px var(--accent-glow),
+    0 0 14px var(--accent-glow);
   opacity: 1;
 }
 
@@ -117,7 +119,8 @@
 .cal-day.has-streams {
   cursor: pointer;
   border-color: rgba(108, 92, 231, calc(0.15 + var(--glow, 0) * 0.55));
-  box-shadow: 0 0 calc(var(--glow, 0) * 18px) rgba(108, 92, 231, calc(var(--glow, 0) * 0.2));
+  box-shadow: 0 0 calc(var(--glow, 0) * 18px)
+    rgba(108, 92, 231, calc(var(--glow, 0) * 0.2));
 }
 
 .cal-day.has-streams:hover {
@@ -137,7 +140,7 @@
   color: var(--text);
   z-index: 2;
   line-height: 1;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 }
 
 .cal-date.dim {
@@ -182,11 +185,11 @@
 }
 
 /* Three+ games: first takes left half, rest stack on right */
-.cal-games .cal-game-art:first-child:nth-last-child(n+3) {
+.cal-games .cal-game-art:first-child:nth-last-child(n + 3) {
   flex: 1 1 50%;
   min-width: 50%;
 }
-.cal-games .cal-game-art:first-child:nth-last-child(n+3) ~ .cal-game-art {
+.cal-games .cal-game-art:first-child:nth-last-child(n + 3) ~ .cal-game-art {
   flex: 1 1 50%;
   min-width: 50%;
   height: 50%;
@@ -210,7 +213,7 @@
   color: var(--text-dim);
   z-index: 2;
   letter-spacing: 0.02em;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 }
 
 .cal-day.has-streams:hover .cal-duration {
