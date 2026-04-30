@@ -1,15 +1,15 @@
 const TOKEN_RE = /^[A-Z2-7]{26,32}$/;
-const ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+const ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 export function isValidToken(t) {
-  return typeof t === 'string' && TOKEN_RE.test(t);
+  return typeof t === "string" && TOKEN_RE.test(t);
 }
 
 export function generateToken(randomBytes) {
   const bytes = randomBytes(16);
   let bits = 0;
   let value = 0;
-  let output = '';
+  let output = "";
   for (let i = 0; i < bytes.length; i++) {
     value = (value << 8) | bytes[i];
     bits += 8;

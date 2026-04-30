@@ -5,14 +5,26 @@ export function getCachedPartDurations(store, vodId, partCount) {
   return entry.durations;
 }
 
-export function savePartDuration(store, vodId, partCount, index, duration, maxEntries, now) {
+export function savePartDuration(
+  store,
+  vodId,
+  partCount,
+  index,
+  duration,
+  maxEntries,
+  now,
+) {
   if (!(duration > 0)) return store;
   if (index < 0 || index >= partCount) return store;
 
   const next = { ...store };
   const existing = next[vodId];
   let durations;
-  if (existing && Array.isArray(existing.durations) && existing.durations.length === partCount) {
+  if (
+    existing &&
+    Array.isArray(existing.durations) &&
+    existing.durations.length === partCount
+  ) {
     durations = existing.durations.slice();
   } else {
     durations = new Array(partCount).fill(0);
