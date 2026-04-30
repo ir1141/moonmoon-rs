@@ -255,7 +255,16 @@
       player.addEventListener('onStateChange', waitForPlay);
     }
     updatePartSelector();
-    loadChat(0);
+
+    // Compute the global time we're switching TO so chat loads aligned with
+    // the new playhead. Without this, chat reloads from offset 0 and the
+    // tick loop has to page forward through every prior message.
+    var cumulative = 0;
+    for (var p = 0; p < index; p++) {
+      cumulative += (partDurations[p] || 0);
+    }
+    var localStart = (typeof seekTime === 'number' && seekTime > 0) ? seekTime : 0;
+    loadChat(cumulative + localStart);
   }
 
   function buildPartSelector() {
