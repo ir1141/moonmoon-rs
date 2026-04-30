@@ -7,9 +7,18 @@
   width: min(440px, 90vw);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
 }
-.sync-dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
-.sync-dialog h2 { margin: 0 0 12px; font-size: 16px; }
-.sync-dialog p { margin: 0 0 12px; font-size: 13px; color: var(--text-muted, #9b98a6); }
+.sync-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+.sync-dialog h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+.sync-dialog p {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-muted, #9b98a6);
+}
 .sync-dialog .sync-token-row {
   display: flex;
   gap: 6px;
@@ -35,14 +44,19 @@
   color: inherit;
   cursor: pointer;
 }
-.sync-dialog button:hover { background: var(--button-hover-bg); }
+.sync-dialog button:hover {
+  background: var(--button-hover-bg);
+}
 .sync-dialog .sync-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   margin-top: 4px;
 }
-.sync-dialog .sync-danger { color: #e07a7a; border-color: #5a2f2f; }
+.sync-dialog .sync-danger {
+  color: #e07a7a;
+  border-color: #5a2f2f;
+}
 .sync-dialog label {
   display: block;
   font-size: 12px;

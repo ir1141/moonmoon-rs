@@ -16,8 +16,8 @@
   --button-hover-bg: #25232f;
   --on-overlay: #e8e6f0;
   --on-overlay-dim: #b8b6c4;
-  --font-display: 'Chakra Petch', sans-serif;
-  --font-body: 'Outfit', sans-serif;
+  --font-display: "Chakra Petch", sans-serif;
+  --font-body: "Outfit", sans-serif;
   color-scheme: dark;
 }
 
@@ -40,7 +40,11 @@
   color-scheme: light;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
 body {
   background: var(--bg-deep);
@@ -51,16 +55,25 @@ body {
 }
 
 body::before {
-  content: '';
+  content: "";
   position: fixed;
-  top: 0; left: 0; right: 0;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 600px;
-  background: radial-gradient(ellipse 80% 50% at 50% -20%, var(--accent-glow), transparent);
+  background: radial-gradient(
+    ellipse 80% 50% at 50% -20%,
+    var(--accent-glow),
+    transparent
+  );
   pointer-events: none;
   z-index: 0;
 }
 
-a { color: inherit; text-decoration: none; }
+a {
+  color: inherit;
+  text-decoration: none;
+}
 
 /* ─── Loading ─── */
 .progress-container {
@@ -132,13 +145,22 @@ a { color: inherit; text-decoration: none; }
 
 /* ─── Animations ─── */
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
-.game-card, .vod-card {
+.game-card,
+.vod-card {
   animation: fadeUp 0.4s ease both;
 }
 
 @media (max-width: 768px) {
-  .content { padding: 20px 16px; }
+  .content {
+    padding: 20px 16px;
+  }
 }

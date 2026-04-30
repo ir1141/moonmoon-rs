@@ -22,7 +22,9 @@
   color: var(--text);
   transition: color 0.2s;
 }
-.header .logo:hover { color: var(--accent-soft); }
+.header .logo:hover {
+  color: var(--accent-soft);
+}
 .header .sep {
   width: 1px;
   height: 20px;
@@ -56,7 +58,10 @@
   color: #a0a0aa;
   padding: 10px 14px;
   border-radius: 8px;
-  transition: color 0.2s, background 0.2s, box-shadow 0.2s;
+  transition:
+    color 0.2s,
+    background 0.2s,
+    box-shadow 0.2s;
 }
 .nav-link:hover {
   color: var(--text);
@@ -83,14 +88,20 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.08s ease;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    color 0.2s,
+    transform 0.08s ease;
 }
 .icon-btn:hover {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
 }
-.icon-btn:active { transform: scale(0.96); }
+.icon-btn:active {
+  transform: scale(0.96);
+}
 .icon-btn:focus-visible {
   outline: 2px solid var(--accent-soft);
   outline-offset: 2px;
@@ -110,12 +121,24 @@
 }
 
 /* ─── Theme toggle (sun/moon swap) ─── */
-.theme-icon-moon { display: none; }
-[data-theme="light"] .theme-icon-sun { display: none; }
-[data-theme="light"] .theme-icon-moon { display: inline-block; }
-#theme-btn svg { transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
-#theme-btn:hover svg { transform: rotate(28deg); }
-[data-theme="light"] #theme-btn:hover svg { transform: rotate(-18deg); }
+.theme-icon-moon {
+  display: none;
+}
+[data-theme="light"] .theme-icon-sun {
+  display: none;
+}
+[data-theme="light"] .theme-icon-moon {
+  display: inline-block;
+}
+#theme-btn svg {
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+#theme-btn:hover svg {
+  transform: rotate(28deg);
+}
+[data-theme="light"] #theme-btn:hover svg {
+  transform: rotate(-18deg);
+}
 
 .header-right {
   margin-left: auto;
@@ -147,7 +170,9 @@
   outline: none;
   transition: all 0.25s;
 }
-.search-bar input::placeholder { color: var(--text-muted); }
+.search-bar input::placeholder {
+  color: var(--text-muted);
+}
 .search-bar input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-glow);
@@ -163,23 +188,46 @@
 }
 
 @keyframes headerFadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
-.header { animation: headerFadeIn 0.32s ease 0.06s both; }
+.header {
+  animation: headerFadeIn 0.32s ease 0.06s both;
+}
 @media (prefers-reduced-motion: reduce) {
-  .header { animation: none; }
+  .header {
+    animation: none;
+  }
 }
 
 @media (max-width: 1024px) {
-  .header { padding: 0 20px; gap: 12px; }
-  .header .logo { font-size: 18px; letter-spacing: 2px; }
-  .nav-link { letter-spacing: 1px; padding: 9px 11px; }
-  .search-bar input { width: 180px; }
+  .header {
+    padding: 0 20px;
+    gap: 12px;
+  }
+  .header .logo {
+    font-size: 18px;
+    letter-spacing: 2px;
+  }
+  .nav-link {
+    letter-spacing: 1px;
+    padding: 9px 11px;
+  }
+  .search-bar input {
+    width: 180px;
+  }
   /* view_title (subtitle + its sep) competes for space at this width —
      hide it; the page itself still shows the heading inside .content. */
   .header > .subtitle,
-  .header > .sep { display: none; }
+  .header > .sep {
+    display: none;
+  }
 }
 
 @media (max-width: 768px) {
@@ -189,8 +237,19 @@
     height: auto;
     gap: 10px;
   }
-  .search-bar { flex: 1 1 100%; order: 99; }
-  .search-bar input { width: 100%; }
-  .nav-link { padding: 8px 10px; letter-spacing: 1px; }
-  .icon-btn { width: 36px; height: 36px; }
+  .search-bar {
+    flex: 1 1 100%;
+    order: 99;
+  }
+  .search-bar input {
+    width: 100%;
+  }
+  .nav-link {
+    padding: 8px 10px;
+    letter-spacing: 1px;
+  }
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+  }
 }
