@@ -743,6 +743,19 @@
   };
 
   function onPlayerReady() {
+    // Prefill partDurations from any cached real durations BEFORE any seek
+    // logic runs. Without this, multi-part resumes compute global offsets
+    // against the 3h MAX_PART_DURATION placeholder and chat lands on the
+    // wrong content offset.
+    var cachedDurations = getCachedPartDurations();
+    if (cachedDurations) {
+      for (var ci = 0; ci < cachedDurations.length; ci++) {
+        if (cachedDurations[ci] > 0) {
+          partDurations[ci] = cachedDurations[ci];
+        }
+      }
+    }
+
     buildPartSelector();
 
     // Resolve the initial position. Priority: ?t= deep-link > saved resume > start.
@@ -794,11 +807,12 @@
 
   function onPlayerStateChange(event) {
     if (event.data === YT.PlayerState.PLAYING) {
-      // Update duration for current part
+      // Update duration for current part, and cache it for future resumes.
       try {
         var dur = player.getDuration();
         if (dur > 0) {
           partDurations[currentPart] = dur;
+          savePartDuration(currentPart, dur);
         }
       } catch (e) { /* ignore */ }
     }
