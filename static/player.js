@@ -310,9 +310,14 @@
     try {
       if (!player || !player.getCurrentTime) return;
       var store = getResumeStore();
+      var localTime = 0;
+      try {
+        localTime = player.getCurrentTime ? player.getCurrentTime() : 0;
+      } catch (e) { /* ignore */ }
       store[VOD_ID] = {
         time: getGlobalTime(),
         part: currentPart,
+        localTime: localTime,
         updated: Date.now()
       };
       // Enforce max entries
@@ -690,8 +695,31 @@
       seekToGlobal(deepLinkT);
       initialOffset = deepLinkT;
     } else if (resume && resume.time > 10) {
-      seekToGlobal(resume.time);
-      initialOffset = resume.time;
+      var hasLocal = typeof resume.localTime === 'number' && resume.part != null
+        && resume.part >= 0 && resume.part < YOUTUBE_IDS.length;
+      if (hasLocal) {
+        // Precise resume: jump to the exact part + local offset, sidestepping
+        // the partDurations placeholder entirely.
+        if (resume.part !== currentPart) {
+          switchPart(resume.part, resume.localTime);
+          // switchPart already loaded chat with the correct offset (Task 2),
+          // and we still need the tick loop running. Skip the boot loadChat below.
+          tickInterval = setInterval(tick, 1000);
+          return;
+        }
+        if (resume.localTime > 0) {
+          player.seekTo(resume.localTime, true);
+        }
+        // Same-part resume: compute global offset for chat. partDurations[0..currentPart-1]
+        // is empty (currentPart is 0 here since switchPart wasn't called), so this is exact.
+        var cum = 0;
+        for (var pi = 0; pi < resume.part; pi++) cum += (partDurations[pi] || 0);
+        initialOffset = cum + resume.localTime;
+      } else {
+        // Legacy entry (no localTime): fall back to global-time seek.
+        seekToGlobal(resume.time);
+        initialOffset = resume.time;
+      }
     }
 
     // Load chat from the same offset the player will be at, NOT 0. Otherwise the
