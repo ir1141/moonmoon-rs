@@ -782,13 +782,10 @@
         if (resume.localTime > 0) {
           player.seekTo(resume.localTime, true);
         }
-        // Same-part resume: at boot currentPart is always 0, so this branch is
-        // only reached when resume.part === 0. The loop is therefore a no-op
-        // and initialOffset === resume.localTime exactly — no partDurations
-        // placeholder leakage.
-        var cum = 0;
-        for (var pi = 0; pi < resume.part; pi++) cum += (partDurations[pi] || 0);
-        initialOffset = cum + resume.localTime;
+        // Same-part resume: this branch is only reached when resume.part ===
+        // currentPart, and currentPart is always 0 here, so resume.part === 0
+        // and the cumulative offset reduces to localTime.
+        initialOffset = resume.localTime;
       } else {
         // Legacy entry (no localTime): fall back to global-time seek.
         seekToGlobal(resume.time);
