@@ -1,0 +1,9 @@
+{
+  "name": "moonmoon-rs-js",
+  "private": true,
+  "type": "module",
+  "description": "Test harness for static/lib/* pure helpers used by player.js and sync.js (uses bun's native test runner).",
+  "scripts": {
+    "test": "bun test"
+  }
+}
