@@ -312,7 +312,7 @@
       var store = getResumeStore();
       var localTime = 0;
       try {
-        localTime = player.getCurrentTime ? player.getCurrentTime() : 0;
+        localTime = player.getCurrentTime();
       } catch (e) { /* ignore */ }
       store[VOD_ID] = {
         time: getGlobalTime(),
@@ -710,8 +710,10 @@
         if (resume.localTime > 0) {
           player.seekTo(resume.localTime, true);
         }
-        // Same-part resume: compute global offset for chat. partDurations[0..currentPart-1]
-        // is empty (currentPart is 0 here since switchPart wasn't called), so this is exact.
+        // Same-part resume: at boot currentPart is always 0, so this branch is
+        // only reached when resume.part === 0. The loop is therefore a no-op
+        // and initialOffset === resume.localTime exactly — no partDurations
+        // placeholder leakage.
         var cum = 0;
         for (var pi = 0; pi < resume.part; pi++) cum += (partDurations[pi] || 0);
         initialOffset = cum + resume.localTime;
