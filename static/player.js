@@ -639,7 +639,8 @@
     // catches the autoplay-blocked path where the resume seek happened during
     // UNSTARTED (which the tick guard skips), so we never observed the jump.
     var jumped = lastTickTime >= 0 && Math.abs(globalTime - lastTickTime) > 3;
-    var firstTickAtOffset = lastTickTime < 0 && globalTime > 10;
+    var firstTickAtOffset = lastTickTime < 0 && globalTime > 10
+      && chatMessages.length === 0;
     if (jumped || firstTickAtOffset) {
       resetChat(globalTime);
     }
