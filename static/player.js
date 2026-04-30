@@ -774,8 +774,8 @@
         // the partDurations placeholder entirely.
         if (resume.part !== currentPart) {
           switchPart(resume.part, resume.localTime);
-          // switchPart already loaded chat with the correct offset (Task 2),
-          // and we still need the tick loop running. Skip the boot loadChat below.
+          // switchPart already loaded chat with the correct offset, and we
+          // still need the tick loop running. Skip the boot loadChat below.
           tickInterval = setInterval(tick, 1000);
           return;
         }
@@ -804,7 +804,6 @@
 
   function onPlayerStateChange(event) {
     if (event.data === YT.PlayerState.PLAYING) {
-      // Update duration for current part, and cache it for future resumes.
       try {
         var dur = player.getDuration();
         if (dur > 0) {
