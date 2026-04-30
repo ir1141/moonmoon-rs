@@ -1,5 +1,5 @@
-(function () {
-  'use strict';
+import { mergeResume as mergeResumePure } from './lib/resume.js';
+import { isValidToken, generateToken as generateTokenPure } from './lib/token.js';
 
   var TOKEN_KEY = 'moonmoon_sync_token';
   var RESUME_KEY = 'moonmoon_resume';
@@ -18,27 +18,12 @@
     }
   }
 
-  function isValidToken(t) {
-    return typeof t === 'string' && /^[A-Z2-7]{26,32}$/.test(t);
-  }
-
   function generateToken() {
-    var bytes = new Uint8Array(16);
-    crypto.getRandomValues(bytes);
-    var alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-    var bits = 0, value = 0, output = '';
-    for (var i = 0; i < bytes.length; i++) {
-      value = (value << 8) | bytes[i];
-      bits += 8;
-      while (bits >= 5) {
-        output += alpha[(value >>> (bits - 5)) & 31];
-        bits -= 5;
-      }
-    }
-    if (bits > 0) {
-      output += alpha[(value << (5 - bits)) & 31];
-    }
-    return output;
+    return generateTokenPure(function (n) {
+      var bytes = new Uint8Array(n);
+      crypto.getRandomValues(bytes);
+      return bytes;
+    });
   }
 
   function getResume() {
@@ -58,24 +43,10 @@
   }
 
   function mergeResume(remote) {
-    if (!remote || typeof remote !== 'object') return false;
     var local = getResume();
-    var merged = {};
-    var changed = false;
-    var keys = {};
-    Object.keys(local).forEach(function (k) { keys[k] = true; });
-    Object.keys(remote).forEach(function (k) { keys[k] = true; });
-    Object.keys(keys).forEach(function (k) {
-      var l = local[k], r = remote[k];
-      if (!l) { merged[k] = r; changed = true; return; }
-      if (!r) { merged[k] = l; return; }
-      var lt = (l && l.updated) || 0;
-      var rt = (r && r.updated) || 0;
-      if (rt > lt) { merged[k] = r; changed = true; }
-      else { merged[k] = l; }
-    });
-    if (changed) setResume(merged);
-    return changed;
+    var result = mergeResumePure(local, remote);
+    if (result.changed) setResume(result.merged);
+    return result.changed;
   }
 
   function pull() {
@@ -171,7 +142,7 @@
   function el(id) { return document.getElementById(id); }
   var btn = el('sync-btn');
   var dlg = el('sync-dialog');
-  if (!btn || !dlg) return;
+  if (btn && dlg) {
 
   function refreshUi() {
     var token = getToken();
@@ -266,4 +237,4 @@
   });
 
   refreshUi();
-})();
+}
