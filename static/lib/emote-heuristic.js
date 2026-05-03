@@ -57,35 +57,36 @@ const COMMON_WORDS = new Set([
   "very", "too", "also", "only", "just", "even", "still", "well",
   "good", "great", "best", "better", "bad", "worse", "worst",
   "big", "small", "new", "old", "hot", "cold", "fast", "slow",
-  "true", "false", "real", "fake", "right", "wrong", "left",
+  "true", "false", "real", "fake", "right", "wrong",
   "nice", "cool", "fine", "fun", "funny",
-  "like", "love",
+  "like",
   // greetings / common interjections
   "hi", "hello", "hey", "bye",
   "ok", "okay", "wow", "yo", "yay", "huh", "haha",
   "thanks", "ty", "please", "plz", "pls", "sorry",
   // chat slang
   "lol", "lmao", "lmfao", "rofl", "wtf", "omg", "ffs", "imo", "imho", "tbh",
-  "idk", "idc", "irl", "afk", "brb", "tldr", "tl",
+  "idk", "idc", "brb", "tldr", "tl",
   "gg", "ez", "ezpz", "hf", "gl", "rip", "smh", "fyi", "til",
   "btw", "atm", "asap", "tbf", "thx", "np",
   "hype", "moon", "moonmoon",
-  // contractions stripped of apostrophe
+  // contractions stripped of apostrophe — note that "were", "well",
+  // "lets" are already covered above as the verb / adverb forms
+  // (same lowercased token), so they aren't repeated here
   "im", "ive", "id", "ill",
   "youre", "youve", "youll", "youd",
   "hes", "shes", "theyre", "theyve", "theyll", "theyd",
-  "were", "weve", "well", "wed",
+  "weve", "wed",
   "isnt", "arent", "wasnt", "werent",
   "dont", "doesnt", "didnt",
   "cant", "couldnt", "wont", "wouldnt", "shouldnt",
   "hasnt", "havent", "hadnt",
-  "lets",
   // common nouns (chat-frequent)
   "guy", "guys", "man", "men", "woman", "women", "boy", "girl", "kid", "kids",
   "dude", "bro", "sis", "mom", "dad",
   "day", "time", "year", "week", "month", "hour", "min", "sec",
   "way", "thing", "things", "stuff",
-  "game", "stream", "chat", "vod", "clip",
+  "game", "stream", "chat", "vod",
   // numerals as words
   "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
   // chat reactions / slang
@@ -93,11 +94,11 @@ const COMMON_WORDS = new Set([
   "actually", "literally", "probably", "honestly", "basically",
   "obviously", "definitely", "maybe", "because", "cuz", "cause",
   "anyway", "anyways", "first", "last", "same", "sure",
-  "welcome", "sorry", "soon", "almost", "kinda", "sorta",
+  "welcome", "almost", "kinda", "sorta",
   "pov", "pfp", "dm", "dms", "op", "irl", "afk", "rn", "ngl",
   // twitch-isms
   "mod", "mods", "sub", "subs", "subbed", "bits", "drop", "drops",
-  "live", "twitch", "youtube", "yt", "tts", "ban", "banned", "mute",
+  "twitch", "youtube", "yt", "tts", "ban", "banned", "mute",
   "muted", "spoiler", "spoilers", "vods", "clip", "clips",
   // common english words that slipped through real chat (data-driven)
   "already", "cop", "cops", "em", "eternal", "hourly", "keto",
