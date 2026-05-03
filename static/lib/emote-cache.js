@@ -7,8 +7,8 @@
 // Records: { hit: true, url, provider, owner? } | { hit: false }
 // Negative entries are cached too so we never re-query a known miss.
 
-const CACHE_NAME = "moonmoon-emote-cache-v2";
-const OBSOLETE_CACHES = ["moonmoon-emote-cache-v1"];
+const CACHE_NAME = "moonmoon-emote-cache-v3";
+const OBSOLETE_CACHES = ["moonmoon-emote-cache-v1", "moonmoon-emote-cache-v2"];
 const KEY_PREFIX = "https://emote-cache.moonmoon.local/";
 
 if (
