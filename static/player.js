@@ -205,8 +205,14 @@ var MIN_CHAT_SIZE = 10;
 var MAX_CHAT_SIZE = 30;
 
 function applyChatSize() {
+  var stickToBottom = chatAutoScroll;
+  chatRendering = true;
   chatContainer.style.fontSize = chatFontSize + "px";
   emoteTooltip.style.fontSize = chatFontSize + "px";
+  if (stickToBottom) {
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+  }
+  chatRendering = false;
 }
 
 applyChatSize();
