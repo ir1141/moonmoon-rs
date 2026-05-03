@@ -1,14 +1,100 @@
-// Cheap gate that decides whether a word is worth looking up against the 7TV
-// API. We skip obvious non-emotes (lowercase common English words, anything
-// with punctuation, anything too short or too long) so we don't fire a fetch
-// per word. Emote names are conventionally CamelCase, ALLCAPS, or mix in
-// digits, so requiring at least one uppercase letter or digit catches the
-// vast majority while rejecting normal prose.
+// Cheap gate that decides whether a word is worth looking up against a
+// third-party emote API. We skip obvious non-emotes so we don't fire a
+// fetch per word: too short / too long, anything with punctuation, and
+// anything all-lowercase (real emote names almost always carry an
+// uppercase letter or digit).
+//
+// We also reject a small case-insensitive blocklist of common English
+// words. The shape rules above let through sentence-start capitalization
+// ("The", "You") and ALLCAPS emphasis ("GIVE", "STOP", "MOON"); with
+// three providers in the lookup race, those words frequently false-
+// positive against some random foreign-channel emote. The blocklist is
+// surgical — it only filters words that would otherwise pass the shape
+// rules, so real emote names like "Pog", "KEKW", "PogU" are unaffected.
+
+const COMMON_WORDS = new Set([
+  // articles / pronouns / demonstratives
+  "a", "an", "the",
+  "i", "me", "my", "mine", "myself",
+  "you", "your", "yours", "yourself",
+  "he", "him", "his", "himself",
+  "she", "her", "hers", "herself",
+  "it", "its", "itself",
+  "we", "us", "our", "ours", "ourselves",
+  "they", "them", "their", "theirs", "themselves",
+  "this", "that", "these", "those",
+  // conjunctions / prepositions
+  "and", "or", "but", "nor", "for", "yet", "so", "if",
+  "of", "at", "by", "in", "on", "to", "up", "as", "from", "with",
+  "into", "onto", "out", "down", "off", "over", "under",
+  // be / aux verbs
+  "is", "am", "are", "was", "were", "be", "been", "being",
+  "have", "has", "had", "having",
+  "do", "does", "did", "done", "doing",
+  // modals
+  "can", "could", "will", "would", "shall", "should", "may", "might", "must",
+  // negations / affirmations
+  "no", "not", "none", "never", "nothing",
+  "yes", "yeah", "yep", "yup", "nope",
+  // common verbs (chat-frequent)
+  "get", "got", "give", "gave", "take", "took", "make", "made",
+  "go", "goes", "went", "gone", "come", "came",
+  "see", "saw", "seen", "look", "find", "found",
+  "think", "thought", "know", "knew", "say", "said", "tell", "told",
+  "want", "ask", "use", "try", "call", "work",
+  "run", "ran", "sit", "sat", "stop", "start",
+  "move", "hit", "win", "won", "lose", "lost", "kill", "die", "died",
+  "help", "play", "hear", "heard", "feel", "felt",
+  "keep", "kept", "leave", "left", "send", "sent",
+  "read", "write", "wrote", "hold", "held",
+  "bring", "brought", "buy", "bought", "build", "built",
+  "live", "lived", "love", "loved", "hate", "hated",
+  "let", "lets",
+  // common adverbs / adjectives
+  "now", "then", "here", "there", "soon", "later", "today", "yesterday", "tomorrow",
+  "what", "why", "how", "when", "where", "who", "which", "whose",
+  "all", "any", "some", "every", "many", "much", "more", "most", "less", "few", "fewer",
+  "very", "too", "also", "only", "just", "even", "still", "well",
+  "good", "great", "best", "better", "bad", "worse", "worst",
+  "big", "small", "new", "old", "hot", "cold", "fast", "slow",
+  "true", "false", "real", "fake", "right", "wrong", "left",
+  "nice", "cool", "fine", "fun", "funny",
+  "like", "love",
+  // greetings / common interjections
+  "hi", "hello", "hey", "bye",
+  "ok", "okay", "wow", "yo", "yay", "huh", "haha",
+  "thanks", "ty", "please", "plz", "pls", "sorry",
+  // chat slang
+  "lol", "lmao", "lmfao", "rofl", "wtf", "omg", "ffs", "imo", "imho", "tbh",
+  "idk", "idc", "irl", "afk", "brb", "tldr", "tl",
+  "gg", "ez", "ezpz", "hf", "gl", "rip", "smh", "fyi", "til",
+  "btw", "atm", "asap", "tbf", "thx", "np",
+  "hype", "moon", "moonmoon",
+  // contractions stripped of apostrophe
+  "im", "ive", "id", "ill",
+  "youre", "youve", "youll", "youd",
+  "hes", "shes", "theyre", "theyve", "theyll", "theyd",
+  "were", "weve", "well", "wed",
+  "isnt", "arent", "wasnt", "werent",
+  "dont", "doesnt", "didnt",
+  "cant", "couldnt", "wont", "wouldnt", "shouldnt",
+  "hasnt", "havent", "hadnt",
+  "lets",
+  // common nouns (chat-frequent)
+  "guy", "guys", "man", "men", "woman", "women", "boy", "girl", "kid", "kids",
+  "dude", "bro", "sis", "mom", "dad",
+  "day", "time", "year", "week", "month", "hour", "min", "sec",
+  "way", "thing", "things", "stuff",
+  "game", "stream", "chat", "vod", "clip",
+  // numerals as words
+  "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+]);
 
 export function isEmoteCandidate(word) {
   if (typeof word !== "string") return false;
   if (word.length < 2 || word.length > 25) return false;
   if (!/^[A-Za-z0-9_]+$/.test(word)) return false;
   if (!/[A-Z0-9]/.test(word)) return false;
+  if (COMMON_WORDS.has(word.toLowerCase())) return false;
   return true;
 }
