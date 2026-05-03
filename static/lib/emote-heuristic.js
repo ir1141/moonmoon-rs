@@ -88,6 +88,20 @@ const COMMON_WORDS = new Set([
   "game", "stream", "chat", "vod", "clip",
   // numerals as words
   "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+  // chat reactions / slang
+  "wholesome", "vibes", "vibe", "vibing", "cap", "nocap", "fr",
+  "actually", "literally", "probably", "honestly", "basically",
+  "obviously", "definitely", "maybe", "because", "cuz", "cause",
+  "anyway", "anyways", "first", "last", "same", "sure",
+  "welcome", "sorry", "soon", "almost", "kinda", "sorta",
+  "pov", "pfp", "dm", "dms", "op", "irl", "afk", "rn", "ngl",
+  // twitch-isms
+  "mod", "mods", "sub", "subs", "subbed", "bits", "drop", "drops",
+  "live", "twitch", "youtube", "yt", "tts", "ban", "banned", "mute",
+  "muted", "spoiler", "spoilers", "vods", "clip", "clips",
+  // common english words that slipped through real chat (data-driven)
+  "already", "cop", "cops", "em", "eternal", "hourly", "keto",
+  "looks", "looking", "marry", "married", "sherry", "started", "starting",
   // swears / expletives (same shape-rule false-positive problem — chat
   // dumps these in ALLCAPS or sentence-start case all the time)
   "fuck", "fucking", "fucked", "fucker", "fuckers", "fucks",
@@ -112,6 +126,7 @@ export function isEmoteCandidate(word) {
   if (word.length < 2 || word.length > 25) return false;
   if (!/^[A-Za-z0-9_]+$/.test(word)) return false;
   if (!/[A-Z0-9]/.test(word)) return false;
+  if (/^\d+$/.test(word)) return false; // pure numbers ("825", "2026")
   if (COMMON_WORDS.has(word.toLowerCase())) return false;
   return true;
 }

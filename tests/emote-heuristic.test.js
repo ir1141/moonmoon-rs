@@ -79,6 +79,24 @@ describe("isEmoteCandidate", () => {
     "Whore", "WHORE", "Slut", "SLUT",
     "Bastard", "BASTARD",
     "Piss", "PISS", "Pissed", "PISSED",
+    // chat reactions / slang
+    "Wholesome", "Vibes", "VIBES", "Cap", "CAP",
+    "Actually", "ACTUALLY", "Literally", "LITERALLY", "Probably",
+    "Honestly", "Basically", "Obviously", "Definitely", "Maybe", "MAYBE",
+    "Because", "Cuz", "CUZ", "Anyway", "Anyways",
+    "First", "FIRST", "Last", "LAST", "Same", "SAME", "Sure", "SURE",
+    "Welcome", "WELCOME", "Sorry", "SORRY",
+    "POV", "Pov", "PFP", "Pfp", "DM", "OP", "IRL", "AFK", "RN", "NGL",
+    // twitch-isms
+    "Mod", "MOD", "Mods", "MODS", "Sub", "SUB", "Subs", "Bits", "BITS",
+    "Drop", "Drops", "Live", "LIVE", "Twitch", "TWITCH",
+    "YouTube", "YOUTUBE", "YT", "TTS", "Ban", "BAN", "Mute", "MUTE",
+    "Spoiler", "SPOILER", "Spoilers", "Vods", "VODS", "Clip", "Clips",
+    // data-driven from cache misses
+    "ALREADY", "Already", "COP", "Cop", "Cops", "EM", "Em",
+    "ETERNAL", "Eternal", "HOURLY", "Hourly", "KETO", "Keto",
+    "LOOKS", "Looks", "Looking", "Marry", "MARRY", "Married",
+    "SHERRY", "Sherry", "STARTED", "Started",
   ])("rejects common English word %p (case-insensitive blocklist)", (w) => {
     expect(isEmoteCandidate(w)).toBe(false);
   });
@@ -87,6 +105,34 @@ describe("isEmoteCandidate", () => {
   // unusual casing — these should still pass.
   test.each(["Pog", "PogU", "KEKW", "LULW", "JAMM", "Sadge", "Madge"])(
     "accepts real emote despite English-word shape %p",
+    (w) => {
+      expect(isEmoteCandidate(w)).toBe(true);
+    },
+  );
+
+  // Real emotes that ARE common English words — must pass the heuristic
+  // even though they look blocklist-shaped. Verified as real emotes on
+  // multiple providers via search API.
+  test.each(["BRUH", "Bruh", "BASED", "Based", "CRINGE", "Cringe",
+             "BANGER", "Banger", "SUS", "Sus"])(
+    "accepts emote-name English word %p",
+    (w) => {
+      expect(isEmoteCandidate(w)).toBe(true);
+    },
+  );
+
+  // Pure-number tokens ("825", "2026") look candidate-shaped because
+  // they pass the "has digit" check, but no emote is just digits.
+  test.each(["825", "2026", "100", "1", "00"])(
+    "rejects pure-digit token %p",
+    (w) => {
+      expect(isEmoteCandidate(w)).toBe(false);
+    },
+  );
+
+  // Digit-prefix emotes like 5Head must still pass.
+  test.each(["5Head", "4Head", "3Head"])(
+    "accepts digit-prefix emote %p",
     (w) => {
       expect(isEmoteCandidate(w)).toBe(true);
     },
