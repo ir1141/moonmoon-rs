@@ -235,17 +235,21 @@ function applyResolved(name, record, textNode) {
   });
 }
 
-function swapTextNodeForEmote(textNode, name, emote) {
-  if (!textNode || !textNode.parentNode) return;
-  if (textNode.nodeType !== Node.TEXT_NODE) return;
-  if (textNode.nodeValue !== name) return; // text was edited or already swapped
+function buildEmoteImg(name, emote) {
   var img = document.createElement("img");
   img.className = "chat-emote";
   img.src = emote.url;
   img.alt = name;
   img.dataset.tooltip = formatEmoteTooltip(name, emote);
   img.loading = "lazy";
-  textNode.parentNode.replaceChild(img, textNode);
+  return img;
+}
+
+function swapTextNodeForEmote(textNode, name, emote) {
+  if (!textNode || !textNode.parentNode) return;
+  if (textNode.nodeType !== Node.TEXT_NODE) return;
+  if (textNode.nodeValue !== name) return; // text was edited or already swapped
+  textNode.parentNode.replaceChild(buildEmoteImg(name, emote), textNode);
 }
 
 function formatEmoteTooltip(name, emote) {
@@ -654,13 +658,7 @@ function appendTextWithEmotes(parent, text) {
     var word = words[i];
     var emote = thirdPartyEmotes[word];
     if (emote) {
-      var img = document.createElement("img");
-      img.className = "chat-emote";
-      img.src = emote.url;
-      img.alt = word;
-      img.dataset.tooltip = word + " [" + emote.provider + "]";
-      img.loading = "lazy";
-      parent.appendChild(img);
+      parent.appendChild(buildEmoteImg(word, emote));
     } else {
       var textNode = document.createTextNode(word);
       parent.appendChild(textNode);
