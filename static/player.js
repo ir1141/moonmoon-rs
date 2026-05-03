@@ -188,25 +188,26 @@ function lazyResolveEmote(name, textNode) {
   if (emoteMissCache[name]) return;
 
   if (pendingEmoteLookups[name]) {
-    pendingEmoteLookups[name].then(function (record) {
-      applyResolved(name, record, textNode);
-    });
+    pendingEmoteLookups[name].then(
+      function (record) {
+        applyResolved(name, record, textNode);
+      },
+      function () {},
+    );
     return;
   }
 
-  var p = getCachedEmote(name)
-    .then(function (cached) {
-      if (cached) return cached;
-      return fetchEmoteFrom7TV(name).then(function (record) {
-        setCachedEmote(name, record);
-        return record;
-      });
-    })
-    .catch(function (err) {
-      console.warn("[Emote] lookup failed for", name, err);
-      return { hit: false };
-    })
-    .then(function (record) {
+  var p = getCachedEmote(name).then(function (cached) {
+    if (cached) return cached;
+    return fetchEmoteFrom7TV(name).then(function (record) {
+      setCachedEmote(name, record);
+      return record;
+    });
+  });
+
+  pendingEmoteLookups[name] = p;
+  p.then(
+    function (record) {
       delete pendingEmoteLookups[name];
       if (record && record.hit) {
         thirdPartyEmotes[name] = {
@@ -217,13 +218,15 @@ function lazyResolveEmote(name, textNode) {
       } else {
         emoteMissCache[name] = true;
       }
-      return record;
-    });
-
-  pendingEmoteLookups[name] = p;
-  p.then(function (record) {
-    applyResolved(name, record, textNode);
-  });
+      applyResolved(name, record, textNode);
+    },
+    function (err) {
+      delete pendingEmoteLookups[name];
+      console.warn("[Emote] lookup failed for", name, err);
+      // Transient error — don't poison emoteMissCache or the persistent
+      // Cache API. Next occurrence of `name` will retry.
+    },
+  );
 }
 
 function applyResolved(name, record, textNode) {
