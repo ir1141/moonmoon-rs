@@ -209,7 +209,11 @@ function lazyResolveEmote(name, textNode) {
     .then(function (record) {
       delete pendingEmoteLookups[name];
       if (record && record.hit) {
-        thirdPartyEmotes[name] = { url: record.url, provider: record.provider };
+        thirdPartyEmotes[name] = {
+          url: record.url,
+          provider: record.provider,
+          owner: record.owner,
+        };
       } else {
         emoteMissCache[name] = true;
       }
@@ -227,6 +231,7 @@ function applyResolved(name, record, textNode) {
   swapTextNodeForEmote(textNode, name, {
     url: record.url,
     provider: record.provider,
+    owner: record.owner,
   });
 }
 
@@ -238,18 +243,40 @@ function swapTextNodeForEmote(textNode, name, emote) {
   img.className = "chat-emote";
   img.src = emote.url;
   img.alt = name;
-  img.dataset.tooltip = name + " [" + emote.provider + "]";
+  img.dataset.tooltip = formatEmoteTooltip(name, emote);
   img.loading = "lazy";
   textNode.parentNode.replaceChild(img, textNode);
+}
+
+function formatEmoteTooltip(name, emote) {
+  var label = "[" + emote.provider;
+  if (emote.owner) label += " · " + emote.owner;
+  label += "]";
+  return name + " " + label;
 }
 
 var SEVENTV_SEARCH_QUERY =
   "query SearchEmotes($query: String!, $page: Int, $sort: Sort, $limit: Int, $filter: EmoteSearchFilter) {\n" +
   "  emotes(query: $query, page: $page, sort: $sort, limit: $limit, filter: $filter) {\n" +
   "    count\n" +
-  "    items { id name host { url } }\n" +
+  "    items {\n" +
+  "      id name\n" +
+  "      host { url }\n" +
+  "      owner { display_name connections { platform display_name } }\n" +
+  "    }\n" +
   "  }\n" +
   "}";
+
+function pickOwnerLabel(owner) {
+  if (!owner) return null;
+  var conns = owner.connections || [];
+  for (var i = 0; i < conns.length; i++) {
+    if (conns[i] && conns[i].platform === "TWITCH" && conns[i].display_name) {
+      return conns[i].display_name;
+    }
+  }
+  return owner.display_name || null;
+}
 
 function fetchEmoteFrom7TV(name) {
   var body = {
@@ -290,6 +317,7 @@ function fetchEmoteFrom7TV(name) {
             hit: true,
             url: "https:" + it.host.url + "/1x.webp",
             provider: "7TV",
+            owner: pickOwnerLabel(it.owner),
           };
         }
       }
@@ -947,6 +975,14 @@ window.onYouTubeIframeAPIReady = function () {
     },
   });
 };
+
+// player.js is a module (deferred). The YT iframe API may have already fired
+// its ready callback before this script ran — in that case our newly-assigned
+// onYouTubeIframeAPIReady will never be invoked. If YT is already loaded,
+// kick it off ourselves.
+if (typeof YT !== "undefined" && YT && typeof YT.Player === "function") {
+  window.onYouTubeIframeAPIReady();
+}
 
 function onPlayerReady() {
   // Prefill partDurations from any cached real durations BEFORE any seek

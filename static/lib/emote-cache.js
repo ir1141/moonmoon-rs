@@ -7,8 +7,19 @@
 // Records: { hit: true, url, provider } | { hit: false }
 // Negative entries are cached too so we never re-query a known miss.
 
-const CACHE_NAME = "moonmoon-emote-cache-v1";
+const CACHE_NAME = "moonmoon-emote-cache-v2";
+const OBSOLETE_CACHES = ["moonmoon-emote-cache-v1"];
 const KEY_PREFIX = "https://emote-cache.moonmoon.local/";
+
+if (
+  typeof caches !== "undefined" &&
+  caches &&
+  typeof caches.delete === "function"
+) {
+  for (const old of OBSOLETE_CACHES) {
+    caches.delete(old).catch(function () {});
+  }
+}
 
 function keyFor(name) {
   return KEY_PREFIX + encodeURIComponent(name);
