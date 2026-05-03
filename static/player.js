@@ -4,6 +4,11 @@ import {
 } from "./lib/part-durations.js";
 import { isEmoteCandidate } from "./lib/emote-heuristic.js";
 import { getCachedEmote, setCachedEmote } from "./lib/emote-cache.js";
+import {
+  buildSearchUrl,
+  parseSearchResponse,
+  PROVIDERS,
+} from "./lib/emote-providers.js";
 
 var dataEl = document.getElementById("vod-data");
 if (!dataEl) {
@@ -199,7 +204,7 @@ function lazyResolveEmote(name, textNode) {
 
   var p = getCachedEmote(name).then(function (cached) {
     if (cached) return cached;
-    return fetchEmoteFrom7TV(name).then(function (record) {
+    return fetchEmoteFromAnyProvider(name).then(function (record) {
       setCachedEmote(name, record);
       return record;
     });
@@ -262,73 +267,54 @@ function formatEmoteTooltip(name, emote) {
   return name + " " + label;
 }
 
-var SEVENTV_SEARCH_QUERY =
-  "query SearchEmotes($query: String!, $page: Int, $sort: Sort, $limit: Int, $filter: EmoteSearchFilter) {\n" +
-  "  emotes(query: $query, page: $page, sort: $sort, limit: $limit, filter: $filter) {\n" +
-  "    count\n" +
-  "    items {\n" +
-  "      id name\n" +
-  "      host { url }\n" +
-  "      owner { display_name connections { platform display_name } }\n" +
-  "    }\n" +
-  "  }\n" +
-  "}";
+// Race all three providers in parallel for the lookup. First exact-match
+// hit wins; only mark `name` a miss if every provider missed (or errored,
+// but at least one provider responded successfully without a hit).
+function fetchEmoteFromAnyProvider(name) {
+  var attempts = PROVIDERS.map(function (provider) {
+    return fetchOneProvider(provider, name);
+  });
 
-function pickOwnerLabel(owner) {
-  if (!owner) return null;
-  var conns = owner.connections || [];
-  for (var i = 0; i < conns.length; i++) {
-    if (conns[i] && conns[i].platform === "TWITCH" && conns[i].display_name) {
-      return conns[i].display_name;
+  return new Promise(function (resolve, reject) {
+    var remaining = attempts.length;
+    var sawSuccessfulMiss = false;
+    var lastErr = null;
+    attempts.forEach(function (p) {
+      p.then(
+        function (record) {
+          if (record && record.hit) {
+            resolve(record);
+            return;
+          }
+          sawSuccessfulMiss = true;
+          if (--remaining === 0) finish();
+        },
+        function (err) {
+          lastErr = err;
+          if (--remaining === 0) finish();
+        },
+      );
+    });
+
+    function finish() {
+      if (sawSuccessfulMiss) resolve({ hit: false });
+      else reject(lastErr || new Error("all emote providers failed"));
     }
-  }
-  return owner.display_name || null;
+  });
 }
 
-function fetchEmoteFrom7TV(name) {
-  var body = {
-    operationName: "SearchEmotes",
-    variables: {
-      query: name,
-      limit: 4,
-      page: 1,
-      sort: { value: "popularity", order: "DESCENDING" },
-      filter: {
-        category: "TOP",
-        exact_match: true,
-        case_sensitive: true,
-        ignore_tags: false,
-        zero_width: false,
-        animated: false,
-        aspect_ratio: "",
-      },
-    },
-    query: SEVENTV_SEARCH_QUERY,
-  };
-  return fetch("https://7tv.io/v3/gql", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  })
+function fetchOneProvider(provider, name) {
+  var req = buildSearchUrl(provider, name);
+  var init = { method: req.method };
+  if (req.headers) init.headers = req.headers;
+  if (req.body) init.body = req.body;
+  return fetch(req.url, init)
     .then(function (r) {
-      if (!r.ok) throw new Error("7TV HTTP " + r.status);
+      if (!r.ok) throw new Error(provider + " HTTP " + r.status);
       return r.json();
     })
-    .then(function (data) {
-      var items =
-        (data && data.data && data.data.emotes && data.data.emotes.items) || [];
-      for (var i = 0; i < items.length; i++) {
-        var it = items[i];
-        if (it && it.name === name && it.host && it.host.url) {
-          return {
-            hit: true,
-            url: "https:" + it.host.url + "/1x.webp",
-            provider: "7TV",
-            owner: pickOwnerLabel(it.owner),
-          };
-        }
-      }
-      return { hit: false };
+    .then(function (json) {
+      return parseSearchResponse(provider, json, name);
     });
 }
 
