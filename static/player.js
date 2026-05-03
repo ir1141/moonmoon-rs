@@ -243,18 +243,46 @@ function swapTextNodeForEmote(textNode, name, emote) {
   textNode.parentNode.replaceChild(img, textNode);
 }
 
+var SEVENTV_SEARCH_QUERY =
+  "query SearchEmotes($query: String!, $page: Int, $sort: Sort, $limit: Int, $filter: EmoteSearchFilter) {\n" +
+  "  emotes(query: $query, page: $page, sort: $sort, limit: $limit, filter: $filter) {\n" +
+  "    count\n" +
+  "    items { id name host { url } }\n" +
+  "  }\n" +
+  "}";
+
 function fetchEmoteFrom7TV(name) {
-  var url =
-    "https://7tv.io/v3/emotes?query=" +
-    encodeURIComponent(name) +
-    "&limit=4&page=1";
-  return fetch(url)
+  var body = {
+    operationName: "SearchEmotes",
+    variables: {
+      query: name,
+      limit: 4,
+      page: 1,
+      sort: { value: "popularity", order: "DESCENDING" },
+      filter: {
+        category: "TOP",
+        exact_match: true,
+        case_sensitive: true,
+        ignore_tags: false,
+        zero_width: false,
+        animated: false,
+        aspect_ratio: "",
+      },
+    },
+    query: SEVENTV_SEARCH_QUERY,
+  };
+  return fetch("https://7tv.io/v3/gql", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
     .then(function (r) {
       if (!r.ok) throw new Error("7TV HTTP " + r.status);
       return r.json();
     })
     .then(function (data) {
-      var items = (data && data.items) || [];
+      var items =
+        (data && data.data && data.data.emotes && data.data.emotes.items) || [];
       for (var i = 0; i < items.length; i++) {
         var it = items[i];
         if (it && it.name === name && it.host && it.host.url) {
