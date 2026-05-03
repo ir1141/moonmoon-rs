@@ -157,4 +157,53 @@ describe("parseSearchResponse FFZ", () => {
   test("returns miss when emoticons missing", () => {
     expect(parseSearchResponse("FFZ", {}, "x")).toEqual({ hit: false });
   });
+
+  // Regression: real FFZ search responses return ABSOLUTE https URLs,
+  // not protocol-relative. Earlier parser blindly prepended "https:"
+  // and produced "https:https://...". Ensure absolute URLs pass through.
+  test("absolute https URL passes through unchanged", () => {
+    const json = {
+      emoticons: [
+        {
+          id: 130762,
+          name: "monkaS",
+          urls: { 1: "https://cdn.frankerfacez.com/emote/130762/1" },
+          owner: { display_name: "FabulousPotato69" },
+        },
+      ],
+    };
+    expect(parseSearchResponse("FFZ", json, "monkaS").url).toBe(
+      "https://cdn.frankerfacez.com/emote/130762/1",
+    );
+  });
+
+  test("http URL gets upgraded to https", () => {
+    const json = {
+      emoticons: [{ id: 1, name: "X", urls: { 1: "http://cdn.x/1" }, owner: {} }],
+    };
+    expect(parseSearchResponse("FFZ", json, "X").url).toBe("https://cdn.x/1");
+  });
+});
+
+describe("parseSearchResponse 7TV URL normalization", () => {
+  // 7TV bulk + gql both return protocol-relative host URLs today, but
+  // be defensive in case that ever changes.
+  test("absolute https host url passes through unchanged (no double prefix)", () => {
+    const json = {
+      data: {
+        emotes: {
+          items: [
+            {
+              name: "X",
+              host: { url: "https://cdn.7tv.app/emote/abc" },
+              owner: null,
+            },
+          ],
+        },
+      },
+    };
+    expect(parseSearchResponse("7TV", json, "X").url).toBe(
+      "https://cdn.7tv.app/emote/abc/1x.webp",
+    );
+  });
 });

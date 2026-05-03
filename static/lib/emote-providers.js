@@ -68,6 +68,17 @@ export function buildSearchUrl(provider, name) {
   throw new Error("Unknown emote provider: " + provider);
 }
 
+// CDN URLs come back in two shapes depending on the endpoint:
+//   - protocol-relative ("//cdn.example/x") from 7TV
+//   - absolute ("https://cdn.example/x") from FFZ search
+// Normalize to absolute https.
+function toHttpsUrl(url) {
+  if (!url) return url;
+  if (url.startsWith("//")) return "https:" + url;
+  if (url.startsWith("http://")) return "https://" + url.slice("http://".length);
+  return url;
+}
+
 function pick7TVOwner(owner) {
   if (!owner) return null;
   const conns = owner.connections || [];
@@ -85,7 +96,7 @@ export function parseSearchResponse(provider, json, name) {
       if (it && it.name === name && it.host && it.host.url) {
         return {
           hit: true,
-          url: "https:" + it.host.url + "/1x.webp",
+          url: toHttpsUrl(it.host.url) + "/1x.webp",
           provider: "7TV",
           owner: pick7TVOwner(it.owner),
         };
@@ -115,7 +126,7 @@ export function parseSearchResponse(provider, json, name) {
         if (!url) continue;
         return {
           hit: true,
-          url: "https:" + url,
+          url: toHttpsUrl(url),
           provider: "FFZ",
           owner: (it.owner && it.owner.display_name) || null,
         };
