@@ -63,6 +63,22 @@ describe("isEmoteCandidate", () => {
     "Up", "UP", "Down", "DOWN", "Out", "OUT", "In", "IN", "On", "ON",
     "Hype", "HYPE", "Lets", "LETS", "Let", "LET", "Plz", "PLZ", "Pls", "PLS",
     "Moon", "MOON", "Moonmoon", "MOONMOON",
+    // swears / expletives — same shape-rule problem (ALLCAPS emphasis
+    // and capitalized exclamations dominate when chat is mad)
+    "Fuck", "FUCK", "Fucking", "FUCKING", "Fucked", "FUCKED", "Fck", "FCK", "Fkn", "FKN",
+    "Shit", "SHIT", "Shitty", "Bullshit", "BS",
+    "Damn", "DAMN", "Goddamn", "GODDAMN",
+    "Ass", "ASS", "Asshole", "ASSHOLE",
+    "Bitch", "BITCH",
+    "Crap", "CRAP",
+    "Hell", "HELL",
+    "Dick", "DICK", "Cock", "COCK",
+    "Cunt", "CUNT", "Twat", "TWAT", "Prick", "PRICK",
+    "Wank", "Wanker", "Bollocks", "BOLLOCKS",
+    "Mf", "MF", "Mfer", "Motherfucker", "MOTHERFUCKER",
+    "Whore", "WHORE", "Slut", "SLUT",
+    "Bastard", "BASTARD",
+    "Piss", "PISS", "Pissed", "PISSED",
   ])("rejects common English word %p (case-insensitive blocklist)", (w) => {
     expect(isEmoteCandidate(w)).toBe(false);
   });

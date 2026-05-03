@@ -88,6 +88,23 @@ const COMMON_WORDS = new Set([
   "game", "stream", "chat", "vod", "clip",
   // numerals as words
   "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+  // swears / expletives (same shape-rule false-positive problem — chat
+  // dumps these in ALLCAPS or sentence-start case all the time)
+  "fuck", "fucking", "fucked", "fucker", "fuckers", "fucks",
+  "fck", "fkn", "fuk", "fking", "fkin",
+  "shit", "shitty", "shits", "bullshit", "bs",
+  "damn", "damned", "goddamn", "goddamned", "dammit", "damnit",
+  "ass", "asses", "asshole", "assholes", "arse", "arsehole",
+  "bitch", "bitches", "biatch",
+  "crap", "crappy",
+  "hell",
+  "dick", "dicks", "cock", "cocks",
+  "cunt", "cunts", "twat", "twats", "prick", "pricks",
+  "wank", "wanker", "wankers", "bollocks",
+  "mf", "mfs", "mfer", "mfers", "motherfucker", "motherfuckers",
+  "whore", "whores", "slut", "sluts", "thot", "thots",
+  "bastard", "bastards",
+  "piss", "pissed", "pissing",
 ]);
 
 export function isEmoteCandidate(word) {
