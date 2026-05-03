@@ -30,7 +30,13 @@
 </head>
 <body>
   <div class="header">
-    <a href="/" class="logo">Moonmoon</a>
+    <a href="/" class="logo">
+      <svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+        <path d="M38 14a20 20 0 1 0 0 36 16 16 0 0 1 0-36z" fill="currentColor"/>
+        <text x="49" y="22" font-family="Georgia, 'Times New Roman', serif" font-size="16" font-weight="700" fill="currentColor" text-anchor="middle">2</text>
+      </svg>
+      Moonmoon
+    </a>
     <nav class="header-nav" aria-label="Primary">
       <a href="/"         class="nav-link{% if active_section.slug() == "games"    %} active{% endif %}"{% if active_section.slug() == "games"    %} aria-current="page"{% endif %}>Games</a>
       <a href="/streams"  class="nav-link{% if active_section.slug() == "streams"  %} active{% endif %}"{% if active_section.slug() == "streams"  %} aria-current="page"{% endif %}>Streams</a>
