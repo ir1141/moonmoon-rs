@@ -2,6 +2,8 @@ import {
   getCachedPartDurations as getCachedPartDurationsPure,
   savePartDuration as savePartDurationPure,
 } from "./lib/part-durations.js";
+import { isEmoteCandidate } from "./lib/emote-heuristic.js";
+import { getCachedEmote, setCachedEmote } from "./lib/emote-cache.js";
 
 var dataEl = document.getElementById("vod-data");
 if (!dataEl) {
@@ -164,6 +166,107 @@ function parseFFZ(sets) {
       }
     }
   }
+}
+
+// ─── Lazy 7TV lookup ───
+// Emotes from non-Moonmoon 7TV sets (e.g. TANIMURA, owned by another channel)
+// won't appear in any of the bulk-loaded sets above. When we see an unknown
+// word that *looks* like an emote, query 7TV's search API once. Hits go into
+// thirdPartyEmotes and are also persisted via the Cache API so the next page
+// load skips the fetch. Misses go into emoteMissCache + the same persistent
+// cache so we never re-query a known non-emote.
+
+var emoteMissCache = Object.create(null);
+var pendingEmoteLookups = Object.create(null);
+
+function lazyResolveEmote(name, textNode) {
+  if (!isEmoteCandidate(name)) return;
+  if (thirdPartyEmotes[name]) {
+    swapTextNodeForEmote(textNode, name, thirdPartyEmotes[name]);
+    return;
+  }
+  if (emoteMissCache[name]) return;
+
+  if (pendingEmoteLookups[name]) {
+    pendingEmoteLookups[name].then(function (record) {
+      applyResolved(name, record, textNode);
+    });
+    return;
+  }
+
+  var p = getCachedEmote(name)
+    .then(function (cached) {
+      if (cached) return cached;
+      return fetchEmoteFrom7TV(name).then(function (record) {
+        setCachedEmote(name, record);
+        return record;
+      });
+    })
+    .catch(function (err) {
+      console.warn("[Emote] lookup failed for", name, err);
+      return { hit: false };
+    })
+    .then(function (record) {
+      delete pendingEmoteLookups[name];
+      if (record && record.hit) {
+        thirdPartyEmotes[name] = { url: record.url, provider: record.provider };
+      } else {
+        emoteMissCache[name] = true;
+      }
+      return record;
+    });
+
+  pendingEmoteLookups[name] = p;
+  p.then(function (record) {
+    applyResolved(name, record, textNode);
+  });
+}
+
+function applyResolved(name, record, textNode) {
+  if (!record || !record.hit) return;
+  swapTextNodeForEmote(textNode, name, {
+    url: record.url,
+    provider: record.provider,
+  });
+}
+
+function swapTextNodeForEmote(textNode, name, emote) {
+  if (!textNode || !textNode.parentNode) return;
+  if (textNode.nodeType !== Node.TEXT_NODE) return;
+  if (textNode.nodeValue !== name) return; // text was edited or already swapped
+  var img = document.createElement("img");
+  img.className = "chat-emote";
+  img.src = emote.url;
+  img.alt = name;
+  img.dataset.tooltip = name + " [" + emote.provider + "]";
+  img.loading = "lazy";
+  textNode.parentNode.replaceChild(img, textNode);
+}
+
+function fetchEmoteFrom7TV(name) {
+  var url =
+    "https://7tv.io/v3/emotes?query=" +
+    encodeURIComponent(name) +
+    "&limit=4&page=1";
+  return fetch(url)
+    .then(function (r) {
+      if (!r.ok) throw new Error("7TV HTTP " + r.status);
+      return r.json();
+    })
+    .then(function (data) {
+      var items = (data && data.items) || [];
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        if (it && it.name === name && it.host && it.host.url) {
+          return {
+            hit: true,
+            url: "https:" + it.host.url + "/1x.webp",
+            provider: "7TV",
+          };
+        }
+      }
+      return { hit: false };
+    });
 }
 
 loadEmotes();
@@ -492,17 +595,20 @@ function appendTextWithEmotes(parent, text) {
   var words = text.split(" ");
   for (var i = 0; i < words.length; i++) {
     if (i > 0) parent.appendChild(document.createTextNode(" "));
-    var emote = thirdPartyEmotes[words[i]];
+    var word = words[i];
+    var emote = thirdPartyEmotes[word];
     if (emote) {
       var img = document.createElement("img");
       img.className = "chat-emote";
       img.src = emote.url;
-      img.alt = words[i];
-      img.dataset.tooltip = words[i] + " [" + emote.provider + "]";
+      img.alt = word;
+      img.dataset.tooltip = word + " [" + emote.provider + "]";
       img.loading = "lazy";
       parent.appendChild(img);
     } else {
-      parent.appendChild(document.createTextNode(words[i]));
+      var textNode = document.createTextNode(word);
+      parent.appendChild(textNode);
+      lazyResolveEmote(word, textNode);
     }
   }
 }
