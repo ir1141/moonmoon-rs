@@ -35,12 +35,10 @@ struct VodsGridTemplate {
     has_more: bool,
     next_url: String,
     show_game_tags: bool,
-    nonce: String,
 }
 
 pub async fn history_vods_grid(
     State(state): State<SharedState>,
-    Extension(nonce): Extension<CspNonce>,
     Query(params): Query<HistoryVodsQuery>,
 ) -> impl IntoResponse {
     let ids_str = params.ids.unwrap_or_default();
@@ -93,6 +91,5 @@ pub async fn history_vods_grid(
         has_more: false,
         next_url: String::new(),
         show_game_tags: true,
-        nonce: nonce.0,
     })
 }

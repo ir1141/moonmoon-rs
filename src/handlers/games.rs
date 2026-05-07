@@ -28,7 +28,6 @@ struct GamesGridTemplate {
     games: Vec<Game>,
     has_more: bool,
     next_url: String,
-    nonce: String,
 }
 
 async fn prepare_games(state: &SharedState, params: &ListQuery) -> (Vec<Game>, bool, String) {
@@ -61,7 +60,6 @@ pub async fn games_page(
 
 pub async fn games_grid(
     State(state): State<SharedState>,
-    Extension(nonce): Extension<CspNonce>,
     Query(params): Query<ListQuery>,
 ) -> impl IntoResponse {
     let (paged, has_more, next_url) = prepare_games(&state, &params).await;
@@ -69,6 +67,5 @@ pub async fn games_grid(
         games: paged,
         has_more,
         next_url,
-        nonce: nonce.0,
     })
 }

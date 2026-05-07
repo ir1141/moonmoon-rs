@@ -33,7 +33,6 @@ struct VodsGridTemplate {
     has_more: bool,
     next_url: String,
     show_game_tags: bool,
-    nonce: String,
 }
 
 #[derive(Template)]
@@ -106,7 +105,6 @@ pub async fn game_vods_page(
 
 pub async fn game_vods_grid(
     State(state): State<SharedState>,
-    Extension(nonce): Extension<CspNonce>,
     Path(name): Path<String>,
     Query(params): Query<ListQuery>,
 ) -> impl IntoResponse {
@@ -118,7 +116,6 @@ pub async fn game_vods_grid(
         has_more,
         next_url,
         show_game_tags: false,
-        nonce: nonce.0,
     })
 }
 
@@ -162,7 +159,6 @@ pub async fn all_streams_page(
 
 pub async fn all_streams_grid(
     State(state): State<SharedState>,
-    Extension(nonce): Extension<CspNonce>,
     Query(params): Query<ListQuery>,
 ) -> impl IntoResponse {
     let (paged, _, has_more, next_url) = prepare_all_streams(&state, &params).await;
@@ -172,6 +168,5 @@ pub async fn all_streams_grid(
         has_more,
         next_url,
         show_game_tags: true,
-        nonce: nonce.0,
     })
 }
