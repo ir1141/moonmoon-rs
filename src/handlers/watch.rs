@@ -1,7 +1,8 @@
 use super::{Section, get_game_tags, next_vod_in_period, render_template};
 use crate::SharedState;
+use crate::middleware::CspNonce;
 use askama::Template;
-use axum::extract::{Path, Query, State};
+use axum::extract::{Extension, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Redirect};
 use rand::prelude::IndexedRandom;
@@ -16,6 +17,7 @@ struct WatchTemplate {
     youtube_ids_json: String,
     game_hint: String,
     active_section: Section,
+    nonce: String,
 }
 
 #[derive(Deserialize, Default)]
@@ -25,6 +27,7 @@ pub struct GameQuery {
 
 pub async fn watch_page(
     State(state): State<SharedState>,
+    Extension(nonce): Extension<CspNonce>,
     Path(vod_id): Path<String>,
     Query(params): Query<GameQuery>,
 ) -> impl IntoResponse {
@@ -47,6 +50,7 @@ pub async fn watch_page(
                 youtube_ids_json,
                 game_hint: params.game.unwrap_or_default(),
                 active_section: Section::None,
+                nonce: nonce.0,
             })
         }
         None => (StatusCode::NOT_FOUND, "VOD not found").into_response(),

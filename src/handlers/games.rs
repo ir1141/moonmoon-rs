@@ -2,9 +2,10 @@ use super::{
     GAME_BATCH_SIZE, ListQuery, Section, filter_games, paginate_with_nav, render_template,
 };
 use crate::SharedState;
+use crate::middleware::CspNonce;
 use crate::vods::Game;
 use askama::Template;
-use axum::extract::{Query, State};
+use axum::extract::{Extension, Query, State};
 use axum::response::IntoResponse;
 use std::sync::Arc;
 
@@ -18,6 +19,7 @@ struct GamesPageTemplate {
     has_more: bool,
     next_url: String,
     active_section: Section,
+    nonce: String,
 }
 
 #[derive(Template)]
@@ -26,6 +28,7 @@ struct GamesGridTemplate {
     games: Vec<Game>,
     has_more: bool,
     next_url: String,
+    nonce: String,
 }
 
 async fn prepare_games(state: &SharedState, params: &ListQuery) -> (Vec<Game>, bool, String) {
@@ -39,6 +42,7 @@ async fn prepare_games(state: &SharedState, params: &ListQuery) -> (Vec<Game>, b
 
 pub async fn games_page(
     State(state): State<SharedState>,
+    Extension(nonce): Extension<CspNonce>,
     Query(params): Query<ListQuery>,
 ) -> impl IntoResponse {
     let sort = params.sort.clone().unwrap_or("most".to_string());
@@ -51,11 +55,13 @@ pub async fn games_page(
         has_more,
         next_url,
         active_section: Section::Games,
+        nonce: nonce.0,
     })
 }
 
 pub async fn games_grid(
     State(state): State<SharedState>,
+    Extension(nonce): Extension<CspNonce>,
     Query(params): Query<ListQuery>,
 ) -> impl IntoResponse {
     let (paged, has_more, next_url) = prepare_games(&state, &params).await;
@@ -63,5 +69,6 @@ pub async fn games_grid(
         games: paged,
         has_more,
         next_url,
+        nonce: nonce.0,
     })
 }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MOONMOON - {% block title %}Games Browser{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-  <script>
+  <script nonce="{{ nonce }}">
     (function () {
       try {
         var t = localStorage.getItem('moonmoon_theme');
@@ -26,7 +26,8 @@
   <script src="https://unpkg.com/htmx.org@2.0.4"
           integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
           crossorigin="anonymous"
-          referrerpolicy="no-referrer"></script>
+          referrerpolicy="no-referrer"
+          nonce="{{ nonce }}"></script>
 </head>
 <body>
   <div class="header">
@@ -80,7 +81,7 @@
   <div class="content">
     {% block content %}{% endblock %}
   </div>
-<script>
+<script nonce="{{ nonce }}">
 (function() {
   function applyResumeBars(root) {
     var store;
@@ -149,6 +150,6 @@
     </div>
   </form>
 </dialog>
-<script type="module" src="/static/sync.js"></script>
+<script type="module" src="/static/sync.js" nonce="{{ nonce }}"></script>
 </body>
 </html>

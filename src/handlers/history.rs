@@ -1,7 +1,8 @@
 use super::{Section, VodDisplay, assign_series_headers, render_template, resolve_watched_chapter};
 use crate::SharedState;
+use crate::middleware::CspNonce;
 use askama::Template;
-use axum::extract::{Query, State};
+use axum::extract::{Extension, Query, State};
 use axum::response::IntoResponse;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -10,11 +11,13 @@ use std::sync::Arc;
 #[template(path = "history.html")]
 struct HistoryTemplate {
     active_section: Section,
+    nonce: String,
 }
 
-pub async fn history_page() -> impl IntoResponse {
+pub async fn history_page(Extension(nonce): Extension<CspNonce>) -> impl IntoResponse {
     render_template(&HistoryTemplate {
         active_section: Section::History,
+        nonce: nonce.0,
     })
 }
 
@@ -32,10 +35,12 @@ struct VodsGridTemplate {
     has_more: bool,
     next_url: String,
     show_game_tags: bool,
+    nonce: String,
 }
 
 pub async fn history_vods_grid(
     State(state): State<SharedState>,
+    Extension(nonce): Extension<CspNonce>,
     Query(params): Query<HistoryVodsQuery>,
 ) -> impl IntoResponse {
     let ids_str = params.ids.unwrap_or_default();
@@ -88,5 +93,6 @@ pub async fn history_vods_grid(
         has_more: false,
         next_url: String::new(),
         show_game_tags: true,
+        nonce: nonce.0,
     })
 }

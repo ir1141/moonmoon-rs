@@ -17,7 +17,7 @@
   </div>
   <div id="history-grid" class="vod-grid"></div>
 </div>
-<script>
+<script nonce="{{ nonce }}">
 (function() {
   var store;
   try { store = JSON.parse(localStorage.getItem('moonmoon_resume')) || {}; } catch(e) { store = {}; }
