@@ -1,7 +1,8 @@
 use super::{Section, days_to_civil, parse_duration_minutes, render_template};
 use crate::SharedState;
+use crate::middleware::CspNonce;
 use askama::Template;
-use axum::extract::{Query, State};
+use axum::extract::{Extension, Query, State};
 use axum::response::IntoResponse;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -39,6 +40,7 @@ struct CalendarPageTemplate {
     has_next: bool,
     today_day: usize,
     active_section: Section,
+    nonce: String,
 }
 
 fn month_name(m: u32) -> &'static str {
@@ -99,6 +101,7 @@ fn next_month(year: i32, month: u32) -> (i32, u32) {
 
 pub async fn calendar_page(
     State(state): State<SharedState>,
+    Extension(nonce): Extension<CspNonce>,
     Query(params): Query<CalendarQuery>,
 ) -> impl IntoResponse {
     let now = std::time::SystemTime::now()
@@ -207,6 +210,7 @@ pub async fn calendar_page(
             usize::MAX
         },
         active_section: Section::Calendar,
+        nonce: nonce.0,
     };
     render_template(&tmpl)
 }

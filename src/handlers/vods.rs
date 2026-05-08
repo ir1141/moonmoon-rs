@@ -3,8 +3,9 @@ use super::{
     find_game_image, get_chapter_start, paginate_with_nav, render_template, vod_has_game,
 };
 use crate::SharedState;
+use crate::middleware::CspNonce;
 use askama::Template;
-use axum::extract::{Path, Query, State};
+use axum::extract::{Extension, Path, Query, State};
 use axum::response::IntoResponse;
 use std::sync::Arc;
 
@@ -22,6 +23,7 @@ struct VodsPageTemplate {
     next_url: String,
     show_game_tags: bool,
     active_section: Section,
+    nonce: String,
 }
 
 #[derive(Template)]
@@ -45,6 +47,7 @@ struct AllStreamsPageTemplate {
     next_url: String,
     show_game_tags: bool,
     active_section: Section,
+    nonce: String,
 }
 
 async fn prepare_game_vods(
@@ -72,6 +75,7 @@ async fn prepare_game_vods(
 
 pub async fn game_vods_page(
     State(state): State<SharedState>,
+    Extension(nonce): Extension<CspNonce>,
     Path(name): Path<String>,
     Query(params): Query<ListQuery>,
 ) -> impl IntoResponse {
@@ -95,6 +99,7 @@ pub async fn game_vods_page(
         next_url,
         show_game_tags: false,
         active_section: Section::None,
+        nonce: nonce.0,
     })
 }
 
@@ -132,6 +137,7 @@ async fn prepare_all_streams(
 
 pub async fn all_streams_page(
     State(state): State<SharedState>,
+    Extension(nonce): Extension<CspNonce>,
     Query(params): Query<ListQuery>,
 ) -> impl IntoResponse {
     let sort = params.sort.clone().unwrap_or("newest".to_string());
@@ -147,6 +153,7 @@ pub async fn all_streams_page(
         next_url,
         show_game_tags: true,
         active_section: Section::Streams,
+        nonce: nonce.0,
     })
 }
 

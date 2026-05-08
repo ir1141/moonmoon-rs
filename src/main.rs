@@ -9,6 +9,7 @@ use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
 mod handlers;
+mod middleware;
 mod sync_store;
 mod vods;
 
@@ -132,6 +133,7 @@ async fn main() {
         .route("/random", get(handlers::random_vod))
         .merge(api_routes)
         .nest_service("/static", ServeDir::new("static"))
+        .layer(axum::middleware::from_fn(middleware::csp_nonce))
         .layer(
             TraceLayer::new_for_http()
                 .on_request(|req: &axum::http::Request<_>, _span: &tracing::Span| {
