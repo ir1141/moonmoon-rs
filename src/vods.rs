@@ -25,9 +25,9 @@ pub struct Chapter {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct YoutubeVideo {
-    // The YouTube video ID lives under `upload_id` in the new API. We do NOT
-    // alias `"id"` — the API also has an integer `id` (DB row) on each upload,
-    // and an alias would match it first and fail to deserialize as a String.
+    // Each upload has both an integer `id` (DB row) and a string `upload_id`
+    // (YouTube video ID); we want the latter. Aliasing `"id"` would match the
+    // integer first and fail to deserialize as a String.
     #[serde(rename = "upload_id")]
     pub id: String,
     #[serde(default)]
@@ -213,9 +213,9 @@ pub async fn fetch_all_vods(client: &reqwest::Client) -> Result<Vec<Vod>, reqwes
     Ok(result)
 }
 
-/// New API doesn't return `thumbnail_url` at the VOD level — it's only on each
-/// `vod_uploads` entry. Backfill from the first upload so the rest of the app
-/// (templates, VodDisplay) can keep using `vod.thumbnail_url` unchanged.
+/// Upstream doesn't expose `thumbnail_url` at the VOD level — only on each
+/// `vod_uploads` entry. Lift it from the first upload so templates and
+/// `VodDisplay` can keep reading `vod.thumbnail_url` directly.
 fn backfill_thumbnails(vods: &mut [Vod]) {
     for vod in vods.iter_mut() {
         if vod.thumbnail_url.is_some() {
@@ -325,7 +325,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_vod_deserialize_legacy() {
+    fn test_vod_deserialize_string_fields() {
         let json = r#"{"id":"abc123","title":"Test Stream","created_at":"2025-01-15T00:00:00Z","duration":"3h 20m","thumbnail_url":"https://example.com/thumb.jpg","chapters":[{"name":"Elden Ring","image":"https://example.com/40x53.jpg"}]}"#;
         let vod: Vod = serde_json::from_str(json).unwrap();
         assert_eq!(vod.id, "abc123");
@@ -334,7 +334,7 @@ mod tests {
     }
 
     #[test]
-    fn test_vod_deserialize_new_api_shape() {
+    fn test_vod_deserialize_int_fields() {
         let json = r#"{
             "id": 1430,
             "title": "Test Stream",

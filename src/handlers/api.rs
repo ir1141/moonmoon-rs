@@ -49,8 +49,8 @@ pub async fn chat_proxy(
                         .into_response();
                 }
             };
-            // Upstream now wraps payloads as {success, data: {comments, cursor}}.
-            // Forward only `data` so the frontend keeps its existing shape.
+            // Upstream wraps payloads as {success, data: {comments, cursor}};
+            // forward only `data` so the frontend keeps its existing shape.
             let forwarded = if status.is_success() {
                 match serde_json::from_str::<serde_json::Value>(&body) {
                     Ok(serde_json::Value::Object(mut obj)) => {
