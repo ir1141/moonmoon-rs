@@ -22,7 +22,7 @@ pub async fn chat_proxy(
     {
         return (axum::http::StatusCode::BAD_REQUEST, "invalid vod_id").into_response();
     }
-    let mut url = format!("https://archive.overpowered.tv/moonmoon/v1/vods/{vod_id}/comments");
+    let mut url = format!("https://archive.overpowered.tv/api/v1/moonmoon/vods/{vod_id}/comments");
     let mut qparts = vec![];
     if let Some(offset) = params.content_offset_seconds
         && offset.is_finite()
@@ -49,11 +49,23 @@ pub async fn chat_proxy(
                         .into_response();
                 }
             };
+            // Upstream wraps payloads as {success, data: {comments, cursor}};
+            // forward only `data` so the frontend keeps its existing shape.
+            let forwarded = if status.is_success() {
+                match serde_json::from_str::<serde_json::Value>(&body) {
+                    Ok(serde_json::Value::Object(mut obj)) => {
+                        obj.remove("data").map(|d| d.to_string()).unwrap_or(body)
+                    }
+                    _ => body,
+                }
+            } else {
+                body
+            };
             (
                 axum::http::StatusCode::from_u16(status.as_u16())
                     .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
                 [("content-type", "application/json")],
-                body,
+                forwarded,
             )
                 .into_response()
         }
