@@ -3,13 +3,16 @@ use std::time::Duration;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Vod {
+    #[serde(deserialize_with = "deserialize_id_string")]
     pub id: String,
     pub title: Option<String>,
-    #[serde(rename = "createdAt")]
     pub created_at: String,
+    #[serde(default, deserialize_with = "deserialize_duration_string")]
     pub duration: Option<String>,
+    #[serde(default)]
     pub thumbnail_url: Option<String>,
     pub chapters: Option<Vec<Chapter>>,
+    #[serde(rename = "vod_uploads", alias = "youtube", default)]
     pub youtube: Option<Vec<YoutubeVideo>>,
 }
 
@@ -22,7 +25,63 @@ pub struct Chapter {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct YoutubeVideo {
+    // The YouTube video ID lives under `upload_id` in the new API. We do NOT
+    // alias `"id"` — the API also has an integer `id` (DB row) on each upload,
+    // and an alias would match it first and fail to deserialize as a String.
+    #[serde(rename = "upload_id")]
     pub id: String,
+    #[serde(default)]
+    pub thumbnail_url: Option<String>,
+}
+
+fn deserialize_id_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum IdValue {
+        Int(i64),
+        Str(String),
+    }
+    Ok(match IdValue::deserialize(deserializer)? {
+        IdValue::Int(n) => n.to_string(),
+        IdValue::Str(s) => s,
+    })
+}
+
+fn deserialize_duration_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum DurationValue {
+        Int(i64),
+        Str(String),
+    }
+    let value: Option<DurationValue> = Option::deserialize(deserializer)?;
+    Ok(value.map(|v| match v {
+        DurationValue::Int(secs) => format_duration_hm(secs),
+        DurationValue::Str(s) => s,
+    }))
+}
+
+fn format_duration_hm(secs: i64) -> String {
+    if secs <= 0 {
+        return "0m".into();
+    }
+    let h = secs / 3600;
+    let m = (secs % 3600) / 60;
+    if h > 0 && m > 0 {
+        format!("{h}h {m}m")
+    } else if h > 0 {
+        format!("{h}h")
+    } else if m > 0 {
+        format!("{m}m")
+    } else {
+        format!("{secs}s")
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -42,27 +101,28 @@ pub enum RefreshOutcome {
 }
 
 #[derive(Deserialize)]
-struct ApiResponse {
-    pub data: Vec<Vod>,
+struct ApiMeta {
     pub total: usize,
 }
 
-pub fn upscale_chapter_image(url: &str) -> String {
-    url.replace("40x53", "285x380")
+#[derive(Deserialize)]
+struct ApiResponse {
+    pub data: Vec<Vod>,
+    pub meta: ApiMeta,
 }
 
-const API: &str = "https://archive.overpowered.tv/moonmoon/vods";
+pub fn upscale_chapter_image(url: &str) -> String {
+    url.replace("{width}x{height}", "285x380")
+        .replace("40x53", "285x380")
+}
+
+const API: &str = "https://archive.overpowered.tv/api/v1/moonmoon/vods";
 const PAGE_SIZE: usize = 50;
 const MAX_429_RETRIES: usize = 6;
 const INITIAL_429_BACKOFF_MS: u64 = 250;
 
-fn page_url(skip: usize) -> String {
-    format!(
-        "{API}?$limit={PAGE_SIZE}&$skip={skip}&$sort[createdAt]=-1\
-         &$select[]=id&$select[]=title&$select[]=createdAt\
-         &$select[]=duration&$select[]=thumbnail_url\
-         &$select[]=chapters&$select[]=youtube"
-    )
+fn page_url(page_one_based: usize) -> String {
+    format!("{API}?page={page_one_based}&limit={PAGE_SIZE}&sort=created_at&order=desc")
 }
 
 fn pages(total: usize) -> usize {
@@ -124,13 +184,13 @@ async fn fetch_api_response(
 }
 
 pub async fn fetch_vod_count(client: &reqwest::Client) -> Result<usize, reqwest::Error> {
-    let resp = fetch_api_response(client, &format!("{API}?$limit=1&$skip=0")).await?;
-    Ok(resp.total)
+    let resp = fetch_api_response(client, &format!("{API}?page=1&limit=1")).await?;
+    Ok(resp.meta.total)
 }
 
 pub async fn fetch_all_vods(client: &reqwest::Client) -> Result<Vec<Vod>, reqwest::Error> {
-    let first = fetch_api_response(client, &page_url(0)).await?;
-    let total = first.total;
+    let first = fetch_api_response(client, &page_url(1)).await?;
+    let total = first.meta.total;
     tracing::info!("fetching {total} vods...");
 
     let total_pages = pages(total);
@@ -141,14 +201,32 @@ pub async fn fetch_all_vods(client: &reqwest::Client) -> Result<Vec<Vod>, reqwes
     let mut result: Vec<Vod> = Vec::with_capacity(total);
     result.extend(first.data);
 
-    for page_idx in 1..total_pages {
-        let resp = fetch_api_response(client, &page_url(page_idx * PAGE_SIZE)).await?;
+    for page_idx in 2..=total_pages {
+        let resp = fetch_api_response(client, &page_url(page_idx)).await?;
         result.extend(resp.data);
-        tracing::debug!("page {} of {} done", page_idx + 1, total_pages);
+        tracing::debug!("page {page_idx} of {total_pages} done");
     }
+
+    backfill_thumbnails(&mut result);
 
     tracing::info!("{} / {} vods fetched", result.len(), total);
     Ok(result)
+}
+
+/// New API doesn't return `thumbnail_url` at the VOD level — it's only on each
+/// `vod_uploads` entry. Backfill from the first upload so the rest of the app
+/// (templates, VodDisplay) can keep using `vod.thumbnail_url` unchanged.
+fn backfill_thumbnails(vods: &mut [Vod]) {
+    for vod in vods.iter_mut() {
+        if vod.thumbnail_url.is_some() {
+            continue;
+        }
+        if let Some(uploads) = vod.youtube.as_ref()
+            && let Some(thumb) = uploads.iter().find_map(|u| u.thumbnail_url.clone())
+        {
+            vod.thumbnail_url = Some(thumb);
+        }
+    }
 }
 
 pub async fn load_vods(client: &reqwest::Client) -> Vec<Vod> {
@@ -247,11 +325,59 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_vod_deserialize() {
-        let json = r#"{"id":"abc123","title":"Test Stream","createdAt":"2025-01-15T00:00:00Z","duration":"3h 20m","thumbnail_url":"https://example.com/thumb.jpg","chapters":[{"name":"Elden Ring","image":"https://example.com/40x53.jpg"}]}"#;
+    fn test_vod_deserialize_legacy() {
+        let json = r#"{"id":"abc123","title":"Test Stream","created_at":"2025-01-15T00:00:00Z","duration":"3h 20m","thumbnail_url":"https://example.com/thumb.jpg","chapters":[{"name":"Elden Ring","image":"https://example.com/40x53.jpg"}]}"#;
         let vod: Vod = serde_json::from_str(json).unwrap();
         assert_eq!(vod.id, "abc123");
+        assert_eq!(vod.duration.as_deref(), Some("3h 20m"));
         assert_eq!(vod.chapters.unwrap()[0].name.as_deref(), Some("Elden Ring"));
+    }
+
+    #[test]
+    fn test_vod_deserialize_new_api_shape() {
+        let json = r#"{
+            "id": 1430,
+            "title": "Test Stream",
+            "created_at": "2026-05-09T22:35:39.000Z",
+            "duration": 25194,
+            "vod_uploads": [
+                {"upload_id": "M1giB9QeXNM", "thumbnail_url": "https://i.ytimg.com/vi/M1giB9QeXNM/mqdefault.jpg"}
+            ],
+            "chapters": [
+                {"name": "HITMAN", "image": "https://example.com/{width}x{height}.jpg", "start": 0}
+            ]
+        }"#;
+        let mut vods: Vec<Vod> = vec![serde_json::from_str(json).unwrap()];
+        backfill_thumbnails(&mut vods);
+        let vod = &vods[0];
+        assert_eq!(vod.id, "1430");
+        assert_eq!(vod.duration.as_deref(), Some("6h 59m"));
+        assert_eq!(vod.youtube.as_ref().unwrap()[0].id, "M1giB9QeXNM");
+        assert_eq!(
+            vod.thumbnail_url.as_deref(),
+            Some("https://i.ytimg.com/vi/M1giB9QeXNM/mqdefault.jpg")
+        );
+    }
+
+    #[test]
+    fn test_format_duration_hm() {
+        assert_eq!(format_duration_hm(25194), "6h 59m");
+        assert_eq!(format_duration_hm(3600), "1h");
+        assert_eq!(format_duration_hm(2700), "45m");
+        assert_eq!(format_duration_hm(45), "45s");
+        assert_eq!(format_duration_hm(0), "0m");
+    }
+
+    #[test]
+    fn test_upscale_chapter_image_placeholder() {
+        assert_eq!(
+            upscale_chapter_image("https://x.tv/foo_{width}x{height}.jpg"),
+            "https://x.tv/foo_285x380.jpg"
+        );
+        assert_eq!(
+            upscale_chapter_image("https://x.tv/foo_40x53.jpg"),
+            "https://x.tv/foo_285x380.jpg"
+        );
     }
 
     #[test]
@@ -367,25 +493,15 @@ mod tests {
 
     #[test]
     fn test_page_url_includes_required_params() {
-        let url = page_url(100);
-        assert!(url.starts_with("https://archive.overpowered.tv/moonmoon/vods?"));
-        assert!(url.contains("$limit=50"), "missing $limit=50: {url}");
-        assert!(url.contains("$skip=100"), "missing $skip=100: {url}");
-        assert!(url.contains("$sort[createdAt]=-1"), "missing $sort: {url}");
-        for field in [
-            "id",
-            "title",
-            "createdAt",
-            "duration",
-            "thumbnail_url",
-            "chapters",
-            "youtube",
-        ] {
-            assert!(
-                url.contains(&format!("$select[]={field}")),
-                "missing $select[]={field} in: {url}"
-            );
-        }
+        let url = page_url(3);
+        assert!(url.starts_with("https://archive.overpowered.tv/api/v1/moonmoon/vods?"));
+        assert!(url.contains("page=3"), "missing page=3: {url}");
+        assert!(url.contains("limit=50"), "missing limit=50: {url}");
+        assert!(
+            url.contains("sort=created_at"),
+            "missing sort=created_at: {url}"
+        );
+        assert!(url.contains("order=desc"), "missing order=desc: {url}");
     }
 
     #[test]
