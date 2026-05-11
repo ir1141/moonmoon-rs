@@ -44,6 +44,14 @@ impl Section {
     }
 }
 
+pub(crate) fn vod_matches_id(vod: &Vod, requested_id: &str) -> bool {
+    vod.id == requested_id || vod.platform_vod_id.as_deref() == Some(requested_id)
+}
+
+pub(crate) fn find_vod_by_id<'a>(vods: &'a [Vod], requested_id: &str) -> Option<&'a Vod> {
+    vods.iter().find(|vod| vod_matches_id(vod, requested_id))
+}
+
 // ─── Query types ───
 
 #[derive(Deserialize, Default)]
@@ -631,6 +639,16 @@ mod tests {
     }
 
     #[test]
+    fn test_vod_matches_platform_vod_id() {
+        let mut vod = make_vod("1430", "2024-01-01T00:00:00Z", &["HITMAN"]);
+        vod.platform_vod_id = Some("2768249708".into());
+
+        assert!(vod_matches_id(&vod, "1430"));
+        assert!(vod_matches_id(&vod, "2768249708"));
+        assert!(!vod_matches_id(&vod, "nope"));
+    }
+
+    #[test]
     fn test_format_date() {
         assert_eq!(format_date("2025-01-15T00:00:00Z"), "Jan 15, 2025");
         assert_eq!(format_date("2025-12-01T12:30:00Z"), "Dec 1, 2025");
@@ -645,6 +663,7 @@ mod tests {
     fn test_get_game_tags() {
         let vod = Vod {
             id: "1".into(),
+            platform_vod_id: None,
             title: Some("Test".into()),
             created_at: "2025-01-01T00:00:00Z".into(),
             duration: Some("2h".into()),
@@ -676,6 +695,7 @@ mod tests {
     fn test_get_game_tags_case_insensitive() {
         let vod = Vod {
             id: "1".into(),
+            platform_vod_id: None,
             title: Some("Test".into()),
             created_at: "2025-01-01T00:00:00Z".into(),
             duration: Some("2h".into()),
@@ -702,6 +722,7 @@ mod tests {
     fn test_vod_has_game() {
         let vod = Vod {
             id: "1".into(),
+            platform_vod_id: None,
             title: Some("Test".into()),
             created_at: "2025-01-01T00:00:00Z".into(),
             duration: Some("2h".into()),
@@ -962,6 +983,7 @@ mod tests {
     fn test_resolve_watched_chapter_none_for_empty() {
         let vod = Vod {
             id: "x".into(),
+            platform_vod_id: None,
             title: None,
             created_at: "2024-01-01T00:00:00Z".into(),
             duration: None,
@@ -985,6 +1007,7 @@ mod tests {
     fn make_vod(id: &str, created_at: &str, games: &[&str]) -> Vod {
         Vod {
             id: id.into(),
+            platform_vod_id: None,
             title: Some(format!("vod {id}")),
             created_at: created_at.into(),
             duration: Some("1h".into()),
