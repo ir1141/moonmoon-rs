@@ -1,4 +1,7 @@
-use super::{Section, VodDisplay, assign_series_headers, render_template, resolve_watched_chapter};
+use super::{
+    Section, VodDisplay, assign_series_headers, find_vod_by_id, render_template,
+    resolve_watched_chapter,
+};
 use crate::SharedState;
 use crate::middleware::CspNonce;
 use askama::Template;
@@ -61,7 +64,7 @@ pub async fn history_vods_grid(
     let mut displays = Vec::new();
     let mut keys: Vec<Option<String>> = Vec::new();
     for (i, id) in requested_ids.iter().enumerate() {
-        if let Some(vod) = vods.iter().find(|v| v.id == *id) {
+        if let Some(vod) = find_vod_by_id(&vods, id) {
             let time = resume_times.get(i).copied().flatten();
             let (name_opt, start_opt) = time
                 .and_then(|t| resolve_watched_chapter(vod, Some(t)))

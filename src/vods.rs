@@ -5,6 +5,8 @@ use std::time::Duration;
 pub struct Vod {
     #[serde(deserialize_with = "deserialize_id_string")]
     pub id: String,
+    #[serde(default, deserialize_with = "deserialize_optional_id_string")]
+    pub platform_vod_id: Option<String>,
     pub title: Option<String>,
     pub created_at: String,
     #[serde(default, deserialize_with = "deserialize_duration_string")]
@@ -48,6 +50,23 @@ where
         IdValue::Int(n) => n.to_string(),
         IdValue::Str(s) => s,
     })
+}
+
+fn deserialize_optional_id_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum IdValue {
+        Int(i64),
+        Str(String),
+    }
+    let value: Option<IdValue> = Option::deserialize(deserializer)?;
+    Ok(value.map(|v| match v {
+        IdValue::Int(n) => n.to_string(),
+        IdValue::Str(s) => s,
+    }))
 }
 
 fn deserialize_duration_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
@@ -326,9 +345,10 @@ mod tests {
 
     #[test]
     fn test_vod_deserialize_string_fields() {
-        let json = r#"{"id":"abc123","title":"Test Stream","created_at":"2025-01-15T00:00:00Z","duration":"3h 20m","thumbnail_url":"https://example.com/thumb.jpg","chapters":[{"name":"Elden Ring","image":"https://example.com/40x53.jpg"}]}"#;
+        let json = r#"{"id":"abc123","platform_vod_id":"2237432794","title":"Test Stream","created_at":"2025-01-15T00:00:00Z","duration":"3h 20m","thumbnail_url":"https://example.com/thumb.jpg","chapters":[{"name":"Elden Ring","image":"https://example.com/40x53.jpg"}]}"#;
         let vod: Vod = serde_json::from_str(json).unwrap();
         assert_eq!(vod.id, "abc123");
+        assert_eq!(vod.platform_vod_id.as_deref(), Some("2237432794"));
         assert_eq!(vod.duration.as_deref(), Some("3h 20m"));
         assert_eq!(vod.chapters.unwrap()[0].name.as_deref(), Some("Elden Ring"));
     }
@@ -337,6 +357,7 @@ mod tests {
     fn test_vod_deserialize_int_fields() {
         let json = r#"{
             "id": 1430,
+            "platform_vod_id": "2768249708",
             "title": "Test Stream",
             "created_at": "2026-05-09T22:35:39.000Z",
             "duration": 25194,
@@ -351,6 +372,7 @@ mod tests {
         backfill_thumbnails(&mut vods);
         let vod = &vods[0];
         assert_eq!(vod.id, "1430");
+        assert_eq!(vod.platform_vod_id.as_deref(), Some("2768249708"));
         assert_eq!(vod.duration.as_deref(), Some("6h 59m"));
         assert_eq!(vod.youtube.as_ref().unwrap()[0].id, "M1giB9QeXNM");
         assert_eq!(
@@ -384,6 +406,7 @@ mod tests {
     fn test_build_games_deduplicates() {
         let vods = vec![Vod {
             id: "1".into(),
+            platform_vod_id: None,
             title: Some("Stream 1".into()),
             created_at: "2025-01-01T00:00:00Z".into(),
             duration: Some("2h".into()),
@@ -416,6 +439,7 @@ mod tests {
         let vods = vec![
             Vod {
                 id: "1".into(),
+                platform_vod_id: None,
                 title: Some("Stream 1".into()),
                 created_at: "2025-01-01T00:00:00Z".into(),
                 duration: Some("2h".into()),
@@ -429,6 +453,7 @@ mod tests {
             },
             Vod {
                 id: "2".into(),
+                platform_vod_id: None,
                 title: Some("Stream 2".into()),
                 created_at: "2025-01-02T00:00:00Z".into(),
                 duration: Some("3h".into()),

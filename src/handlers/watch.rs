@@ -1,4 +1,4 @@
-use super::{Section, get_game_tags, next_vod_in_period, render_template};
+use super::{Section, find_vod_by_id, get_game_tags, next_vod_in_period, render_template};
 use crate::SharedState;
 use crate::middleware::CspNonce;
 use askama::Template;
@@ -35,7 +35,7 @@ pub async fn watch_page(
         let guard = state.vods.read().await;
         Arc::clone(&*guard)
     };
-    match vods.iter().find(|v| v.id == vod_id) {
+    match find_vod_by_id(&vods, &vod_id) {
         Some(v) => {
             let youtube_ids: Vec<String> = v
                 .youtube
@@ -65,7 +65,7 @@ pub async fn vod_detail(
         let guard = state.vods.read().await;
         Arc::clone(&*guard)
     };
-    if let Some(vod) = vods.iter().find(|v| v.id == vod_id) {
+    if let Some(vod) = find_vod_by_id(&vods, &vod_id) {
         axum::Json(vod.clone()).into_response()
     } else {
         (StatusCode::NOT_FOUND, "vod not found").into_response()
@@ -82,7 +82,7 @@ pub async fn next_in_period(
         Arc::clone(&*guard)
     };
 
-    let Some(current) = vods.iter().find(|v| v.id == vod_id) else {
+    let Some(current) = find_vod_by_id(&vods, &vod_id) else {
         return StatusCode::NOT_FOUND.into_response();
     };
 
@@ -99,7 +99,7 @@ pub async fn next_in_period(
         }
     };
 
-    match next_vod_in_period(&vods, &vod_id, &game) {
+    match next_vod_in_period(&vods, &current.id, &game) {
         Some(next) => axum::Json(serde_json::json!({
             "next_id": next.id,
             "next_title": next.title,
