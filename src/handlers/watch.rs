@@ -1,12 +1,13 @@
 use super::{Section, find_vod_by_id, get_game_tags, next_vod_in_period, render_template};
 use crate::SharedState;
 use crate::middleware::CspNonce;
+use crate::vods::{Vod, canonical_youtube_uploads};
 use askama::Template;
 use axum::extract::{Extension, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Redirect};
 use rand::prelude::IndexedRandom;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 #[derive(Template)]
@@ -14,10 +15,16 @@ use std::sync::Arc;
 struct WatchTemplate {
     vod_id: String,
     vod_title: String,
-    youtube_ids_json: String,
+    youtube_parts_json: String,
     game_hint: String,
     active_section: Section,
     nonce: String,
+}
+
+#[derive(Serialize)]
+struct YoutubePartPayload {
+    id: String,
+    duration: Option<i64>,
 }
 
 #[derive(Deserialize, Default)]
@@ -36,25 +43,27 @@ pub async fn watch_page(
         Arc::clone(&*guard)
     };
     match find_vod_by_id(&vods, &vod_id) {
-        Some(v) => {
-            let youtube_ids: Vec<String> = v
-                .youtube
-                .as_ref()
-                .map(|yt| yt.iter().map(|y| y.id.clone()).collect())
-                .unwrap_or_default();
-            let youtube_ids_json =
-                serde_json::to_string(&youtube_ids).unwrap_or_else(|_| "[]".into());
-            render_template(&WatchTemplate {
-                vod_id: v.id.clone(),
-                vod_title: v.title.clone().unwrap_or_else(|| "Untitled".into()),
-                youtube_ids_json,
-                game_hint: params.game.unwrap_or_default(),
-                active_section: Section::None,
-                nonce: nonce.0,
-            })
-        }
+        Some(v) => render_template(&WatchTemplate {
+            vod_id: v.id.clone(),
+            vod_title: v.title.clone().unwrap_or_else(|| "Untitled".into()),
+            youtube_parts_json: youtube_parts_json(v),
+            game_hint: params.game.unwrap_or_default(),
+            active_section: Section::None,
+            nonce: nonce.0,
+        }),
         None => (StatusCode::NOT_FOUND, "VOD not found").into_response(),
     }
+}
+
+fn youtube_parts_json(vod: &Vod) -> String {
+    let parts: Vec<YoutubePartPayload> = canonical_youtube_uploads(vod)
+        .into_iter()
+        .map(|upload| YoutubePartPayload {
+            id: upload.id,
+            duration: upload.duration.filter(|duration| *duration > 0),
+        })
+        .collect();
+    serde_json::to_string(&parts).unwrap_or_else(|_| "[]".into())
 }
 
 pub async fn vod_detail(
@@ -119,5 +128,77 @@ pub async fn random_vod(State(state): State<SharedState>) -> Redirect {
         Redirect::temporary(&format!("/watch/{}", pick.id))
     } else {
         Redirect::temporary("/")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::vods::{Chapter, Vod, VodDuration, YoutubeVideo};
+
+    #[test]
+    fn test_youtube_parts_json_uses_canonical_ids_and_durations() {
+        let vod = Vod {
+            id: "1430".into(),
+            platform: Some("twitch".into()),
+            platform_vod_id: Some("2768249708".into()),
+            platform_stream_id: None,
+            title: Some("Playable Stream".into()),
+            created_at: "2026-05-10T23:05:44.967Z".into(),
+            started_at: Some("2026-05-09T22:35:39.000Z".into()),
+            updated_at: None,
+            duration: Some(VodDuration::from_seconds(25194)),
+            thumbnail_url: None,
+            chapters: Some(vec![Chapter {
+                name: Some("HITMAN".into()),
+                image: None,
+                start: Some(0.0),
+                duration: None,
+                end: None,
+            }]),
+            youtube: Some(vec![
+                YoutubeVideo {
+                    row_id: None,
+                    id: "live-1".into(),
+                    thumbnail_url: None,
+                    part: Some(1),
+                    duration: Some(10800),
+                    status: Some("COMPLETED".into()),
+                    upload_type: Some("live".into()),
+                    created_at: None,
+                },
+                YoutubeVideo {
+                    row_id: None,
+                    id: "vod-2".into(),
+                    thumbnail_url: None,
+                    part: Some(2),
+                    duration: Some(3594),
+                    status: Some("COMPLETED".into()),
+                    upload_type: Some("vod".into()),
+                    created_at: None,
+                },
+                YoutubeVideo {
+                    row_id: None,
+                    id: "vod-1".into(),
+                    thumbnail_url: None,
+                    part: Some(1),
+                    duration: Some(10800),
+                    status: Some("COMPLETED".into()),
+                    upload_type: Some("vod".into()),
+                    created_at: None,
+                },
+            ]),
+            is_live: false,
+        };
+
+        let value: serde_json::Value = serde_json::from_str(&youtube_parts_json(&vod)).unwrap();
+
+        assert_eq!(
+            value,
+            serde_json::json!([
+                {"id": "vod-1", "duration": 10800},
+                {"id": "vod-2", "duration": 3594}
+            ])
+        );
     }
 }

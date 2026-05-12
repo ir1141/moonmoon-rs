@@ -2,6 +2,10 @@ import {
   getCachedPartDurations as getCachedPartDurationsPure,
   savePartDuration as savePartDurationPure,
 } from "./lib/part-durations.js";
+import {
+  initialPartDurations,
+  parseYoutubePartsDataset,
+} from "./lib/player-parts.js";
 import { isEmoteCandidate } from "./lib/emote-heuristic.js";
 import { getCachedEmote, setCachedEmote } from "./lib/emote-cache.js";
 import {
@@ -17,13 +21,13 @@ if (!dataEl) {
 var VOD_ID = dataEl.dataset.vodId;
 var GAME_HINT = dataEl.dataset.gameHint || "";
 var HAS_EXPLICIT_HINT = GAME_HINT.length > 0;
-var YOUTUBE_IDS;
-try {
-  YOUTUBE_IDS = JSON.parse(dataEl.dataset.youtubeIds || "[]");
-} catch (e) {
-  console.error("[Player] Failed to parse YouTube IDs:", e);
-  YOUTUBE_IDS = [];
-}
+var YOUTUBE_PARTS = parseYoutubePartsDataset(
+  dataEl.dataset.youtubeParts || "",
+  dataEl.dataset.youtubeIds || "",
+);
+var YOUTUBE_IDS = YOUTUBE_PARTS.map(function (part) {
+  return part.id;
+});
 var STORAGE_KEY = "moonmoon_resume";
 var MAX_RESUME_ENTRIES = 500;
 var PART_DURATIONS_KEY = "moonmoon_part_durations";
@@ -35,10 +39,7 @@ var MOONMOON_TWITCH_ID = "121059319";
 
 var player = null;
 var currentPart = 0;
-// Pre-fill durations: all parts assumed 3hrs, corrected when each loads
-var partDurations = YOUTUBE_IDS.map(function () {
-  return MAX_PART_DURATION;
-});
+var partDurations = initialPartDurations(YOUTUBE_PARTS, null, MAX_PART_DURATION);
 var tickInterval = null;
 
 // Chat state

@@ -49,7 +49,7 @@
   </div>
 </div>
 
-<div id="vod-data" data-vod-id="{{ vod_id }}" data-youtube-ids="{{ youtube_ids_json }}" data-game-hint="{{ game_hint }}"></div>
+<div id="vod-data" data-vod-id="{{ vod_id }}" data-youtube-parts="{{ youtube_parts_json }}" data-game-hint="{{ game_hint }}"></div>
 <!-- SRI not used: Google serves a versionless URL whose contents change over time. -->
 <script src="https://www.youtube.com/iframe_api" nonce="{{ nonce }}"></script>
 <script type="module" src="/static/player.js" nonce="{{ nonce }}"></script>
