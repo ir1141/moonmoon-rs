@@ -104,7 +104,10 @@ impl VodDisplay {
             .clone()
             .unwrap_or_else(|| "Untitled Stream".to_string());
         let formatted_date = format_date(&vod.created_at);
-        let duration_seconds = parse_duration_seconds(vod.duration.as_deref().unwrap_or(""));
+        let duration_seconds = vod
+            .duration
+            .as_ref()
+            .map_or(0, |duration| duration.seconds());
         let duration_minutes = duration_seconds / 60;
         let watch_url = build_watch_url(&vod.id, chapter_start, game_name_hint);
         let chapter_segments = get_chapter_segments(vod, duration_seconds);
@@ -112,7 +115,10 @@ impl VodDisplay {
             id: vod.id.clone(),
             display_title,
             formatted_date,
-            duration: vod.duration.clone(),
+            duration: vod
+                .duration
+                .as_ref()
+                .map(|duration| duration.display().to_string()),
             thumbnail_url: vod.thumbnail_url.clone(),
             chapter_segments,
             created_at: vod.created_at.clone(),
@@ -524,50 +530,6 @@ pub(crate) fn format_date(created_at: &str) -> String {
     format!("{} {day}, {}", month_abbr(parts[1]), parts[0])
 }
 
-pub(crate) fn parse_duration_minutes(duration: &str) -> i64 {
-    parse_duration_seconds(duration) / 60
-}
-
-pub(crate) fn parse_duration_seconds(duration: &str) -> i64 {
-    let parts: Vec<&str> = duration.split(':').collect();
-    if parts.len() == 3 {
-        let h = parts[0].parse::<i64>().unwrap_or(0);
-        let m = parts[1].parse::<i64>().unwrap_or(0);
-        let s = parts[2].parse::<i64>().unwrap_or(0);
-        return h * 3600 + m * 60 + s;
-    }
-    if parts.len() == 2 {
-        let m = parts[0].parse::<i64>().unwrap_or(0);
-        let s = parts[1].parse::<i64>().unwrap_or(0);
-        return m * 60 + s;
-    }
-    let mut total: i64 = 0;
-    let mut num_buf = String::new();
-    for ch in duration.chars() {
-        if ch.is_ascii_digit() {
-            num_buf.push(ch);
-        } else if ch == 'h' || ch == 'H' {
-            if let Ok(h) = num_buf.parse::<i64>() {
-                total += h * 3600;
-            }
-            num_buf.clear();
-        } else if ch == 'm' || ch == 'M' {
-            if let Ok(m) = num_buf.parse::<i64>() {
-                total += m * 60;
-            }
-            num_buf.clear();
-        } else if ch == 's' || ch == 'S' {
-            if let Ok(s) = num_buf.parse::<i64>() {
-                total += s;
-            }
-            num_buf.clear();
-        } else {
-            num_buf.clear();
-        }
-    }
-    total
-}
-
 pub(crate) fn paginate_with_nav<T>(
     items: Vec<T>,
     base_url: &str,
@@ -619,23 +581,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_duration_minutes() {
-        assert_eq!(parse_duration_minutes("3h 20m"), 200);
-        assert_eq!(parse_duration_minutes("1h"), 60);
-        assert_eq!(parse_duration_minutes("45m"), 45);
-        assert_eq!(parse_duration_minutes(""), 0);
-        assert_eq!(parse_duration_minutes("10h 5m"), 605);
-        assert_eq!(parse_duration_minutes("07:02:52"), 422);
-        assert_eq!(parse_duration_minutes("09:28:29"), 568);
-    }
+    fn test_vod_display_preserves_numeric_api_duration_seconds() {
+        let vod: Vod = serde_json::from_str(
+            r#"{
+                "id": 1430,
+                "platform_vod_id": "2768249708",
+                "title": "Test Stream",
+                "created_at": "2026-05-09T22:35:39.000Z",
+                "duration": 25194,
+                "vod_uploads": [
+                    {"upload_id": "M1giB9QeXNM"}
+                ],
+                "chapters": [
+                    {"name": "HITMAN", "start": 0}
+                ]
+            }"#,
+        )
+        .unwrap();
 
-    #[test]
-    fn test_parse_duration_seconds() {
-        assert_eq!(parse_duration_seconds("07:02:52"), 25372);
-        assert_eq!(parse_duration_seconds("09:28:29"), 34109);
-        assert_eq!(parse_duration_seconds("00:30:00"), 1800);
-        assert_eq!(parse_duration_seconds("3h 20m"), 12000);
-        assert_eq!(parse_duration_seconds(""), 0);
+        let display = VodDisplay::from_vod(&vod);
+
+        assert_eq!(display.duration.as_deref(), Some("6h 59m"));
+        assert_eq!(display.duration_seconds, 25194);
     }
 
     #[test]

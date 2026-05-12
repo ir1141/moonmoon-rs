@@ -1,4 +1,4 @@
-use super::{Section, days_to_civil, parse_duration_minutes, render_template};
+use super::{Section, days_to_civil, render_template};
 use crate::SharedState;
 use crate::middleware::CspNonce;
 use askama::Template;
@@ -141,7 +141,11 @@ pub async fn calendar_page(
     for (&d, dvods) in &day_map {
         let total: i64 = dvods
             .iter()
-            .map(|v| parse_duration_minutes(v.duration.as_deref().unwrap_or("")))
+            .map(|v| {
+                v.duration
+                    .as_ref()
+                    .map_or(0, |duration| duration.seconds() / 60)
+            })
             .sum();
         day_minutes.insert(d, total);
         if total > max_minutes {

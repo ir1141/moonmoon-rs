@@ -11,8 +11,8 @@ pub struct Vod {
     pub created_at: String,
     #[serde(default)]
     pub updated_at: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_duration_string")]
-    pub duration: Option<String>,
+    #[serde(default)]
+    pub duration: Option<VodDuration>,
     #[serde(default)]
     pub thumbnail_url: Option<String>,
     pub chapters: Option<Vec<Chapter>>,
@@ -73,23 +73,6 @@ where
     }))
 }
 
-fn deserialize_duration_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum DurationValue {
-        Int(i64),
-        Str(String),
-    }
-    let value: Option<DurationValue> = Option::deserialize(deserializer)?;
-    Ok(value.map(|v| match v {
-        DurationValue::Int(secs) => format_duration_hm(secs),
-        DurationValue::Str(s) => s,
-    }))
-}
-
 fn format_duration_hm(secs: i64) -> String {
     if secs <= 0 {
         return "0m".into();
@@ -105,6 +88,123 @@ fn format_duration_hm(secs: i64) -> String {
     } else {
         format!("{secs}s")
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VodDuration {
+    display: String,
+    seconds: i64,
+}
+
+impl VodDuration {
+    pub fn from_seconds(seconds: i64) -> Self {
+        Self {
+            display: format_duration_hm(seconds),
+            seconds: seconds.max(0),
+        }
+    }
+
+    fn from_display(display: String) -> Self {
+        let seconds = parse_duration_display_seconds(&display);
+        Self { display, seconds }
+    }
+
+    pub fn display(&self) -> &str {
+        &self.display
+    }
+
+    pub fn seconds(&self) -> i64 {
+        self.seconds
+    }
+}
+
+impl std::ops::Deref for VodDuration {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.display
+    }
+}
+
+impl From<&str> for VodDuration {
+    fn from(value: &str) -> Self {
+        Self::from_display(value.to_string())
+    }
+}
+
+impl From<String> for VodDuration {
+    fn from(value: String) -> Self {
+        Self::from_display(value)
+    }
+}
+
+impl Serialize for VodDuration {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.display)
+    }
+}
+
+impl<'de> Deserialize<'de> for VodDuration {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum DurationValue {
+            Int(i64),
+            Str(String),
+        }
+
+        Ok(match DurationValue::deserialize(deserializer)? {
+            DurationValue::Int(secs) => Self::from_seconds(secs),
+            DurationValue::Str(s) => Self::from_display(s),
+        })
+    }
+}
+
+fn parse_duration_display_seconds(duration: &str) -> i64 {
+    let parts: Vec<&str> = duration.split(':').collect();
+    if parts.len() == 3 {
+        let h = parts[0].parse::<i64>().unwrap_or(0);
+        let m = parts[1].parse::<i64>().unwrap_or(0);
+        let s = parts[2].parse::<i64>().unwrap_or(0);
+        return h * 3600 + m * 60 + s;
+    }
+    if parts.len() == 2 {
+        let m = parts[0].parse::<i64>().unwrap_or(0);
+        let s = parts[1].parse::<i64>().unwrap_or(0);
+        return m * 60 + s;
+    }
+
+    let mut total = 0;
+    let mut num_buf = String::new();
+    for ch in duration.chars() {
+        if ch.is_ascii_digit() {
+            num_buf.push(ch);
+        } else if ch == 'h' || ch == 'H' {
+            if let Ok(h) = num_buf.parse::<i64>() {
+                total += h * 3600;
+            }
+            num_buf.clear();
+        } else if ch == 'm' || ch == 'M' {
+            if let Ok(m) = num_buf.parse::<i64>() {
+                total += m * 60;
+            }
+            num_buf.clear();
+        } else if ch == 's' || ch == 'S' {
+            if let Ok(s) = num_buf.parse::<i64>() {
+                total += s;
+            }
+            num_buf.clear();
+        } else {
+            num_buf.clear();
+        }
+    }
+    total
 }
 
 #[derive(Debug, Clone)]
@@ -442,6 +542,7 @@ mod tests {
         assert_eq!(vod.id, "abc123");
         assert_eq!(vod.platform_vod_id.as_deref(), Some("2237432794"));
         assert_eq!(vod.duration.as_deref(), Some("3h 20m"));
+        assert_eq!(vod.duration.as_ref().map(VodDuration::seconds), Some(12000));
         assert_eq!(vod.chapters.unwrap()[0].name.as_deref(), Some("Elden Ring"));
     }
 
@@ -466,6 +567,7 @@ mod tests {
         assert_eq!(vod.id, "1430");
         assert_eq!(vod.platform_vod_id.as_deref(), Some("2768249708"));
         assert_eq!(vod.duration.as_deref(), Some("6h 59m"));
+        assert_eq!(vod.duration.as_ref().map(VodDuration::seconds), Some(25194));
         assert_eq!(vod.youtube.as_ref().unwrap()[0].id, "M1giB9QeXNM");
         assert_eq!(
             vod.thumbnail_url.as_deref(),
@@ -480,6 +582,13 @@ mod tests {
         assert_eq!(format_duration_hm(2700), "45m");
         assert_eq!(format_duration_hm(45), "45s");
         assert_eq!(format_duration_hm(0), "0m");
+    }
+
+    #[test]
+    fn test_vod_duration_parses_string_fallbacks() {
+        assert_eq!(VodDuration::from("07:02:52").seconds(), 25372);
+        assert_eq!(VodDuration::from("3h 20m").seconds(), 12000);
+        assert_eq!(VodDuration::from("").seconds(), 0);
     }
 
     #[test]
