@@ -666,6 +666,7 @@ mod tests {
             platform_vod_id: None,
             title: Some("Test".into()),
             created_at: "2025-01-01T00:00:00Z".into(),
+            updated_at: None,
             duration: Some("2h".into()),
             thumbnail_url: None,
             chapters: Some(vec![
@@ -686,6 +687,7 @@ mod tests {
                 },
             ]),
             youtube: None,
+            is_live: false,
         };
         let tags = get_game_tags(&vod);
         assert_eq!(tags, vec!["Game A".to_string(), "Game B".to_string()]);
@@ -698,6 +700,7 @@ mod tests {
             platform_vod_id: None,
             title: Some("Test".into()),
             created_at: "2025-01-01T00:00:00Z".into(),
+            updated_at: None,
             duration: Some("2h".into()),
             thumbnail_url: None,
             chapters: Some(vec![
@@ -713,6 +716,7 @@ mod tests {
                 },
             ]),
             youtube: None,
+            is_live: false,
         };
         let tags = get_game_tags(&vod);
         assert_eq!(tags, vec!["Elden Ring".to_string()]);
@@ -725,6 +729,7 @@ mod tests {
             platform_vod_id: None,
             title: Some("Test".into()),
             created_at: "2025-01-01T00:00:00Z".into(),
+            updated_at: None,
             duration: Some("2h".into()),
             thumbnail_url: None,
             chapters: Some(vec![crate::vods::Chapter {
@@ -733,6 +738,7 @@ mod tests {
                 start: None,
             }]),
             youtube: None,
+            is_live: false,
         };
         assert!(vod_has_game(&vod, "Elden Ring"));
         assert!(vod_has_game(&vod, "elden ring"));
@@ -986,10 +992,12 @@ mod tests {
             platform_vod_id: None,
             title: None,
             created_at: "2024-01-01T00:00:00Z".into(),
+            updated_at: None,
             duration: None,
             thumbnail_url: None,
             chapters: Some(vec![]),
             youtube: None,
+            is_live: false,
         };
         assert!(resolve_watched_chapter(&vod, Some(100)).is_none());
     }
@@ -1010,6 +1018,7 @@ mod tests {
             platform_vod_id: None,
             title: Some(format!("vod {id}")),
             created_at: created_at.into(),
+            updated_at: None,
             duration: Some("1h".into()),
             thumbnail_url: None,
             chapters: Some(
@@ -1023,6 +1032,7 @@ mod tests {
                     .collect(),
             ),
             youtube: None,
+            is_live: false,
         }
     }
 

@@ -16,6 +16,7 @@ mod vods;
 pub struct AppState {
     pub vods: RwLock<Arc<Vec<vods::Vod>>>,
     pub games: RwLock<Arc<Vec<vods::Game>>>,
+    pub(crate) catalog_snapshot: RwLock<vods::CatalogSnapshot>,
     pub http_client: reqwest::Client,
     pub refresh_lock: tokio::sync::Mutex<()>,
     pub sync_store: Arc<sync_store::SyncStore>,
@@ -38,17 +39,18 @@ async fn main() {
         .expect("failed to build HTTP client");
 
     const BOOT_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
-    let all_vods =
-        match tokio::time::timeout(BOOT_FETCH_TIMEOUT, vods::load_vods(&http_client)).await {
-            Ok(v) => v,
+    let catalog =
+        match tokio::time::timeout(BOOT_FETCH_TIMEOUT, vods::load_catalog(&http_client)).await {
+            Ok(catalog) => catalog,
             Err(_) => {
                 tracing::error!(
                     "boot fetch timed out after {:?}; starting with 0 vods",
                     BOOT_FETCH_TIMEOUT
                 );
-                Vec::new()
+                vods::CatalogLoad::empty()
             }
         };
+    let all_vods = catalog.vods;
     tracing::info!("ready with {} vods", all_vods.len());
 
     let games = vods::build_games(&all_vods);
@@ -62,6 +64,7 @@ async fn main() {
     let state = Arc::new(AppState {
         vods: RwLock::new(Arc::new(all_vods)),
         games: RwLock::new(Arc::new(games)),
+        catalog_snapshot: RwLock::new(catalog.snapshot),
         http_client,
         refresh_lock: tokio::sync::Mutex::new(()),
         sync_store,

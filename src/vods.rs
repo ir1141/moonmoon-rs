@@ -9,6 +9,8 @@ pub struct Vod {
     pub platform_vod_id: Option<String>,
     pub title: Option<String>,
     pub created_at: String,
+    #[serde(default)]
+    pub updated_at: Option<String>,
     #[serde(default, deserialize_with = "deserialize_duration_string")]
     pub duration: Option<String>,
     #[serde(default)]
@@ -16,6 +18,8 @@ pub struct Vod {
     pub chapters: Option<Vec<Chapter>>,
     #[serde(rename = "vod_uploads", alias = "youtube", default)]
     pub youtube: Option<Vec<YoutubeVideo>>,
+    #[serde(default)]
+    pub is_live: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -130,6 +134,60 @@ struct ApiResponse {
     pub meta: ApiMeta,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CatalogSnapshot {
+    pub total: usize,
+    pub latest_id: Option<String>,
+    pub latest_updated_at: Option<String>,
+}
+
+impl CatalogSnapshot {
+    #[cfg(test)]
+    pub(crate) fn from_vods(vods: &[Vod]) -> Self {
+        let latest = vods.first();
+        Self {
+            total: vods.len(),
+            latest_id: latest.map(|vod| vod.id.clone()),
+            latest_updated_at: latest.and_then(|vod| vod.updated_at.clone()),
+        }
+    }
+
+    fn from_api_response(resp: &ApiResponse) -> Self {
+        let latest = resp.data.first();
+        Self {
+            total: resp.meta.total,
+            latest_id: latest.map(|vod| vod.id.clone()),
+            latest_updated_at: latest.and_then(|vod| vod.updated_at.clone()),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CatalogLoad {
+    pub(crate) vods: Vec<Vod>,
+    pub(crate) snapshot: CatalogSnapshot,
+}
+
+impl CatalogLoad {
+    pub(crate) fn empty() -> Self {
+        Self {
+            vods: Vec::new(),
+            snapshot: CatalogSnapshot {
+                total: 0,
+                latest_id: None,
+                latest_updated_at: None,
+            },
+        }
+    }
+
+    fn from_raw_vods(snapshot: CatalogSnapshot, mut vods: Vec<Vod>) -> Self {
+        filter_playable_vods(&mut vods);
+        backfill_thumbnails(&mut vods);
+
+        Self { vods, snapshot }
+    }
+}
+
 pub fn upscale_chapter_image(url: &str) -> String {
     url.replace("{width}x{height}", "285x380")
         .replace("40x53", "285x380")
@@ -142,6 +200,10 @@ const INITIAL_429_BACKOFF_MS: u64 = 250;
 
 fn page_url(page_one_based: usize) -> String {
     format!("{API}?page={page_one_based}&limit={PAGE_SIZE}&sort=created_at&order=desc")
+}
+
+fn snapshot_url() -> String {
+    format!("{API}?page=1&limit=1&sort=created_at&order=desc")
 }
 
 fn pages(total: usize) -> usize {
@@ -202,34 +264,59 @@ async fn fetch_api_response(
     }
 }
 
-pub async fn fetch_vod_count(client: &reqwest::Client) -> Result<usize, reqwest::Error> {
-    let resp = fetch_api_response(client, &format!("{API}?page=1&limit=1")).await?;
-    Ok(resp.meta.total)
+async fn fetch_catalog_snapshot(
+    client: &reqwest::Client,
+) -> Result<CatalogSnapshot, reqwest::Error> {
+    let resp = fetch_api_response(client, &snapshot_url()).await?;
+    let latest = resp.data.first();
+    Ok(CatalogSnapshot {
+        total: resp.meta.total,
+        latest_id: latest.map(|vod| vod.id.clone()),
+        latest_updated_at: latest.and_then(|vod| vod.updated_at.clone()),
+    })
 }
 
-pub async fn fetch_all_vods(client: &reqwest::Client) -> Result<Vec<Vod>, reqwest::Error> {
+pub fn is_playable_vod(vod: &Vod) -> bool {
+    !vod.is_live
+        && vod
+            .youtube
+            .as_ref()
+            .is_some_and(|uploads| !uploads.is_empty())
+}
+
+pub fn filter_playable_vods(vods: &mut Vec<Vod>) {
+    vods.retain(is_playable_vod);
+}
+
+pub(crate) async fn fetch_catalog_load(
+    client: &reqwest::Client,
+) -> Result<CatalogLoad, reqwest::Error> {
     let first = fetch_api_response(client, &page_url(1)).await?;
     let total = first.meta.total;
     tracing::info!("fetching {total} vods...");
 
     let total_pages = pages(total);
     if total_pages == 0 {
-        return Ok(Vec::new());
+        return Ok(CatalogLoad::from_raw_vods(
+            CatalogSnapshot::from_api_response(&first),
+            first.data,
+        ));
     }
 
-    let mut result: Vec<Vod> = Vec::with_capacity(total);
-    result.extend(first.data);
+    let snapshot = CatalogSnapshot::from_api_response(&first);
+    let mut vods = Vec::with_capacity(total);
+    vods.extend(first.data);
 
     for page_idx in 2..=total_pages {
         let resp = fetch_api_response(client, &page_url(page_idx)).await?;
-        result.extend(resp.data);
+        vods.extend(resp.data);
         tracing::debug!("page {page_idx} of {total_pages} done");
     }
 
-    backfill_thumbnails(&mut result);
+    let catalog = CatalogLoad::from_raw_vods(snapshot, vods);
 
-    tracing::info!("{} / {} vods fetched", result.len(), total);
-    Ok(result)
+    tracing::info!("{} / {} vods fetched", catalog.vods.len(), total);
+    Ok(catalog)
 }
 
 /// Upstream doesn't expose `thumbnail_url` at the VOD level — only on each
@@ -248,13 +335,13 @@ fn backfill_thumbnails(vods: &mut [Vod]) {
     }
 }
 
-pub async fn load_vods(client: &reqwest::Client) -> Vec<Vod> {
-    match fetch_all_vods(client).await {
-        Ok(vods) => vods,
+pub async fn load_catalog(client: &reqwest::Client) -> CatalogLoad {
+    match fetch_catalog_load(client).await {
+        Ok(catalog) => catalog,
         Err(e) => {
             tracing::error!("failed to fetch vods: {e}");
             tracing::error!("starting with 0 vods — site will be empty until next refresh");
-            Vec::new()
+            CatalogLoad::empty()
         }
     }
 }
@@ -300,39 +387,44 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
         }
     };
 
-    let cached_count = state.vods.read().await.len();
+    let cached_snapshot = state.catalog_snapshot.read().await.clone();
 
-    let remote_count = match fetch_vod_count(&state.http_client).await {
-        Ok(c) => c,
+    let remote_snapshot = match fetch_catalog_snapshot(&state.http_client).await {
+        Ok(snapshot) => snapshot,
         Err(e) => {
-            tracing::error!("refresh: failed to check vod count: {e}");
-            return RefreshOutcome::Error(format!("failed to check vod count: {e}"));
+            tracing::error!("refresh: failed to check catalog snapshot: {e}");
+            return RefreshOutcome::Error(format!("failed to check catalog snapshot: {e}"));
         }
     };
 
-    if remote_count == cached_count {
-        tracing::info!("refresh: vod count unchanged ({cached_count})");
-        return RefreshOutcome::Unchanged(cached_count);
+    if remote_snapshot == cached_snapshot {
+        tracing::info!("refresh: catalog unchanged ({cached_snapshot:?})");
+        let count = state.vods.read().await.len();
+        return RefreshOutcome::Unchanged(count);
     }
 
-    tracing::info!("refresh: vod count changed ({cached_count} -> {remote_count}), fetching...");
-    let new_vods = match fetch_all_vods(&state.http_client).await {
-        Ok(v) => v,
+    tracing::info!(
+        "refresh: catalog changed ({cached_snapshot:?} -> {remote_snapshot:?}), fetching..."
+    );
+    let catalog = match fetch_catalog_load(&state.http_client).await {
+        Ok(catalog) => catalog,
         Err(e) => {
             tracing::error!("refresh: failed to fetch vods: {e}");
             return RefreshOutcome::Error(format!("failed to fetch vods: {e}"));
         }
     };
 
-    let new_vods = std::sync::Arc::new(new_vods);
+    let new_vods = std::sync::Arc::new(catalog.vods);
     let new_games = std::sync::Arc::new(build_games(&new_vods));
     let count = new_vods.len();
 
     {
         let mut vods_w = state.vods.write().await;
         let mut games_w = state.games.write().await;
+        let mut snapshot_w = state.catalog_snapshot.write().await;
         *vods_w = new_vods;
         *games_w = new_games;
+        *snapshot_w = catalog.snapshot;
     }
 
     tracing::info!("refresh: complete ({count} vods)");
@@ -409,6 +501,7 @@ mod tests {
             platform_vod_id: None,
             title: Some("Stream 1".into()),
             created_at: "2025-01-01T00:00:00Z".into(),
+            updated_at: None,
             duration: Some("2h".into()),
             thumbnail_url: None,
             chapters: Some(vec![
@@ -429,6 +522,7 @@ mod tests {
                 },
             ]),
             youtube: None,
+            is_live: false,
         }];
         let games = build_games(&vods);
         assert_eq!(games.len(), 2);
@@ -442,6 +536,7 @@ mod tests {
                 platform_vod_id: None,
                 title: Some("Stream 1".into()),
                 created_at: "2025-01-01T00:00:00Z".into(),
+                updated_at: None,
                 duration: Some("2h".into()),
                 thumbnail_url: None,
                 chapters: Some(vec![Chapter {
@@ -450,12 +545,14 @@ mod tests {
                     start: None,
                 }]),
                 youtube: None,
+                is_live: false,
             },
             Vod {
                 id: "2".into(),
                 platform_vod_id: None,
                 title: Some("Stream 2".into()),
                 created_at: "2025-01-02T00:00:00Z".into(),
+                updated_at: None,
                 duration: Some("3h".into()),
                 thumbnail_url: None,
                 chapters: Some(vec![Chapter {
@@ -464,6 +561,7 @@ mod tests {
                     start: None,
                 }]),
                 youtube: None,
+                is_live: false,
             },
         ];
         let games = build_games(&vods);
@@ -537,5 +635,176 @@ mod tests {
         assert_eq!(pages(51), 2);
         assert_eq!(pages(100), 2);
         assert_eq!(pages(1419), 29);
+    }
+
+    #[test]
+    fn test_live_empty_upload_row_is_not_playable() {
+        let vod = Vod {
+            id: "live".into(),
+            platform_vod_id: None,
+            title: Some("Live Stream".into()),
+            created_at: "2026-05-12T00:00:00Z".into(),
+            updated_at: Some("2026-05-12T00:10:00Z".into()),
+            duration: None,
+            thumbnail_url: None,
+            chapters: None,
+            youtube: Some(vec![]),
+            is_live: true,
+        };
+
+        assert!(!is_playable_vod(&vod));
+    }
+
+    #[test]
+    fn test_non_live_row_with_uploads_is_playable() {
+        let vod = Vod {
+            id: "1430".into(),
+            platform_vod_id: Some("2768249708".into()),
+            title: Some("Playable Stream".into()),
+            created_at: "2026-05-09T22:35:39.000Z".into(),
+            updated_at: Some("2026-05-10T00:00:00.000Z".into()),
+            duration: Some("6h 59m".into()),
+            thumbnail_url: None,
+            chapters: None,
+            youtube: Some(vec![YoutubeVideo {
+                id: "M1giB9QeXNM".into(),
+                thumbnail_url: None,
+            }]),
+            is_live: false,
+        };
+
+        assert!(is_playable_vod(&vod));
+    }
+
+    #[test]
+    fn test_filter_playable_vods_removes_live_empty_upload_rows() {
+        let mut vods = vec![
+            Vod {
+                id: "live".into(),
+                platform_vod_id: None,
+                title: Some("Live Stream".into()),
+                created_at: "2026-05-12T00:00:00Z".into(),
+                updated_at: Some("2026-05-12T00:10:00Z".into()),
+                duration: None,
+                thumbnail_url: None,
+                chapters: None,
+                youtube: Some(vec![]),
+                is_live: true,
+            },
+            Vod {
+                id: "1430".into(),
+                platform_vod_id: Some("2768249708".into()),
+                title: Some("Playable Stream".into()),
+                created_at: "2026-05-09T22:35:39.000Z".into(),
+                updated_at: Some("2026-05-10T00:00:00.000Z".into()),
+                duration: Some("6h 59m".into()),
+                thumbnail_url: None,
+                chapters: None,
+                youtube: Some(vec![YoutubeVideo {
+                    id: "M1giB9QeXNM".into(),
+                    thumbnail_url: None,
+                }]),
+                is_live: false,
+            },
+        ];
+
+        filter_playable_vods(&mut vods);
+
+        assert_eq!(vods.len(), 1);
+        assert_eq!(vods[0].id, "1430");
+    }
+
+    #[test]
+    fn test_catalog_snapshot_includes_latest_id_and_updated_at() {
+        let vods = vec![Vod {
+            id: "1430".into(),
+            platform_vod_id: Some("2768249708".into()),
+            title: Some("Playable Stream".into()),
+            created_at: "2026-05-09T22:35:39.000Z".into(),
+            updated_at: Some("2026-05-10T00:00:00.000Z".into()),
+            duration: Some("6h 59m".into()),
+            thumbnail_url: None,
+            chapters: None,
+            youtube: Some(vec![YoutubeVideo {
+                id: "M1giB9QeXNM".into(),
+                thumbnail_url: None,
+            }]),
+            is_live: false,
+        }];
+
+        let snapshot = CatalogSnapshot::from_vods(&vods);
+
+        assert_eq!(snapshot.total, 1);
+        assert_eq!(snapshot.latest_id.as_deref(), Some("1430"));
+        assert_eq!(
+            snapshot.latest_updated_at.as_deref(),
+            Some("2026-05-10T00:00:00.000Z")
+        );
+    }
+
+    #[test]
+    fn test_catalog_snapshot_detects_same_count_updated_at_changes() {
+        let cached = CatalogSnapshot {
+            total: 1,
+            latest_id: Some("1430".into()),
+            latest_updated_at: Some("2026-05-10T00:00:00.000Z".into()),
+        };
+        let remote = CatalogSnapshot {
+            total: 1,
+            latest_id: Some("1430".into()),
+            latest_updated_at: Some("2026-05-11T00:00:00.000Z".into()),
+        };
+
+        assert_ne!(cached, remote);
+    }
+
+    #[test]
+    fn test_catalog_load_keeps_raw_snapshot_when_latest_row_is_not_playable() {
+        let first = ApiResponse {
+            meta: ApiMeta { total: 2 },
+            data: vec![
+                Vod {
+                    id: "live".into(),
+                    platform_vod_id: Some("2769756119".into()),
+                    title: Some("Live Stream".into()),
+                    created_at: "2026-05-12T00:00:00Z".into(),
+                    updated_at: Some("2026-05-12T02:41:51.672Z".into()),
+                    duration: None,
+                    thumbnail_url: None,
+                    chapters: None,
+                    youtube: Some(vec![]),
+                    is_live: true,
+                },
+                Vod {
+                    id: "1430".into(),
+                    platform_vod_id: Some("2768249708".into()),
+                    title: Some("Playable Stream".into()),
+                    created_at: "2026-05-09T22:35:39.000Z".into(),
+                    updated_at: Some("2026-05-10T23:05:44.967Z".into()),
+                    duration: Some("6h 59m".into()),
+                    thumbnail_url: None,
+                    chapters: None,
+                    youtube: Some(vec![YoutubeVideo {
+                        id: "M1giB9QeXNM".into(),
+                        thumbnail_url: None,
+                    }]),
+                    is_live: false,
+                },
+            ],
+        };
+
+        let snapshot = CatalogSnapshot::from_api_response(&first);
+        let catalog = CatalogLoad::from_raw_vods(snapshot, first.data);
+
+        assert_eq!(
+            catalog.snapshot,
+            CatalogSnapshot {
+                total: 2,
+                latest_id: Some("live".into()),
+                latest_updated_at: Some("2026-05-12T02:41:51.672Z".into()),
+            }
+        );
+        assert_eq!(catalog.vods.len(), 1);
+        assert_eq!(catalog.vods[0].id, "1430");
     }
 }
