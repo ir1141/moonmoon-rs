@@ -1,4 +1,4 @@
-use super::{Section, days_to_civil, parse_duration_minutes, render_template};
+use super::{Section, days_to_civil, render_template, vod_stream_time};
 use crate::SharedState;
 use crate::middleware::CspNonce;
 use askama::Template;
@@ -99,6 +99,19 @@ fn next_month(year: i32, month: u32) -> (i32, u32) {
     }
 }
 
+fn calendar_day_for_month(vod: &crate::vods::Vod, month_prefix: &str, dim: u32) -> Option<u32> {
+    let stream_time = vod_stream_time(vod);
+    if stream_time.starts_with(month_prefix)
+        && stream_time.len() >= 10
+        && let Ok(d) = stream_time[8..10].parse::<u32>()
+        && d >= 1
+        && d <= dim
+    {
+        return Some(d);
+    }
+    None
+}
+
 pub async fn calendar_page(
     State(state): State<SharedState>,
     Extension(nonce): Extension<CspNonce>,
@@ -126,12 +139,7 @@ pub async fn calendar_page(
     let mut day_map: std::collections::HashMap<u32, Vec<&crate::vods::Vod>> =
         std::collections::HashMap::new();
     for vod in vods.iter() {
-        if vod.created_at.starts_with(&month_prefix)
-            && vod.created_at.len() >= 10
-            && let Ok(d) = vod.created_at[8..10].parse::<u32>()
-            && d >= 1
-            && d <= dim
-        {
+        if let Some(d) = calendar_day_for_month(vod, &month_prefix, dim) {
             day_map.entry(d).or_default().push(vod);
         }
     }
@@ -141,7 +149,11 @@ pub async fn calendar_page(
     for (&d, dvods) in &day_map {
         let total: i64 = dvods
             .iter()
-            .map(|v| parse_duration_minutes(v.duration.as_deref().unwrap_or("")))
+            .map(|v| {
+                v.duration
+                    .as_ref()
+                    .map_or(0, |duration| duration.seconds() / 60)
+            })
             .sum();
         day_minutes.insert(d, total);
         if total > max_minutes {
@@ -218,6 +230,7 @@ pub async fn calendar_page(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::vods::Vod;
 
     #[test]
     fn test_calendar_helpers() {
@@ -232,5 +245,27 @@ mod tests {
 
         assert_eq!(month_name(1), "January");
         assert_eq!(month_name(12), "December");
+    }
+
+    #[test]
+    fn test_calendar_day_uses_started_at_when_present() {
+        let vod = Vod {
+            id: "1430".into(),
+            platform: Some("twitch".into()),
+            platform_vod_id: Some("2768249708".into()),
+            platform_stream_id: None,
+            title: Some("Playable Stream".into()),
+            created_at: "2026-05-10T23:05:44.967Z".into(),
+            started_at: Some("2026-05-09T22:35:39.000Z".into()),
+            updated_at: None,
+            duration: None,
+            thumbnail_url: None,
+            chapters: None,
+            youtube: None,
+            is_live: false,
+        };
+
+        assert_eq!(calendar_day_for_month(&vod, "2026-05", 31), Some(9));
+        assert_eq!(calendar_day_for_month(&vod, "2026-05", 8), None);
     }
 }

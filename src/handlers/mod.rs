@@ -52,6 +52,10 @@ pub(crate) fn find_vod_by_id<'a>(vods: &'a [Vod], requested_id: &str) -> Option<
     vods.iter().find(|vod| vod_matches_id(vod, requested_id))
 }
 
+pub(crate) fn vod_stream_time(vod: &Vod) -> &str {
+    vod.started_at.as_deref().unwrap_or(&vod.created_at)
+}
+
 // ─── Query types ───
 
 #[derive(Deserialize, Default)]
@@ -103,8 +107,12 @@ impl VodDisplay {
             .title
             .clone()
             .unwrap_or_else(|| "Untitled Stream".to_string());
-        let formatted_date = format_date(&vod.created_at);
-        let duration_seconds = parse_duration_seconds(vod.duration.as_deref().unwrap_or(""));
+        let stream_time = vod_stream_time(vod);
+        let formatted_date = format_date(stream_time);
+        let duration_seconds = vod
+            .duration
+            .as_ref()
+            .map_or(0, |duration| duration.seconds());
         let duration_minutes = duration_seconds / 60;
         let watch_url = build_watch_url(&vod.id, chapter_start, game_name_hint);
         let chapter_segments = get_chapter_segments(vod, duration_seconds);
@@ -112,10 +120,13 @@ impl VodDisplay {
             id: vod.id.clone(),
             display_title,
             formatted_date,
-            duration: vod.duration.clone(),
+            duration: vod
+                .duration
+                .as_ref()
+                .map(|duration| duration.display().to_string()),
             thumbnail_url: vod.thumbnail_url.clone(),
             chapter_segments,
-            created_at: vod.created_at.clone(),
+            created_at: stream_time.to_string(),
             duration_minutes,
             duration_seconds,
             period_header: None,
@@ -415,11 +426,11 @@ pub(crate) fn next_vod_in_period(
     game_name: &str,
 ) -> Option<NextVod> {
     let mut matches: Vec<&Vod> = vods.iter().filter(|v| vod_has_game(v, game_name)).collect();
-    matches.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    matches.sort_by(|a, b| vod_stream_time(a).cmp(vod_stream_time(b)));
     let idx = matches.iter().position(|v| v.id == current_id)?;
     let next = matches.get(idx + 1)?;
-    let curr_days = parse_ymd_to_days(&matches[idx].created_at)?;
-    let next_days = parse_ymd_to_days(&next.created_at)?;
+    let curr_days = parse_ymd_to_days(vod_stream_time(matches[idx]))?;
+    let next_days = parse_ymd_to_days(vod_stream_time(next))?;
     if (next_days - curr_days).abs() <= PERIOD_GAP_DAYS {
         Some(NextVod {
             id: next.id.clone(),
@@ -458,11 +469,15 @@ pub(crate) fn get_chapter_segments(vod: &Vod, total_duration_secs: i64) -> Vec<C
         return Vec::new();
     }
 
-    let mut named: Vec<(usize, &str, i64)> = Vec::new();
+    let mut named: Vec<(usize, &str, i64, Option<i64>)> = Vec::new();
     for (i, ch) in chapters.iter().enumerate() {
         if let Some(name) = ch.name.as_deref().filter(|n| !n.is_empty()) {
             let start = ch.start.map(|s| s as i64).unwrap_or(0);
-            named.push((i, name, start));
+            let explicit_end = ch
+                .end
+                .map(|end| end as i64)
+                .or_else(|| ch.duration.map(|duration| start + duration as i64));
+            named.push((i, name, start, explicit_end));
         }
     }
     if named.is_empty() {
@@ -470,12 +485,16 @@ pub(crate) fn get_chapter_segments(vod: &Vod, total_duration_secs: i64) -> Vec<C
     }
 
     let mut out = Vec::with_capacity(named.len());
-    for (k, &(_, name, start)) in named.iter().enumerate() {
-        let end = named.get(k + 1).map(|n| n.2).unwrap_or(total_duration_secs);
-        let len = (end - start).max(0);
-        if len == 0 {
+    for (k, &(_, name, start, explicit_end)) in named.iter().enumerate() {
+        let inferred_end = named.get(k + 1).map(|n| n.2).unwrap_or(total_duration_secs);
+        let start = start.clamp(0, total_duration_secs);
+        let end = explicit_end
+            .unwrap_or(inferred_end)
+            .clamp(0, total_duration_secs);
+        if end <= start {
             continue;
         }
+        let len = end - start;
         let width_pct = (len as f64 / total_duration_secs as f64) * 100.0;
         let mut h: u32 = 5381;
         for b in name.as_bytes() {
@@ -522,50 +541,6 @@ pub(crate) fn format_date(created_at: &str) -> String {
     }
     let day = parts[2].trim_start_matches('0');
     format!("{} {day}, {}", month_abbr(parts[1]), parts[0])
-}
-
-pub(crate) fn parse_duration_minutes(duration: &str) -> i64 {
-    parse_duration_seconds(duration) / 60
-}
-
-pub(crate) fn parse_duration_seconds(duration: &str) -> i64 {
-    let parts: Vec<&str> = duration.split(':').collect();
-    if parts.len() == 3 {
-        let h = parts[0].parse::<i64>().unwrap_or(0);
-        let m = parts[1].parse::<i64>().unwrap_or(0);
-        let s = parts[2].parse::<i64>().unwrap_or(0);
-        return h * 3600 + m * 60 + s;
-    }
-    if parts.len() == 2 {
-        let m = parts[0].parse::<i64>().unwrap_or(0);
-        let s = parts[1].parse::<i64>().unwrap_or(0);
-        return m * 60 + s;
-    }
-    let mut total: i64 = 0;
-    let mut num_buf = String::new();
-    for ch in duration.chars() {
-        if ch.is_ascii_digit() {
-            num_buf.push(ch);
-        } else if ch == 'h' || ch == 'H' {
-            if let Ok(h) = num_buf.parse::<i64>() {
-                total += h * 3600;
-            }
-            num_buf.clear();
-        } else if ch == 'm' || ch == 'M' {
-            if let Ok(m) = num_buf.parse::<i64>() {
-                total += m * 60;
-            }
-            num_buf.clear();
-        } else if ch == 's' || ch == 'S' {
-            if let Ok(s) = num_buf.parse::<i64>() {
-                total += s;
-            }
-            num_buf.clear();
-        } else {
-            num_buf.clear();
-        }
-    }
-    total
 }
 
 pub(crate) fn paginate_with_nav<T>(
@@ -619,23 +594,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_duration_minutes() {
-        assert_eq!(parse_duration_minutes("3h 20m"), 200);
-        assert_eq!(parse_duration_minutes("1h"), 60);
-        assert_eq!(parse_duration_minutes("45m"), 45);
-        assert_eq!(parse_duration_minutes(""), 0);
-        assert_eq!(parse_duration_minutes("10h 5m"), 605);
-        assert_eq!(parse_duration_minutes("07:02:52"), 422);
-        assert_eq!(parse_duration_minutes("09:28:29"), 568);
-    }
+    fn test_vod_display_preserves_numeric_api_duration_seconds() {
+        let vod: Vod = serde_json::from_str(
+            r#"{
+                "id": 1430,
+                "platform_vod_id": "2768249708",
+                "title": "Test Stream",
+                "created_at": "2026-05-09T22:35:39.000Z",
+                "duration": 25194,
+                "vod_uploads": [
+                    {"upload_id": "M1giB9QeXNM"}
+                ],
+                "chapters": [
+                    {"name": "HITMAN", "start": 0}
+                ]
+            }"#,
+        )
+        .unwrap();
 
-    #[test]
-    fn test_parse_duration_seconds() {
-        assert_eq!(parse_duration_seconds("07:02:52"), 25372);
-        assert_eq!(parse_duration_seconds("09:28:29"), 34109);
-        assert_eq!(parse_duration_seconds("00:30:00"), 1800);
-        assert_eq!(parse_duration_seconds("3h 20m"), 12000);
-        assert_eq!(parse_duration_seconds(""), 0);
+        let display = VodDisplay::from_vod(&vod);
+
+        assert_eq!(display.duration.as_deref(), Some("6h 59m"));
+        assert_eq!(display.duration_seconds, 25194);
     }
 
     #[test]
@@ -663,9 +643,12 @@ mod tests {
     fn test_get_game_tags() {
         let vod = Vod {
             id: "1".into(),
+            platform: None,
             platform_vod_id: None,
+            platform_stream_id: None,
             title: Some("Test".into()),
             created_at: "2025-01-01T00:00:00Z".into(),
+            started_at: None,
             updated_at: None,
             duration: Some("2h".into()),
             thumbnail_url: None,
@@ -674,16 +657,22 @@ mod tests {
                     name: Some("Game A".into()),
                     image: None,
                     start: Some(0.0),
+                    duration: None,
+                    end: None,
                 },
                 crate::vods::Chapter {
                     name: Some("Game A".into()),
                     image: None,
                     start: Some(100.0),
+                    duration: None,
+                    end: None,
                 },
                 crate::vods::Chapter {
                     name: Some("Game B".into()),
                     image: None,
                     start: Some(200.0),
+                    duration: None,
+                    end: None,
                 },
             ]),
             youtube: None,
@@ -697,9 +686,12 @@ mod tests {
     fn test_get_game_tags_case_insensitive() {
         let vod = Vod {
             id: "1".into(),
+            platform: None,
             platform_vod_id: None,
+            platform_stream_id: None,
             title: Some("Test".into()),
             created_at: "2025-01-01T00:00:00Z".into(),
+            started_at: None,
             updated_at: None,
             duration: Some("2h".into()),
             thumbnail_url: None,
@@ -708,11 +700,15 @@ mod tests {
                     name: Some("Elden Ring".into()),
                     image: None,
                     start: Some(0.0),
+                    duration: None,
+                    end: None,
                 },
                 crate::vods::Chapter {
                     name: Some("ELDEN RING".into()),
                     image: None,
                     start: Some(500.0),
+                    duration: None,
+                    end: None,
                 },
             ]),
             youtube: None,
@@ -726,9 +722,12 @@ mod tests {
     fn test_vod_has_game() {
         let vod = Vod {
             id: "1".into(),
+            platform: None,
             platform_vod_id: None,
+            platform_stream_id: None,
             title: Some("Test".into()),
             created_at: "2025-01-01T00:00:00Z".into(),
+            started_at: None,
             updated_at: None,
             duration: Some("2h".into()),
             thumbnail_url: None,
@@ -736,6 +735,8 @@ mod tests {
                 name: Some("Elden Ring".into()),
                 image: None,
                 start: None,
+                duration: None,
+                end: None,
             }]),
             youtube: None,
             is_live: false,
@@ -802,6 +803,17 @@ mod tests {
     }
 
     #[test]
+    fn test_vod_display_uses_started_at_for_stream_date() {
+        let mut vod = make_vod("started", "2026-05-10T23:05:44.967Z", &["HITMAN"]);
+        vod.started_at = Some("2026-05-09T22:35:39.000Z".into());
+
+        let display = VodDisplay::from_vod(&vod);
+
+        assert_eq!(display.formatted_date, "May 9, 2026");
+        assert_eq!(display.created_at, "2026-05-09T22:35:39.000Z");
+    }
+
+    #[test]
     fn test_days_to_civil_roundtrips() {
         for &(y, m, d) in &[
             (1970, 1, 1),
@@ -845,6 +857,29 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .contains("2 streams")
+        );
+    }
+
+    #[test]
+    fn test_filter_vod_displays_filters_and_sorts_by_stream_date() {
+        let mut displays = vec![
+            make_display("created-late", "2026-05-12T00:00:00Z"),
+            make_display("started-window", "2026-05-09T22:35:39.000Z"),
+            make_display("old", "2026-04-01T00:00:00Z"),
+        ];
+        let params = ListQuery {
+            search: None,
+            sort: Some("oldest".into()),
+            from: Some("2026-05-01".into()),
+            to: Some("2026-05-10".into()),
+            page: None,
+        };
+
+        filter_vod_displays(&mut displays, &params);
+
+        assert_eq!(
+            displays.iter().map(|d| d.id.as_str()).collect::<Vec<_>>(),
+            vec!["started-window"]
         );
     }
 
@@ -989,9 +1024,12 @@ mod tests {
     fn test_resolve_watched_chapter_none_for_empty() {
         let vod = Vod {
             id: "x".into(),
+            platform: None,
             platform_vod_id: None,
+            platform_stream_id: None,
             title: None,
             created_at: "2024-01-01T00:00:00Z".into(),
+            started_at: None,
             updated_at: None,
             duration: None,
             thumbnail_url: None,
@@ -1015,9 +1053,12 @@ mod tests {
     fn make_vod(id: &str, created_at: &str, games: &[&str]) -> Vod {
         Vod {
             id: id.into(),
+            platform: None,
             platform_vod_id: None,
+            platform_stream_id: None,
             title: Some(format!("vod {id}")),
             created_at: created_at.into(),
+            started_at: None,
             updated_at: None,
             duration: Some("1h".into()),
             thumbnail_url: None,
@@ -1028,6 +1069,8 @@ mod tests {
                         name: Some((*g).into()),
                         image: None,
                         start: Some(0.0),
+                        duration: None,
+                        end: None,
                     })
                     .collect(),
             ),
@@ -1090,6 +1133,74 @@ mod tests {
         ];
         let next = next_vod_in_period(&vods, "a", "Elden Ring").unwrap();
         assert_eq!(next.id, "c");
+    }
+
+    #[test]
+    fn test_next_vod_in_period_uses_started_at_for_gap() {
+        let mut a = make_vod("a", "2024-03-01T00:00:00Z", &["Elden Ring"]);
+        a.started_at = Some("2024-01-01T00:00:00Z".into());
+        let mut b = make_vod("b", "2024-03-02T00:00:00Z", &["Elden Ring"]);
+        b.started_at = Some("2024-01-05T00:00:00Z".into());
+        let vods = vec![a, b];
+
+        let next = next_vod_in_period(&vods, "a", "Elden Ring").unwrap();
+
+        assert_eq!(next.id, "b");
+    }
+
+    #[test]
+    fn test_chapter_segments_use_explicit_timing_and_clamp_invalid_ranges() {
+        let mut vod = make_vod("chapters", "2024-01-01T00:00:00Z", &[]);
+        vod.duration = Some(crate::vods::VodDuration::from_seconds(1000));
+        vod.chapters = Some(vec![
+            crate::vods::Chapter {
+                name: Some("Explicit End".into()),
+                image: None,
+                start: Some(100.0),
+                duration: None,
+                end: Some(300.0),
+            },
+            crate::vods::Chapter {
+                name: Some("Explicit Duration".into()),
+                image: None,
+                start: Some(300.0),
+                duration: Some(100.0),
+                end: None,
+            },
+            crate::vods::Chapter {
+                name: Some("Inferred".into()),
+                image: None,
+                start: Some(400.0),
+                duration: None,
+                end: None,
+            },
+            crate::vods::Chapter {
+                name: Some("Clamped".into()),
+                image: None,
+                start: Some(900.0),
+                duration: Some(500.0),
+                end: None,
+            },
+            crate::vods::Chapter {
+                name: Some("Skipped".into()),
+                image: None,
+                start: Some(1200.0),
+                duration: Some(10.0),
+                end: None,
+            },
+        ]);
+
+        let segments = get_chapter_segments(&vod, 1000);
+
+        assert_eq!(
+            segments.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
+            vec!["Explicit End", "Explicit Duration", "Inferred", "Clamped"]
+        );
+        assert_eq!(segments[0].width_pct, 20.0);
+        assert_eq!(segments[1].width_pct, 10.0);
+        assert_eq!(segments[2].width_pct, 50.0);
+        assert_eq!(segments[3].width_pct, 10.0);
+        assert_eq!(segments[0].watch_url, "/watch/chapters?t=100");
     }
 
     #[test]

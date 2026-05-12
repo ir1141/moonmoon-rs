@@ -99,9 +99,12 @@ mod tests {
     fn make_vod(id: &str, platform_vod_id: Option<&str>) -> Vod {
         Vod {
             id: id.into(),
+            platform: None,
             platform_vod_id: platform_vod_id.map(str::to_string),
+            platform_stream_id: None,
             title: Some(format!("vod {id}")),
             created_at: "2026-05-09T22:35:39.000Z".into(),
+            started_at: None,
             updated_at: Some("2026-05-10T00:00:00.000Z".into()),
             duration: Some("1h".into()),
             thumbnail_url: None,

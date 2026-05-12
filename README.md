@@ -12,7 +12,8 @@ A Rust port of [OP-Archives/MOONMOON-site](https://github.com/OP-Archives/MOONMO
 - **Game pages grouped by playing period** — per-game VOD lists are split into contiguous playing periods so long-running games read as distinct seasons instead of one flat stream.
 - **Player with resume** — picks up where you left off via `localStorage`; a progress bar overlays each thumbnail.
 - **Up Next auto-continue** — when a VOD ends inside a game's playing period, an overlay offers the next VOD from that same period and auto-advances.
-- **Watch history** — page listing everything you've started or finished, entirely client-side (no account, no server state).
+- **Watch history** — page listing streams saved in your resume state, entirely client-side unless optional sync is enabled.
+- **Light/dark theme toggle** — stored locally per browser.
 - **Cross-device sync (optional)** — generate a token in one browser, paste it in another, and your watch history follows you. Token is the only credential; no accounts, no email.
 - **Synced chat replay with emotes** — chat comments scroll in time with the VOD. Twitch native emotes plus 7TV / BTTV / FFZ (global + channel sets) render inline, with hover tooltips.
 - **Jump to a game inside a VOD** — if a stream covered multiple games, each chapter is a direct timestamped link.
@@ -35,14 +36,15 @@ Rust edition 2024.
 cargo run
 ```
 
-Serves on `http://0.0.0.0:3000` (override with `PORT`). Every boot fetches the full VOD catalog from `https://archive.overpowered.tv/moonmoon/vods` (sequential paged fetch, 50 VODs per page). A background task refreshes every 6 hours, gated by a cheap upstream `total`-changed check so idle ticks cost one tiny request.
+Serves on `http://0.0.0.0:3000` (override with `PORT`). Every boot fetches the VOD catalog from `https://archive.overpowered.tv/api/v1/moonmoon/vods` (sequential paged fetch, 50 VODs per page), then keeps playable entries. If boot fetch fails or times out after 30 seconds, the app starts with an empty catalog and can recover on a later refresh. A background task refreshes every 6 hours, gated by a cheap upstream snapshot check (`total`, latest ID, and latest `updated_at`) so idle ticks cost one tiny request.
 
 ```sh
 PORT=8080 cargo run                          # custom port
 RUST_LOG=moonmoon=debug cargo run            # verbose logs
 SYNC_STORE_PATH=/var/lib/moonmoon/sync.json cargo run  # sync store location (default ./sync.json)
 cargo test                                   # unit tests
-cargo clippy                                 # lints
+cargo clippy --all-targets -- -D warnings    # CI-equivalent Rust lints
+bun test                                     # JS helper tests
 ```
 
 `/api/*` routes are rate-limited (2 rps, burst 20) per smart-detected client IP via `tower_governor`.
@@ -74,9 +76,10 @@ cargo clippy                                 # lints
 src/
 ├── main.rs              # AppState, router, tracing
 ├── vods.rs              # Upstream API client, cache, Vod/Game models
+├── middleware.rs        # CSP nonce generation and header injection
 ├── sync_store.rs        # In-memory sync blob store, atomic JSON persistence
 └── handlers/
-    ├── mod.rs           # Shared helpers: VodDisplay, pagination, filters, date/duration parsing
+    ├── mod.rs           # Shared helpers: VodDisplay, pagination, filters, date helpers
     ├── games.rs         # /, /games
     ├── vods.rs          # /game/{name}, /streams
     ├── watch.rs         # /watch/{id}, /random, /api/vod, /api/next
@@ -89,16 +92,17 @@ templates/               # Askama templates (compiled into the binary)
 static/
 ├── player.js            # Player logic, chat sync, emotes, resume, Up Next overlay
 ├── sync.js              # Cross-device sync: token storage, pull/push, settings dialog
+├── lib/                 # Pure JS helpers covered by bun test
 └── css/                 # Split per concern: base, header, games, vods, calendar, player, sync
 ```
 
 ### State
 
-`AppState { vods, games, http_client, refresh_lock }` holds both datasets behind `tokio::sync::RwLock<Arc<Vec<…>>>`. Handlers take a read lock just long enough to clone the cheap `Arc` and drop the guard before rendering — the guard never crosses an `.await`. The only writer is the 6-hour background refresh task, which atomically swaps both `Arc`s. `refresh_lock` serializes refreshes so concurrent ticks can't stomp each other.
+`AppState { vods, games, catalog_snapshot, http_client, refresh_lock, sync_store }` holds the catalog behind `tokio::sync::RwLock<Arc<Vec<…>>>`, tracks the upstream snapshot used by refreshes, and owns the optional sync store. Handlers take a read lock just long enough to clone the cheap `Arc` and drop the guard before rendering — the guard never crosses an `.await`. The only writer for catalog data is the 6-hour background refresh task, which atomically swaps VODs, games, and the snapshot. `refresh_lock` serializes refreshes so concurrent ticks can't stomp each other.
 
 ### Templates
 
-Each list view has two templates: a full-page one (e.g. `games.html`) and a grid-only partial (`games_grid.html`) that htmx swaps in for pagination and search. Resume/watched state lives in `localStorage` (`moonmoon_resume`, `moonmoon_watched`) and is reapplied after every `htmx:afterSwap`. Templates are compiled into the binary by Askama, so edits to `templates/*.html` require a rebuild.
+Each list view has two templates: a full-page one (e.g. `games.html`) and a grid-only partial (`games_grid.html`) that htmx swaps in for pagination and search. Resume state lives in `localStorage` (`moonmoon_resume`) and is reapplied after every `htmx:afterSwap`; player-only preferences use additional local keys such as `moonmoon_part_durations`, `moonmoon_chat_size`, and `moonmoon_theatre`. Templates are compiled into the binary by Askama, so edits to `templates/*.html` require a rebuild.
 
 ### Cross-device sync
 
@@ -112,9 +116,11 @@ The token is the only credential — anyone holding it can read and overwrite th
 
 ### Upstream quirks
 
-- `duration` comes in two formats: `"3h 20m"` and `"HH:MM:SS"`. `parse_duration_minutes` / `parse_duration_seconds` in `handlers/mod.rs` handle both.
-- Chapter images are upscaled by replacing `40x53` → `285x380` in the URL.
-- The upstream API rate-limits aggressively; `fetch_api_response` retries 429s with exponential backoff (250ms → 500ms → 1000ms).
+- `duration` currently arrives as numeric seconds. `VodDuration` preserves those exact seconds for calculations while still exposing a compact display string; string-format fallback remains for older payloads.
+- The catalog filters out live rows and rows without VOD uploads, while keeping the raw upstream snapshot for refresh comparisons.
+- VOD-level thumbnails may be absent; `backfill_thumbnails` lifts the first upload thumbnail onto `Vod.thumbnail_url`.
+- Chapter images are upscaled by replacing `{width}x{height}` or `40x53` → `285x380` in the URL.
+- The upstream API rate-limits aggressively; `fetch_api_response` retries 429s with numeric `Retry-After` support, exponential backoff, and jitter.
 - Many fields on `Vod`/`Chapter` are `Option` because the upstream is inconsistent.
 
 ## Conventions
@@ -135,4 +141,3 @@ Not affiliated with or endorsed by MOONMOON, OP-Archives, or overpowered.tv.
 ## License
 
 [MIT](LICENSE)
-
