@@ -142,6 +142,7 @@ pub(crate) struct CatalogSnapshot {
 }
 
 impl CatalogSnapshot {
+    #[cfg(test)]
     pub(crate) fn from_vods(vods: &[Vod]) -> Self {
         let latest = vods.first();
         Self {
@@ -149,6 +150,41 @@ impl CatalogSnapshot {
             latest_id: latest.map(|vod| vod.id.clone()),
             latest_updated_at: latest.and_then(|vod| vod.updated_at.clone()),
         }
+    }
+
+    fn from_api_response(resp: &ApiResponse) -> Self {
+        let latest = resp.data.first();
+        Self {
+            total: resp.meta.total,
+            latest_id: latest.map(|vod| vod.id.clone()),
+            latest_updated_at: latest.and_then(|vod| vod.updated_at.clone()),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CatalogLoad {
+    pub(crate) vods: Vec<Vod>,
+    pub(crate) snapshot: CatalogSnapshot,
+}
+
+impl CatalogLoad {
+    pub(crate) fn empty() -> Self {
+        Self {
+            vods: Vec::new(),
+            snapshot: CatalogSnapshot {
+                total: 0,
+                latest_id: None,
+                latest_updated_at: None,
+            },
+        }
+    }
+
+    fn from_raw_vods(snapshot: CatalogSnapshot, mut vods: Vec<Vod>) -> Self {
+        filter_playable_vods(&mut vods);
+        backfill_thumbnails(&mut vods);
+
+        Self { vods, snapshot }
     }
 }
 
@@ -252,30 +288,35 @@ pub fn filter_playable_vods(vods: &mut Vec<Vod>) {
     vods.retain(is_playable_vod);
 }
 
-pub async fn fetch_all_vods(client: &reqwest::Client) -> Result<Vec<Vod>, reqwest::Error> {
+pub(crate) async fn fetch_catalog_load(
+    client: &reqwest::Client,
+) -> Result<CatalogLoad, reqwest::Error> {
     let first = fetch_api_response(client, &page_url(1)).await?;
     let total = first.meta.total;
     tracing::info!("fetching {total} vods...");
 
     let total_pages = pages(total);
     if total_pages == 0 {
-        return Ok(Vec::new());
+        return Ok(CatalogLoad::from_raw_vods(
+            CatalogSnapshot::from_api_response(&first),
+            first.data,
+        ));
     }
 
-    let mut result: Vec<Vod> = Vec::with_capacity(total);
-    result.extend(first.data);
+    let snapshot = CatalogSnapshot::from_api_response(&first);
+    let mut vods = Vec::with_capacity(total);
+    vods.extend(first.data);
 
     for page_idx in 2..=total_pages {
         let resp = fetch_api_response(client, &page_url(page_idx)).await?;
-        result.extend(resp.data);
+        vods.extend(resp.data);
         tracing::debug!("page {page_idx} of {total_pages} done");
     }
 
-    filter_playable_vods(&mut result);
-    backfill_thumbnails(&mut result);
+    let catalog = CatalogLoad::from_raw_vods(snapshot, vods);
 
-    tracing::info!("{} / {} vods fetched", result.len(), total);
-    Ok(result)
+    tracing::info!("{} / {} vods fetched", catalog.vods.len(), total);
+    Ok(catalog)
 }
 
 /// Upstream doesn't expose `thumbnail_url` at the VOD level — only on each
@@ -294,13 +335,13 @@ fn backfill_thumbnails(vods: &mut [Vod]) {
     }
 }
 
-pub async fn load_vods(client: &reqwest::Client) -> Vec<Vod> {
-    match fetch_all_vods(client).await {
-        Ok(vods) => vods,
+pub async fn load_catalog(client: &reqwest::Client) -> CatalogLoad {
+    match fetch_catalog_load(client).await {
+        Ok(catalog) => catalog,
         Err(e) => {
             tracing::error!("failed to fetch vods: {e}");
             tracing::error!("starting with 0 vods — site will be empty until next refresh");
-            Vec::new()
+            CatalogLoad::empty()
         }
     }
 }
@@ -346,10 +387,7 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
         }
     };
 
-    let cached_snapshot = {
-        let vods = state.vods.read().await;
-        CatalogSnapshot::from_vods(&vods)
-    };
+    let cached_snapshot = state.catalog_snapshot.read().await.clone();
 
     let remote_snapshot = match fetch_catalog_snapshot(&state.http_client).await {
         Ok(snapshot) => snapshot,
@@ -361,29 +399,32 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
 
     if remote_snapshot == cached_snapshot {
         tracing::info!("refresh: catalog unchanged ({cached_snapshot:?})");
-        return RefreshOutcome::Unchanged(cached_snapshot.total);
+        let count = state.vods.read().await.len();
+        return RefreshOutcome::Unchanged(count);
     }
 
     tracing::info!(
         "refresh: catalog changed ({cached_snapshot:?} -> {remote_snapshot:?}), fetching..."
     );
-    let new_vods = match fetch_all_vods(&state.http_client).await {
-        Ok(v) => v,
+    let catalog = match fetch_catalog_load(&state.http_client).await {
+        Ok(catalog) => catalog,
         Err(e) => {
             tracing::error!("refresh: failed to fetch vods: {e}");
             return RefreshOutcome::Error(format!("failed to fetch vods: {e}"));
         }
     };
 
-    let new_vods = std::sync::Arc::new(new_vods);
+    let new_vods = std::sync::Arc::new(catalog.vods);
     let new_games = std::sync::Arc::new(build_games(&new_vods));
     let count = new_vods.len();
 
     {
         let mut vods_w = state.vods.write().await;
         let mut games_w = state.games.write().await;
+        let mut snapshot_w = state.catalog_snapshot.write().await;
         *vods_w = new_vods;
         *games_w = new_games;
+        *snapshot_w = catalog.snapshot;
     }
 
     tracing::info!("refresh: complete ({count} vods)");
@@ -715,5 +756,55 @@ mod tests {
         };
 
         assert_ne!(cached, remote);
+    }
+
+    #[test]
+    fn test_catalog_load_keeps_raw_snapshot_when_latest_row_is_not_playable() {
+        let first = ApiResponse {
+            meta: ApiMeta { total: 2 },
+            data: vec![
+                Vod {
+                    id: "live".into(),
+                    platform_vod_id: Some("2769756119".into()),
+                    title: Some("Live Stream".into()),
+                    created_at: "2026-05-12T00:00:00Z".into(),
+                    updated_at: Some("2026-05-12T02:41:51.672Z".into()),
+                    duration: None,
+                    thumbnail_url: None,
+                    chapters: None,
+                    youtube: Some(vec![]),
+                    is_live: true,
+                },
+                Vod {
+                    id: "1430".into(),
+                    platform_vod_id: Some("2768249708".into()),
+                    title: Some("Playable Stream".into()),
+                    created_at: "2026-05-09T22:35:39.000Z".into(),
+                    updated_at: Some("2026-05-10T23:05:44.967Z".into()),
+                    duration: Some("6h 59m".into()),
+                    thumbnail_url: None,
+                    chapters: None,
+                    youtube: Some(vec![YoutubeVideo {
+                        id: "M1giB9QeXNM".into(),
+                        thumbnail_url: None,
+                    }]),
+                    is_live: false,
+                },
+            ],
+        };
+
+        let snapshot = CatalogSnapshot::from_api_response(&first);
+        let catalog = CatalogLoad::from_raw_vods(snapshot, first.data);
+
+        assert_eq!(
+            catalog.snapshot,
+            CatalogSnapshot {
+                total: 2,
+                latest_id: Some("live".into()),
+                latest_updated_at: Some("2026-05-12T02:41:51.672Z".into()),
+            }
+        );
+        assert_eq!(catalog.vods.len(), 1);
+        assert_eq!(catalog.vods[0].id, "1430");
     }
 }
