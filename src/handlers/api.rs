@@ -1,7 +1,9 @@
-use crate::SharedState;
+use super::find_vod_by_id;
+use crate::{SharedState, vods::Vod};
 use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
 use serde::Deserialize;
+use std::sync::Arc;
 
 // ─── Chat proxy ───
 
@@ -9,6 +11,10 @@ use serde::Deserialize;
 pub struct ChatQuery {
     pub content_offset_seconds: Option<f64>,
     pub cursor: Option<String>,
+}
+
+fn canonical_chat_vod_id(vods: &Arc<Vec<Vod>>, requested_id: &str) -> Option<String> {
+    find_vod_by_id(vods.as_ref().as_slice(), requested_id).map(|vod| vod.id.clone())
 }
 
 pub async fn chat_proxy(
@@ -22,7 +28,16 @@ pub async fn chat_proxy(
     {
         return (axum::http::StatusCode::BAD_REQUEST, "invalid vod_id").into_response();
     }
-    let mut url = format!("https://archive.overpowered.tv/api/v1/moonmoon/vods/{vod_id}/comments");
+    let canonical_vod_id = {
+        let vods = state.vods.read().await;
+        canonical_chat_vod_id(&vods, &vod_id)
+    };
+    let Some(canonical_vod_id) = canonical_vod_id else {
+        return (axum::http::StatusCode::NOT_FOUND, "unknown vod_id").into_response();
+    };
+
+    let mut url =
+        format!("https://archive.overpowered.tv/api/v1/moonmoon/vods/{canonical_vod_id}/comments");
     let mut qparts = vec![];
     if let Some(offset) = params.content_offset_seconds
         && offset.is_finite()
@@ -74,5 +89,52 @@ pub async fn chat_proxy(
             format!("proxy error: {e}"),
         )
             .into_response(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_vod(id: &str, platform_vod_id: Option<&str>) -> Vod {
+        Vod {
+            id: id.into(),
+            platform_vod_id: platform_vod_id.map(str::to_string),
+            title: Some(format!("vod {id}")),
+            created_at: "2026-05-09T22:35:39.000Z".into(),
+            updated_at: Some("2026-05-10T00:00:00.000Z".into()),
+            duration: Some("1h".into()),
+            thumbnail_url: None,
+            chapters: None,
+            youtube: None,
+            is_live: false,
+        }
+    }
+
+    #[test]
+    fn test_canonical_chat_vod_id_accepts_internal_id() {
+        let vods = Arc::new(vec![make_vod("1430", Some("2768249708"))]);
+
+        assert_eq!(
+            canonical_chat_vod_id(&vods, "1430").as_deref(),
+            Some("1430")
+        );
+    }
+
+    #[test]
+    fn test_canonical_chat_vod_id_accepts_platform_vod_id() {
+        let vods = Arc::new(vec![make_vod("1430", Some("2768249708"))]);
+
+        assert_eq!(
+            canonical_chat_vod_id(&vods, "2768249708").as_deref(),
+            Some("1430")
+        );
+    }
+
+    #[test]
+    fn test_canonical_chat_vod_id_rejects_unknown_id() {
+        let vods = Arc::new(vec![make_vod("1430", Some("2768249708"))]);
+
+        assert_eq!(canonical_chat_vod_id(&vods, "missing"), None);
     }
 }

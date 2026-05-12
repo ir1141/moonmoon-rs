@@ -9,6 +9,8 @@ pub struct Vod {
     pub platform_vod_id: Option<String>,
     pub title: Option<String>,
     pub created_at: String,
+    #[serde(default)]
+    pub updated_at: Option<String>,
     #[serde(default, deserialize_with = "deserialize_duration_string")]
     pub duration: Option<String>,
     #[serde(default)]
@@ -16,6 +18,8 @@ pub struct Vod {
     pub chapters: Option<Vec<Chapter>>,
     #[serde(rename = "vod_uploads", alias = "youtube", default)]
     pub youtube: Option<Vec<YoutubeVideo>>,
+    #[serde(default)]
+    pub is_live: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -130,6 +134,24 @@ struct ApiResponse {
     pub meta: ApiMeta,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CatalogSnapshot {
+    pub total: usize,
+    pub latest_id: Option<String>,
+    pub latest_updated_at: Option<String>,
+}
+
+impl CatalogSnapshot {
+    pub(crate) fn from_vods(vods: &[Vod]) -> Self {
+        let latest = vods.first();
+        Self {
+            total: vods.len(),
+            latest_id: latest.map(|vod| vod.id.clone()),
+            latest_updated_at: latest.and_then(|vod| vod.updated_at.clone()),
+        }
+    }
+}
+
 pub fn upscale_chapter_image(url: &str) -> String {
     url.replace("{width}x{height}", "285x380")
         .replace("40x53", "285x380")
@@ -142,6 +164,10 @@ const INITIAL_429_BACKOFF_MS: u64 = 250;
 
 fn page_url(page_one_based: usize) -> String {
     format!("{API}?page={page_one_based}&limit={PAGE_SIZE}&sort=created_at&order=desc")
+}
+
+fn snapshot_url() -> String {
+    format!("{API}?page=1&limit=1&sort=created_at&order=desc")
 }
 
 fn pages(total: usize) -> usize {
@@ -202,9 +228,28 @@ async fn fetch_api_response(
     }
 }
 
-pub async fn fetch_vod_count(client: &reqwest::Client) -> Result<usize, reqwest::Error> {
-    let resp = fetch_api_response(client, &format!("{API}?page=1&limit=1")).await?;
-    Ok(resp.meta.total)
+async fn fetch_catalog_snapshot(
+    client: &reqwest::Client,
+) -> Result<CatalogSnapshot, reqwest::Error> {
+    let resp = fetch_api_response(client, &snapshot_url()).await?;
+    let latest = resp.data.first();
+    Ok(CatalogSnapshot {
+        total: resp.meta.total,
+        latest_id: latest.map(|vod| vod.id.clone()),
+        latest_updated_at: latest.and_then(|vod| vod.updated_at.clone()),
+    })
+}
+
+pub fn is_playable_vod(vod: &Vod) -> bool {
+    !vod.is_live
+        && vod
+            .youtube
+            .as_ref()
+            .is_some_and(|uploads| !uploads.is_empty())
+}
+
+pub fn filter_playable_vods(vods: &mut Vec<Vod>) {
+    vods.retain(is_playable_vod);
 }
 
 pub async fn fetch_all_vods(client: &reqwest::Client) -> Result<Vec<Vod>, reqwest::Error> {
@@ -226,6 +271,7 @@ pub async fn fetch_all_vods(client: &reqwest::Client) -> Result<Vec<Vod>, reqwes
         tracing::debug!("page {page_idx} of {total_pages} done");
     }
 
+    filter_playable_vods(&mut result);
     backfill_thumbnails(&mut result);
 
     tracing::info!("{} / {} vods fetched", result.len(), total);
@@ -300,22 +346,27 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
         }
     };
 
-    let cached_count = state.vods.read().await.len();
+    let cached_snapshot = {
+        let vods = state.vods.read().await;
+        CatalogSnapshot::from_vods(&vods)
+    };
 
-    let remote_count = match fetch_vod_count(&state.http_client).await {
-        Ok(c) => c,
+    let remote_snapshot = match fetch_catalog_snapshot(&state.http_client).await {
+        Ok(snapshot) => snapshot,
         Err(e) => {
-            tracing::error!("refresh: failed to check vod count: {e}");
-            return RefreshOutcome::Error(format!("failed to check vod count: {e}"));
+            tracing::error!("refresh: failed to check catalog snapshot: {e}");
+            return RefreshOutcome::Error(format!("failed to check catalog snapshot: {e}"));
         }
     };
 
-    if remote_count == cached_count {
-        tracing::info!("refresh: vod count unchanged ({cached_count})");
-        return RefreshOutcome::Unchanged(cached_count);
+    if remote_snapshot == cached_snapshot {
+        tracing::info!("refresh: catalog unchanged ({cached_snapshot:?})");
+        return RefreshOutcome::Unchanged(cached_snapshot.total);
     }
 
-    tracing::info!("refresh: vod count changed ({cached_count} -> {remote_count}), fetching...");
+    tracing::info!(
+        "refresh: catalog changed ({cached_snapshot:?} -> {remote_snapshot:?}), fetching..."
+    );
     let new_vods = match fetch_all_vods(&state.http_client).await {
         Ok(v) => v,
         Err(e) => {
@@ -409,6 +460,7 @@ mod tests {
             platform_vod_id: None,
             title: Some("Stream 1".into()),
             created_at: "2025-01-01T00:00:00Z".into(),
+            updated_at: None,
             duration: Some("2h".into()),
             thumbnail_url: None,
             chapters: Some(vec![
@@ -429,6 +481,7 @@ mod tests {
                 },
             ]),
             youtube: None,
+            is_live: false,
         }];
         let games = build_games(&vods);
         assert_eq!(games.len(), 2);
@@ -442,6 +495,7 @@ mod tests {
                 platform_vod_id: None,
                 title: Some("Stream 1".into()),
                 created_at: "2025-01-01T00:00:00Z".into(),
+                updated_at: None,
                 duration: Some("2h".into()),
                 thumbnail_url: None,
                 chapters: Some(vec![Chapter {
@@ -450,12 +504,14 @@ mod tests {
                     start: None,
                 }]),
                 youtube: None,
+                is_live: false,
             },
             Vod {
                 id: "2".into(),
                 platform_vod_id: None,
                 title: Some("Stream 2".into()),
                 created_at: "2025-01-02T00:00:00Z".into(),
+                updated_at: None,
                 duration: Some("3h".into()),
                 thumbnail_url: None,
                 chapters: Some(vec![Chapter {
@@ -464,6 +520,7 @@ mod tests {
                     start: None,
                 }]),
                 youtube: None,
+                is_live: false,
             },
         ];
         let games = build_games(&vods);
@@ -537,5 +594,126 @@ mod tests {
         assert_eq!(pages(51), 2);
         assert_eq!(pages(100), 2);
         assert_eq!(pages(1419), 29);
+    }
+
+    #[test]
+    fn test_live_empty_upload_row_is_not_playable() {
+        let vod = Vod {
+            id: "live".into(),
+            platform_vod_id: None,
+            title: Some("Live Stream".into()),
+            created_at: "2026-05-12T00:00:00Z".into(),
+            updated_at: Some("2026-05-12T00:10:00Z".into()),
+            duration: None,
+            thumbnail_url: None,
+            chapters: None,
+            youtube: Some(vec![]),
+            is_live: true,
+        };
+
+        assert!(!is_playable_vod(&vod));
+    }
+
+    #[test]
+    fn test_non_live_row_with_uploads_is_playable() {
+        let vod = Vod {
+            id: "1430".into(),
+            platform_vod_id: Some("2768249708".into()),
+            title: Some("Playable Stream".into()),
+            created_at: "2026-05-09T22:35:39.000Z".into(),
+            updated_at: Some("2026-05-10T00:00:00.000Z".into()),
+            duration: Some("6h 59m".into()),
+            thumbnail_url: None,
+            chapters: None,
+            youtube: Some(vec![YoutubeVideo {
+                id: "M1giB9QeXNM".into(),
+                thumbnail_url: None,
+            }]),
+            is_live: false,
+        };
+
+        assert!(is_playable_vod(&vod));
+    }
+
+    #[test]
+    fn test_filter_playable_vods_removes_live_empty_upload_rows() {
+        let mut vods = vec![
+            Vod {
+                id: "live".into(),
+                platform_vod_id: None,
+                title: Some("Live Stream".into()),
+                created_at: "2026-05-12T00:00:00Z".into(),
+                updated_at: Some("2026-05-12T00:10:00Z".into()),
+                duration: None,
+                thumbnail_url: None,
+                chapters: None,
+                youtube: Some(vec![]),
+                is_live: true,
+            },
+            Vod {
+                id: "1430".into(),
+                platform_vod_id: Some("2768249708".into()),
+                title: Some("Playable Stream".into()),
+                created_at: "2026-05-09T22:35:39.000Z".into(),
+                updated_at: Some("2026-05-10T00:00:00.000Z".into()),
+                duration: Some("6h 59m".into()),
+                thumbnail_url: None,
+                chapters: None,
+                youtube: Some(vec![YoutubeVideo {
+                    id: "M1giB9QeXNM".into(),
+                    thumbnail_url: None,
+                }]),
+                is_live: false,
+            },
+        ];
+
+        filter_playable_vods(&mut vods);
+
+        assert_eq!(vods.len(), 1);
+        assert_eq!(vods[0].id, "1430");
+    }
+
+    #[test]
+    fn test_catalog_snapshot_includes_latest_id_and_updated_at() {
+        let vods = vec![Vod {
+            id: "1430".into(),
+            platform_vod_id: Some("2768249708".into()),
+            title: Some("Playable Stream".into()),
+            created_at: "2026-05-09T22:35:39.000Z".into(),
+            updated_at: Some("2026-05-10T00:00:00.000Z".into()),
+            duration: Some("6h 59m".into()),
+            thumbnail_url: None,
+            chapters: None,
+            youtube: Some(vec![YoutubeVideo {
+                id: "M1giB9QeXNM".into(),
+                thumbnail_url: None,
+            }]),
+            is_live: false,
+        }];
+
+        let snapshot = CatalogSnapshot::from_vods(&vods);
+
+        assert_eq!(snapshot.total, 1);
+        assert_eq!(snapshot.latest_id.as_deref(), Some("1430"));
+        assert_eq!(
+            snapshot.latest_updated_at.as_deref(),
+            Some("2026-05-10T00:00:00.000Z")
+        );
+    }
+
+    #[test]
+    fn test_catalog_snapshot_detects_same_count_updated_at_changes() {
+        let cached = CatalogSnapshot {
+            total: 1,
+            latest_id: Some("1430".into()),
+            latest_updated_at: Some("2026-05-10T00:00:00.000Z".into()),
+        };
+        let remote = CatalogSnapshot {
+            total: 1,
+            latest_id: Some("1430".into()),
+            latest_updated_at: Some("2026-05-11T00:00:00.000Z".into()),
+        };
+
+        assert_ne!(cached, remote);
     }
 }
