@@ -8,6 +8,7 @@ import {
 } from "./lib/player-parts.js";
 import { isEmoteCandidate } from "./lib/emote-heuristic.js";
 import { getCachedEmote, setCachedEmote } from "./lib/emote-cache.js";
+import { EmoteLookupPolicy } from "./lib/emote-lookup-policy.js";
 import {
   buildSearchUrl,
   parseSearchResponse,
@@ -33,13 +34,19 @@ var MAX_RESUME_ENTRIES = 500;
 var PART_DURATIONS_KEY = "moonmoon_part_durations";
 var MAX_PART_DURATION_ENTRIES = 500;
 var MAX_CHAT_DOM_NODES = 2000;
+var EMOTE_PROVIDER_COOLDOWN_MS = 60 * 1000;
+var EMOTE_NAME_COOLDOWN_MS = 15 * 1000;
 
 var MAX_PART_DURATION = 10800; // 3 hours
 var MOONMOON_TWITCH_ID = "121059319";
 
 var player = null;
 var currentPart = 0;
-var partDurations = initialPartDurations(YOUTUBE_PARTS, null, MAX_PART_DURATION);
+var partDurations = initialPartDurations(
+  YOUTUBE_PARTS,
+  null,
+  MAX_PART_DURATION,
+);
 var tickInterval = null;
 
 // Chat state
@@ -184,6 +191,10 @@ function parseFFZ(sets) {
 
 var emoteMissCache = Object.create(null);
 var pendingEmoteLookups = Object.create(null);
+var emoteLookupPolicy = new EmoteLookupPolicy({
+  providerCooldownMs: EMOTE_PROVIDER_COOLDOWN_MS,
+  nameCooldownMs: EMOTE_NAME_COOLDOWN_MS,
+});
 
 function lazyResolveEmote(name, textNode) {
   if (!isEmoteCandidate(name)) return;
@@ -192,6 +203,7 @@ function lazyResolveEmote(name, textNode) {
     return;
   }
   if (emoteMissCache[name]) return;
+  if (!emoteLookupPolicy.canLookupName(name)) return;
 
   if (pendingEmoteLookups[name]) {
     pendingEmoteLookups[name].then(
@@ -206,7 +218,7 @@ function lazyResolveEmote(name, textNode) {
   var p = getCachedEmote(name).then(function (cached) {
     if (cached) return cached;
     return fetchEmoteFromAnyProvider(name).then(function (record) {
-      setCachedEmote(name, record);
+      if (!record.transient) setCachedEmote(name, record);
       return record;
     });
   });
@@ -221,7 +233,7 @@ function lazyResolveEmote(name, textNode) {
           provider: record.provider,
           owner: record.owner,
         };
-      } else {
+      } else if (!record || !record.transient) {
         emoteMissCache[name] = true;
       }
       applyResolved(name, record, textNode);
@@ -268,11 +280,18 @@ function formatEmoteTooltip(name, emote) {
   return name + " " + label;
 }
 
-// Race all three providers in parallel for the lookup. First exact-match
-// hit wins; only mark `name` a miss if every provider missed (or errored,
-// but at least one provider responded successfully without a hit).
+// Race eligible providers in parallel for the lookup. First exact-match hit
+// wins; only mark `name` a miss if at least one provider responded
+// successfully without a hit. Provider failures enter a short cooldown so an
+// outage or rate-limit does not fan out into one request per chat token.
 function fetchEmoteFromAnyProvider(name) {
-  var attempts = PROVIDERS.map(function (provider) {
+  var providers = emoteLookupPolicy.availableProviders(PROVIDERS);
+  if (providers.length === 0) {
+    emoteLookupPolicy.recordNameFailure(name);
+    return Promise.resolve({ hit: false, transient: true });
+  }
+
+  var attempts = providers.map(function (provider) {
     return fetchOneProvider(provider, name);
   });
 
@@ -299,7 +318,10 @@ function fetchEmoteFromAnyProvider(name) {
 
     function finish() {
       if (sawSuccessfulMiss) resolve({ hit: false });
-      else reject(lastErr || new Error("all emote providers failed"));
+      else {
+        emoteLookupPolicy.recordNameFailure(name);
+        reject(lastErr || new Error("all emote providers failed"));
+      }
     }
   });
 }
@@ -311,11 +333,20 @@ function fetchOneProvider(provider, name) {
   if (req.body) init.body = req.body;
   return fetch(req.url, init)
     .then(function (r) {
-      if (!r.ok) throw new Error(provider + " HTTP " + r.status);
+      if (!r.ok) {
+        var err = new Error(provider + " HTTP " + r.status);
+        err.status = r.status;
+        throw err;
+      }
+      emoteLookupPolicy.recordProviderSuccess(provider);
       return r.json();
     })
     .then(function (json) {
       return parseSearchResponse(provider, json, name);
+    })
+    .catch(function (err) {
+      emoteLookupPolicy.recordFailure(provider, name);
+      throw err;
     });
 }
 
