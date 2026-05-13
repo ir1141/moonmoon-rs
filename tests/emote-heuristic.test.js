@@ -20,6 +20,13 @@ describe("isEmoteCandidate", () => {
     expect(isEmoteCandidate(w)).toBe(false);
   });
 
+  test.each(["JK", "SC", "UD"])(
+    "rejects short uppercase initial token %p",
+    (w) => {
+      expect(isEmoteCandidate(w)).toBe(false);
+    },
+  );
+
   test("rejects too-long word", () => {
     expect(isEmoteCandidate("A".repeat(26))).toBe(false);
   });

@@ -124,7 +124,7 @@ const COMMON_WORDS = new Set([
 
 export function isEmoteCandidate(word) {
   if (typeof word !== "string") return false;
-  if (word.length < 2 || word.length > 25) return false;
+  if (word.length < 3 || word.length > 25) return false;
   if (!/^[A-Za-z0-9_]+$/.test(word)) return false;
   if (!/[A-Z0-9]/.test(word)) return false;
   if (/^\d+$/.test(word)) return false; // pure numbers ("825", "2026")
