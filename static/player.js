@@ -6,6 +6,10 @@ import {
   initialPartDurations,
   parseYoutubePartsDataset,
 } from "./lib/player-parts.js";
+import {
+  formatChatTimestamp,
+  isChatTimestampEnabled,
+} from "./lib/chat-timestamps.js";
 import { isEmoteCandidate } from "./lib/emote-heuristic.js";
 import { getCachedEmote, setCachedEmote } from "./lib/emote-cache.js";
 import { EmoteLookupPolicy } from "./lib/emote-lookup-policy.js";
@@ -356,6 +360,7 @@ loadEmotes();
 var chatContainer = document.getElementById("chat-messages");
 var chatStatus = document.getElementById("chat-status");
 var chatPaused = document.getElementById("chat-paused");
+var chatTimestampToggle = document.getElementById("chat-timestamp-toggle");
 var partSelector = document.getElementById("part-selector");
 
 // ─── Emote Tooltip ───
@@ -387,6 +392,10 @@ var CHAT_SIZE_KEY = "moonmoon_chat_size";
 var chatFontSize = parseInt(localStorage.getItem(CHAT_SIZE_KEY), 10) || 13;
 var MIN_CHAT_SIZE = 10;
 var MAX_CHAT_SIZE = 30;
+var CHAT_TIMESTAMPS_KEY = "moonmoon_chat_timestamps";
+var chatTimestampsEnabled = isChatTimestampEnabled(
+  localStorage.getItem(CHAT_TIMESTAMPS_KEY),
+);
 
 function applyChatSize() {
   var stickToBottom = chatAutoScroll;
@@ -417,6 +426,26 @@ document.getElementById("chat-size-up").addEventListener("click", function () {
     localStorage.setItem(CHAT_SIZE_KEY, chatFontSize);
     applyChatSize();
   }
+});
+
+function applyChatTimestamps() {
+  chatContainer.classList.toggle("show-timestamps", chatTimestampsEnabled);
+  chatTimestampToggle.classList.toggle("active", chatTimestampsEnabled);
+  chatTimestampToggle.setAttribute(
+    "aria-pressed",
+    chatTimestampsEnabled ? "true" : "false",
+  );
+  chatTimestampToggle.title = chatTimestampsEnabled
+    ? "Hide timestamps"
+    : "Show timestamps";
+}
+
+applyChatTimestamps();
+
+chatTimestampToggle.addEventListener("click", function () {
+  chatTimestampsEnabled = !chatTimestampsEnabled;
+  localStorage.setItem(CHAT_TIMESTAMPS_KEY, String(chatTimestampsEnabled));
+  applyChatTimestamps();
 });
 
 // ─── Utility ───
@@ -715,6 +744,13 @@ function getMessageText(msg) {
   return (msg.message && msg.message.body) || "";
 }
 
+function buildChatTimestamp(msg) {
+  var timestamp = document.createElement("span");
+  timestamp.className = "chat-timestamp";
+  timestamp.textContent = formatChatTimestamp(msg.content_offset_seconds);
+  return timestamp;
+}
+
 function buildReplyChain(node) {
   var chain = [];
   var current = node;
@@ -751,6 +787,8 @@ function showReplyPopup(msgDiv) {
     var row = document.createElement("div");
     row.className = "reply-popup-msg";
 
+    row.appendChild(buildChatTimestamp(entry));
+
     var name = document.createElement("span");
     name.className = "chat-name";
     name.textContent = (entry.display_name || "Anonymous") + ": ";
@@ -784,6 +822,8 @@ function renderChat() {
 
     var div = document.createElement("div");
     div.className = "chat-msg";
+
+    div.appendChild(buildChatTimestamp(msg));
 
     var nameSpan = document.createElement("span");
     nameSpan.className = "chat-name";

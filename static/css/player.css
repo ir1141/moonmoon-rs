@@ -123,9 +123,12 @@
   transition: all 0.2s;
   padding: 0;
   line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
-.chat-size-btn:hover {
+.chat-size-btn:hover,
+.chat-size-btn.active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
@@ -167,6 +170,19 @@
   padding: 3px 0;
   line-height: 1.4;
   word-wrap: break-word;
+}
+
+.chat-timestamp {
+  color: var(--text-muted);
+  display: inline-block;
+  font-size: 0.82em;
+  font-variant-numeric: tabular-nums;
+  margin-right: 5px;
+  white-space: nowrap;
+}
+
+.chat-messages:not(.show-timestamps) .chat-timestamp {
+  display: none;
 }
 
 .chat-name {
