@@ -13,6 +13,33 @@
 {% endblock %}
 
 {% block content %}
+<section id="continue-watching" class="continue-shelf" hidden aria-labelledby="continue-title">
+  <div class="continue-heading">
+    <div>
+      <div class="continue-eyebrow">Pick up where you left off</div>
+      <h2 id="continue-title">Continue watching</h2>
+    </div>
+    <div class="continue-actions">
+      <button
+        id="continue-toggle"
+        class="icon-btn continue-toggle"
+        type="button"
+        aria-controls="continue-grid"
+        aria-expanded="true"
+        aria-label="Collapse continue watching"
+        title="Collapse"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+      <a class="continue-history-link" href="/history">View history</a>
+    </div>
+  </div>
+  <div id="continue-grid" class="vod-grid continue-grid" aria-live="polite"></div>
+</section>
+<script type="module" src="/static/continue-watching.js" nonce="{{ nonce }}"></script>
 <div class="games-view">
   <div class="games-toolbar">
     <div class="stats">{{ games.len() }} games</div>
