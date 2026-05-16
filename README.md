@@ -123,7 +123,7 @@ The token is the only credential — anyone holding it can read and overwrite th
 - VOD-level thumbnails may be absent; `backfill_thumbnails` lifts the first upload thumbnail onto `Vod.thumbnail_url`.
 - Chapter images are upscaled by replacing `{width}x{height}` or `40x53` → `285x380` in the URL.
 - The upstream API rate-limits aggressively; `fetch_api_response` retries 429s with numeric `Retry-After` support, exponential backoff, and jitter.
-- Many fields on `Vod`/`Chapter` are `Option` because the upstream is inconsistent.
+- Many fields on `Vod`/`Chapter` are `Option` because the REST payload is nullable/sparse across historical rows; deserializers also retain compatibility with older, less consistent payload shapes.
 
 ## Conventions
 
