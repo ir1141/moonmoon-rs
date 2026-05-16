@@ -25,25 +25,16 @@
 }
 
 .cal-nav-btn {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  color: var(--text);
+  width: 36px;
+  height: 36px;
   text-decoration: none;
   font-size: 1.2rem;
-  transition: all 0.2s;
-  cursor: pointer;
 }
 
 .cal-nav-btn:hover {
+  background: var(--accent);
   border-color: var(--accent);
-  color: var(--accent);
-  background: rgba(108, 92, 231, 0.08);
+  color: #fff;
 }
 
 .cal-nav-btn.disabled {

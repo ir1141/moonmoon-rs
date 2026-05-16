@@ -139,16 +139,6 @@ a.game-card {
   transition: border-color 0.25s;
   pointer-events: none;
 }
-.game-card:hover {
-  transform: translateY(-6px) scale(1.02);
-  box-shadow:
-    0 20px 40px rgba(0, 0, 0, 0.5),
-    0 0 30px var(--accent-glow);
-}
-.game-card:hover::after {
-  border-color: var(--accent);
-}
-
 .game-card .art-wrap {
   position: relative;
   overflow: hidden;
@@ -161,10 +151,6 @@ a.game-card {
   display: block;
   transition: transform 0.4s cubic-bezier(0.25, 0, 0.25, 1);
 }
-.game-card:hover .art {
-  transform: scale(1.08);
-}
-
 .game-card .stream-badge {
   position: absolute;
   bottom: 8px;
@@ -190,6 +176,21 @@ a.game-card {
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .game-card:hover {
+    transform: translateY(-6px) scale(1.02);
+    box-shadow:
+      0 20px 40px rgba(0, 0, 0, 0.5),
+      0 0 30px var(--accent-glow);
+  }
+  .game-card:hover::after {
+    border-color: var(--accent);
+  }
+  .game-card:hover .art {
+    transform: scale(1.08);
+  }
 }
 
 @media (max-width: 768px) {

@@ -19,7 +19,7 @@
       <div class="player-info">
         <h2 class="player-title">{{ vod_title }}</h2>
         <div class="part-selector" id="part-selector"></div>
-        <button class="theatre-btn" id="theatre-toggle" title="Theatre Mode (t)">Theatre</button>
+        <button class="btn-chip theatre-btn" id="theatre-toggle" title="Theatre Mode (t)" aria-pressed="false">Theatre</button>
       </div>
     </div>
   </div>
@@ -44,8 +44,8 @@
     <div class="up-next-title" id="up-next-title"></div>
     <div class="up-next-countdown">Playing in <span id="up-next-seconds">10</span>s</div>
     <div class="up-next-actions">
-      <button id="up-next-cancel" type="button">Cancel</button>
-      <button id="up-next-play-now" type="button">Play now</button>
+      <button id="up-next-cancel" class="btn-chip" type="button">Cancel</button>
+      <button id="up-next-play-now" class="btn-chip btn-primary" type="button">Play now</button>
     </div>
   </div>
 </div>

@@ -23,6 +23,8 @@
   <link rel="stylesheet" href="/static/css/player.css">
   <link rel="stylesheet" href="/static/css/calendar.css">
   <link rel="stylesheet" href="/static/css/sync.css">
+  <script type="module" src="/static/vod-cards.js" nonce="{{ nonce }}"></script>
+  <script type="module" src="/static/header.js" nonce="{{ nonce }}"></script>
   <script src="https://unpkg.com/htmx.org@2.0.4"
           integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
           crossorigin="anonymous"
@@ -39,10 +41,10 @@
       Moonmoon
     </a>
     <nav class="header-nav" aria-label="Primary">
-      <a href="/"         class="nav-link{% if active_section.slug() == "games"    %} active{% endif %}"{% if active_section.slug() == "games"    %} aria-current="page"{% endif %}>Games</a>
-      <a href="/streams"  class="nav-link{% if active_section.slug() == "streams"  %} active{% endif %}"{% if active_section.slug() == "streams"  %} aria-current="page"{% endif %}>Streams</a>
-      <a href="/calendar" class="nav-link{% if active_section.slug() == "calendar" %} active{% endif %}"{% if active_section.slug() == "calendar" %} aria-current="page"{% endif %}>Calendar</a>
-      <a href="/history"  class="nav-link{% if active_section.slug() == "history"  %} active{% endif %}"{% if active_section.slug() == "history"  %} aria-current="page"{% endif %}>History</a>
+      <a href="/"         class="btn-pill nav-link{% if active_section.slug() == "games"    %} active{% endif %}"{% if active_section.slug() == "games"    %} aria-current="page"{% endif %}>Games</a>
+      <a href="/streams"  class="btn-pill nav-link{% if active_section.slug() == "streams"  %} active{% endif %}"{% if active_section.slug() == "streams"  %} aria-current="page"{% endif %}>Streams</a>
+      <a href="/calendar" class="btn-pill nav-link{% if active_section.slug() == "calendar" %} active{% endif %}"{% if active_section.slug() == "calendar" %} aria-current="page"{% endif %}>Calendar</a>
+      <a href="/history"  class="btn-pill nav-link{% if active_section.slug() == "history"  %} active{% endif %}"{% if active_section.slug() == "history"  %} aria-current="page"{% endif %}>History</a>
     </nav>
     {% block view_title %}{% endblock %}
     <div class="header-right">
@@ -82,27 +84,6 @@
     {% block content %}{% endblock %}
   </div>
 <script nonce="{{ nonce }}">
-(function() {
-  function applyResumeBars(root) {
-    var store;
-    try { store = JSON.parse(localStorage.getItem('moonmoon_resume')) || {}; } catch(e) { return; }
-    var cards = (root || document).querySelectorAll('.vod-card[data-vod-id]');
-    for (var i = 0; i < cards.length; i++) {
-      var card = cards[i];
-      var id = card.dataset.vodId;
-      var durSecs = parseInt(card.dataset.durationSecs, 10);
-      var resume = store[id];
-      if (resume && resume.time > 10 && durSecs > 0) {
-        var pct = Math.min((resume.time / durSecs) * 100, 100);
-        card.classList.add('has-resume');
-        var fill = card.querySelector('.resume-bar-fill');
-        if (fill) fill.style.width = pct + '%';
-      }
-    }
-  }
-  applyResumeBars();
-  document.body.addEventListener('htmx:afterSwap', function(e) { applyResumeBars(e.detail.target); });
-})();
 (function () {
   var btn = document.getElementById('theme-btn');
   if (!btn) return;
@@ -128,7 +109,7 @@
       <label for="sync-token-value">Your sync token:</label>
       <div class="sync-token-row">
         <input id="sync-token-value" type="text" readonly>
-        <button type="button" id="sync-copy">Copy</button>
+        <button type="button" id="sync-copy" class="btn-chip">Copy</button>
       </div>
     </div>
 
@@ -136,17 +117,17 @@
       <label for="sync-import-input">Paste a token from another device:</label>
       <div class="sync-token-row">
         <input id="sync-import-input" type="text" autocomplete="off" spellcheck="false" placeholder="ABCDEFGHIJKLMNOPQRSTUVWXYZ">
-        <button type="button" id="sync-import-confirm">Connect</button>
+        <button type="button" id="sync-import-confirm" class="btn-chip btn-primary">Connect</button>
       </div>
     </div>
 
     <div class="sync-actions">
-      <button type="button" id="sync-generate">Generate new token</button>
-      <button type="button" id="sync-import-show">Use existing token</button>
-      <button type="button" id="sync-disconnect" class="sync-danger" hidden>Disconnect this device</button>
+      <button type="button" id="sync-generate" class="btn-chip btn-primary">Generate new token</button>
+      <button type="button" id="sync-import-show" class="btn-chip">Use existing token</button>
+      <button type="button" id="sync-disconnect" class="btn-chip btn-danger" hidden>Disconnect this device</button>
     </div>
-    <div class="sync-actions" style="margin-top:12px;justify-content:flex-end;">
-      <button type="submit">Close</button>
+    <div class="sync-actions sync-actions-end">
+      <button type="submit" class="btn-chip">Close</button>
     </div>
   </form>
 </dialog>
