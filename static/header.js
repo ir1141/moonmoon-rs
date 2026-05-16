@@ -1,7 +1,13 @@
 function initMobileSearch() {
-  const headerRight = document.querySelector(".header-right");
-  const toggle = document.querySelector(".search-toggle");
-  const input = document.querySelector(".search-bar input");
+  const headerRight = /** @type {HTMLElement | null} */ (
+    document.querySelector(".header-right")
+  );
+  const toggle = /** @type {HTMLButtonElement | null} */ (
+    document.querySelector(".search-toggle")
+  );
+  const input = /** @type {HTMLInputElement | null} */ (
+    document.querySelector(".search-bar input")
+  );
   if (!headerRight || !toggle || !input) return;
 
   function setOpen(open) {

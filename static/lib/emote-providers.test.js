@@ -9,7 +9,7 @@ describe("buildSearchUrl", () => {
     const req = buildSearchUrl("7TV", "TANIMURA");
     expect(req.url).toBe("https://7tv.io/v3/gql");
     expect(req.method).toBe("POST");
-    const body = JSON.parse(req.body);
+    const body = JSON.parse(req.body || "{}");
     expect(body.variables.query).toBe("TANIMURA");
     expect(body.operationName).toBe("SearchEmotes");
   });
