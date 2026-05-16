@@ -54,17 +54,21 @@ body {
   overflow-x: hidden;
 }
 
+[data-theme="light"] body {
+  background: var(--bg-surface);
+}
+
 body::before {
   content: "";
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: 600px;
+  height: 220px;
   background: radial-gradient(
-    ellipse 80% 50% at 50% -20%,
-    var(--accent-glow),
-    transparent
+    ellipse 80% 75% at 50% -30%,
+    var(--accent-glow) 0%,
+    transparent 72%
   );
   pointer-events: none;
   z-index: 0;
@@ -73,6 +77,67 @@ body::before {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+.btn-chip {
+  font-family: var(--font-body);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  min-height: 30px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    color 0.2s,
+    transform 0.08s ease;
+}
+
+.btn-chip:hover {
+  background: var(--button-hover-bg);
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+
+.btn-chip:active {
+  transform: scale(0.97);
+}
+
+.btn-chip:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
+}
+
+.btn-chip.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn-chip.btn-primary:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+  color: #fff;
+}
+
+.btn-chip.btn-danger {
+  color: #f19a9a;
+  border-color: #6b3838;
+}
+
+.btn-chip.btn-danger:hover {
+  background: #6b3838;
+  border-color: #a64b4b;
+  color: #fff;
 }
 
 /* ─── Loading ─── */

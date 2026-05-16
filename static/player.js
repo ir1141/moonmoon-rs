@@ -10,6 +10,14 @@ import {
   formatChatTimestamp,
   isChatTimestampEnabled,
 } from "./lib/chat-timestamps.js";
+import {
+  chatDistanceFromBottom,
+  nextChatAutoScrollState,
+} from "./lib/chat-autoscroll.js";
+import {
+  shouldFinalizePlaybackAtTick,
+  shouldSaveResume,
+} from "./lib/player-completion.js";
 import { isEmoteCandidate } from "./lib/emote-heuristic.js";
 import { getCachedEmote, setCachedEmote } from "./lib/emote-cache.js";
 import { EmoteLookupPolicy } from "./lib/emote-lookup-policy.js";
@@ -18,6 +26,7 @@ import {
   parseSearchResponse,
   PROVIDERS,
 } from "./lib/emote-providers.js";
+import { markWatchedVod } from "./lib/watched.js";
 
 var dataEl = document.getElementById("vod-data");
 if (!dataEl) {
@@ -34,10 +43,13 @@ var YOUTUBE_IDS = YOUTUBE_PARTS.map(function (part) {
   return part.id;
 });
 var STORAGE_KEY = "moonmoon_resume";
+var WATCHED_KEY = "moonmoon_watched";
 var MAX_RESUME_ENTRIES = 500;
+var MAX_WATCHED_ENTRIES = 500;
 var PART_DURATIONS_KEY = "moonmoon_part_durations";
 var MAX_PART_DURATION_ENTRIES = 500;
 var MAX_CHAT_DOM_NODES = 2000;
+var CHAT_SCROLL_INTENT_MS = 800;
 var EMOTE_PROVIDER_COOLDOWN_MS = 60 * 1000;
 var EMOTE_NAME_COOLDOWN_MS = 15 * 1000;
 
@@ -46,6 +58,7 @@ var MOONMOON_TWITCH_ID = "121059319";
 
 var player = null;
 var currentPart = 0;
+var watchCompleted = false;
 var partDurations = initialPartDurations(
   YOUTUBE_PARTS,
   null,
@@ -61,6 +74,9 @@ var chatLoading = false;
 var chatAutoScroll = true;
 var chatRendering = false;
 var chatInitialOffset = 0;
+var chatUserScrollIntentUntil = 0;
+var chatAutoScrollFrame = null;
+var chatScrollGeneration = 0;
 var lastTickTime = -1;
 
 // Reply threading: track most recent message per username
@@ -267,6 +283,7 @@ function buildEmoteImg(name, emote) {
   img.alt = name;
   img.dataset.tooltip = formatEmoteTooltip(name, emote);
   img.loading = "lazy";
+  trackChatImageLoad(img);
   return img;
 }
 
@@ -275,6 +292,7 @@ function swapTextNodeForEmote(textNode, name, emote) {
   if (textNode.nodeType !== Node.TEXT_NODE) return;
   if (textNode.nodeValue !== name) return; // text was edited or already swapped
   textNode.parentNode.replaceChild(buildEmoteImg(name, emote), textNode);
+  scheduleChatAutoScroll();
 }
 
 function formatEmoteTooltip(name, emote) {
@@ -363,10 +381,70 @@ var chatPaused = document.getElementById("chat-paused");
 var chatTimestampToggle = document.getElementById("chat-timestamp-toggle");
 var partSelector = document.getElementById("part-selector");
 
+function chatNow() {
+  return window.performance && typeof window.performance.now === "function"
+    ? window.performance.now()
+    : Date.now();
+}
+
+function markChatUserScrollIntent() {
+  chatUserScrollIntentUntil = chatNow() + CHAT_SCROLL_INTENT_MS;
+}
+
+function hasChatUserScrollIntent() {
+  return chatNow() <= chatUserScrollIntentUntil;
+}
+
+function chatScrollMeasurement() {
+  return {
+    scrollHeight: chatContainer.scrollHeight,
+    scrollTop: chatContainer.scrollTop,
+    clientHeight: chatContainer.clientHeight,
+  };
+}
+
+function setChatPausedVisible(paused) {
+  chatPaused.style.display = paused ? "" : "none";
+}
+
+function scrollChatToBottom() {
+  var generation = ++chatScrollGeneration;
+  chatRendering = true;
+  chatContainer.scrollTop = chatContainer.scrollHeight;
+
+  window.requestAnimationFrame(function () {
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+    if (generation === chatScrollGeneration) {
+      chatRendering = false;
+    }
+  });
+}
+
+function scheduleChatAutoScroll() {
+  if (!chatAutoScroll || chatAutoScrollFrame !== null) return;
+
+  chatAutoScrollFrame = window.requestAnimationFrame(function () {
+    chatAutoScrollFrame = null;
+    if (chatAutoScroll) scrollChatToBottom();
+  });
+}
+
+function trackChatImageLoad(img) {
+  img.addEventListener("load", scheduleChatAutoScroll, { once: true });
+  if (img.complete) scheduleChatAutoScroll();
+}
+
 // ─── Emote Tooltip ───
 var emoteTooltip = document.createElement("div");
 emoteTooltip.className = "emote-tooltip";
 document.body.appendChild(emoteTooltip);
+
+function dismissTransientChatUi() {
+  dismissReplyPopup();
+  emoteTooltip.style.display = "none";
+}
+
+document.body.addEventListener("htmx:beforeSwap", dismissTransientChatUi);
 
 chatContainer.addEventListener("mouseover", function (e) {
   var el = e.target;
@@ -399,13 +477,11 @@ var chatTimestampsEnabled = isChatTimestampEnabled(
 
 function applyChatSize() {
   var stickToBottom = chatAutoScroll;
-  chatRendering = true;
   chatContainer.style.fontSize = chatFontSize + "px";
   emoteTooltip.style.fontSize = chatFontSize + "px";
   if (stickToBottom) {
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    scrollChatToBottom();
   }
-  chatRendering = false;
 }
 
 applyChatSize();
@@ -546,7 +622,7 @@ function buildPartSelector() {
   }
   for (var i = 0; i < YOUTUBE_IDS.length; i++) {
     var btn = document.createElement("button");
-    btn.className = "part-btn";
+    btn.className = "btn-chip part-btn";
     btn.textContent = "Part " + (i + 1);
     btn.dataset.index = i;
     btn.addEventListener("click", function () {
@@ -619,6 +695,8 @@ function getResumeStore() {
 }
 
 function savePosition() {
+  if (!shouldSaveResume({ completed: watchCompleted })) return;
+
   try {
     if (!player || !player.getCurrentTime) return;
     var store = getResumeStore();
@@ -663,6 +741,36 @@ function clearResume() {
   } catch (e) {
     /* ignore */
   }
+}
+
+function getWatchedStore() {
+  try {
+    return JSON.parse(localStorage.getItem(WATCHED_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function markWatched() {
+  try {
+    var next = markWatchedVod(
+      getWatchedStore(),
+      VOD_ID,
+      Date.now(),
+      MAX_WATCHED_ENTRIES,
+    );
+    localStorage.setItem(WATCHED_KEY, JSON.stringify(next));
+    window.dispatchEvent(new Event("moonmoon:watchedChanged"));
+  } catch (e) {
+    /* quota exceeded or similar */
+  }
+}
+
+function finalizeCurrentVod() {
+  if (watchCompleted) return;
+  watchCompleted = true;
+  clearResume();
+  markWatched();
 }
 
 // ─── Chat ───
@@ -848,6 +956,7 @@ function renderChat() {
           img.alt = frag.text || "";
           img.dataset.tooltip = (frag.text || "") + " [Twitch]";
           img.loading = "lazy";
+          trackChatImageLoad(img);
           bodySpan.appendChild(img);
         } else if (frag.text) {
           appendTextWithEmotes(bodySpan, frag.text);
@@ -906,9 +1015,7 @@ function renderChat() {
   }
 
   if (rendered && chatAutoScroll) {
-    chatRendering = true;
-    chatContainer.scrollTop = chatContainer.scrollHeight;
-    chatRendering = false;
+    scrollChatToBottom();
   }
 
   // Prefetch: if last rendered message is within 60s of current time and cursor exists
@@ -924,26 +1031,57 @@ function renderChat() {
 }
 
 // Chat scroll tracking
+chatContainer.addEventListener("wheel", markChatUserScrollIntent, {
+  passive: true,
+});
+chatContainer.addEventListener("touchmove", markChatUserScrollIntent, {
+  passive: true,
+});
+chatContainer.addEventListener("keydown", function (e) {
+  if (
+    e.key === "ArrowUp" ||
+    e.key === "ArrowDown" ||
+    e.key === "PageUp" ||
+    e.key === "PageDown" ||
+    e.key === "Home" ||
+    e.key === "End" ||
+    e.key === " "
+  ) {
+    markChatUserScrollIntent();
+  }
+});
+chatContainer.addEventListener("pointerdown", function (e) {
+  var rect = chatContainer.getBoundingClientRect();
+  if (e.clientX >= rect.right - 18) markChatUserScrollIntent();
+});
+
 chatContainer.addEventListener("scroll", function () {
-  if (chatRendering) return;
-  dismissReplyPopup();
-  var distFromBottom =
-    chatContainer.scrollHeight -
-    chatContainer.scrollTop -
-    chatContainer.clientHeight;
-  if (distFromBottom > 100) {
-    chatAutoScroll = false;
-    chatPaused.style.display = "";
-  } else {
-    chatAutoScroll = true;
-    chatPaused.style.display = "none";
+  var userInitiated = hasChatUserScrollIntent();
+  if (chatRendering && !userInitiated) return;
+  if (userInitiated) dismissReplyPopup();
+
+  var measurement = chatScrollMeasurement();
+  var nextState = nextChatAutoScrollState(measurement, {
+    currentAutoScroll: chatAutoScroll,
+    userInitiated: userInitiated,
+  });
+
+  chatAutoScroll = nextState.autoScroll;
+  setChatPausedVisible(nextState.paused);
+
+  if (
+    chatAutoScroll &&
+    !userInitiated &&
+    chatDistanceFromBottom(measurement) > 0
+  ) {
+    scheduleChatAutoScroll();
   }
 });
 
 chatPaused.addEventListener("click", function () {
   chatAutoScroll = true;
-  chatContainer.scrollTop = chatContainer.scrollHeight;
-  chatPaused.style.display = "none";
+  scrollChatToBottom();
+  setChatPausedVisible(false);
 });
 
 chatContainer.addEventListener("click", function (e) {
@@ -991,15 +1129,21 @@ function tick() {
   savePosition();
   renderChat();
 
-  // Fallback: YouTube's ENDED event is unreliable in embeds, so also trigger
-  // up-next when the final part is within 2s of its duration. Do NOT clear
-  // resume here — the real ENDED branch owns that so a mid-window cancel
-  // leaves the saved position intact.
+  // Fallback: YouTube's ENDED event is unreliable in embeds, so treat the
+  // final part's last seconds as completed for watched/resume state too.
   if (!upNextTriggered && currentPart === YOUTUBE_IDS.length - 1) {
     try {
       var dur = player.getDuration();
       var cur = player.getCurrentTime();
-      if (dur > 0 && cur >= dur - 2) {
+      if (
+        shouldFinalizePlaybackAtTick({
+          currentPart: currentPart,
+          partCount: YOUTUBE_IDS.length,
+          duration: dur,
+          currentTime: cur,
+        })
+      ) {
+        finalizeCurrentVod();
         maybeShowUpNext();
       }
     } catch (e) {
@@ -1125,7 +1269,7 @@ function onPlayerStateChange(event) {
       switchPart(currentPart + 1);
     } else {
       // All parts finished, clear resume and maybe offer next VOD in the same period
-      clearResume();
+      finalizeCurrentVod();
       maybeShowUpNext();
     }
   }
@@ -1222,6 +1366,8 @@ var theatreBtn = document.getElementById("theatre-toggle");
 
 function setTheatre(on) {
   document.body.classList.toggle("theatre-mode", on);
+  theatreBtn.setAttribute("aria-pressed", on ? "true" : "false");
+  theatreBtn.title = on ? "Exit theatre mode (t)" : "Theatre mode (t)";
   localStorage.setItem(THEATRE_KEY, on ? "1" : "0");
 }
 

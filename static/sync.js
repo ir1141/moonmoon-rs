@@ -3,9 +3,11 @@ import {
   isValidToken,
   generateToken as generateTokenPure,
 } from "./lib/token.js";
+import { mergeWatched as mergeWatchedPure } from "./lib/watched.js";
 
 var TOKEN_KEY = "moonmoon_sync_token";
 var RESUME_KEY = "moonmoon_resume";
+var WATCHED_KEY = "moonmoon_watched";
 var META_KEY = "moonmoon_sync_meta";
 
 function getToken() {
@@ -40,8 +42,26 @@ function getResume() {
 function setResume(obj) {
   try {
     localStorage.setItem(RESUME_KEY, JSON.stringify(obj));
+    window.dispatchEvent(new Event("moonmoon:resumeChanged"));
   } catch (e) {
     console.warn("[Sync] resume write failed:", e);
+  }
+}
+
+function getWatched() {
+  try {
+    return JSON.parse(localStorage.getItem(WATCHED_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function setWatched(obj) {
+  try {
+    localStorage.setItem(WATCHED_KEY, JSON.stringify(obj));
+    window.dispatchEvent(new Event("moonmoon:watchedChanged"));
+  } catch (e) {
+    console.warn("[Sync] watched write failed:", e);
   }
 }
 
@@ -49,6 +69,13 @@ function mergeResume(remote) {
   var local = getResume();
   var result = mergeResumePure(local, remote);
   if (result.changed) setResume(result.merged);
+  return result.changed;
+}
+
+function mergeWatched(remote) {
+  var local = getWatched();
+  var result = mergeWatchedPure(local, remote);
+  if (result.changed) setWatched(result.merged);
   return result.changed;
 }
 
@@ -64,7 +91,10 @@ function pull() {
     .then(function (data) {
       if (!data) return null;
       var remoteResume = (data.blob && data.blob.resume) || {};
-      var changed = mergeResume(remoteResume);
+      var remoteWatched = (data.blob && data.blob.watched) || {};
+      var resumeChanged = mergeResume(remoteResume);
+      var watchedChanged = mergeWatched(remoteWatched);
+      var changed = resumeChanged || watchedChanged;
       try {
         localStorage.setItem(
           META_KEY,
@@ -92,7 +122,7 @@ function push() {
   pushTimer = null;
   var token = getToken();
   if (!token) return;
-  var blob = { resume: getResume() };
+  var blob = { resume: getResume(), watched: getWatched() };
   var body = JSON.stringify({ blob: blob, updated_at: Date.now() });
   fetch("/api/sync/" + encodeURIComponent(token), {
     method: "PUT",
@@ -113,17 +143,21 @@ function schedulePush() {
 // localStorage `storage` events fire on OTHER tabs only, so we also poll
 // the resume key in this tab. 2s is fine — the debounce already coalesces.
 var lastResumeStr = localStorage.getItem(RESUME_KEY) || "";
+var lastWatchedStr = localStorage.getItem(WATCHED_KEY) || "";
 setInterval(function () {
   var cur = localStorage.getItem(RESUME_KEY) || "";
-  if (cur !== lastResumeStr) {
+  var watched = localStorage.getItem(WATCHED_KEY) || "";
+  if (cur !== lastResumeStr || watched !== lastWatchedStr) {
     lastResumeStr = cur;
+    lastWatchedStr = watched;
     schedulePush();
   }
 }, POLL_MS);
 
 window.addEventListener("storage", function (e) {
-  if (e.key === RESUME_KEY) {
-    lastResumeStr = e.newValue || "";
+  if (e.key === RESUME_KEY || e.key === WATCHED_KEY) {
+    lastResumeStr = localStorage.getItem(RESUME_KEY) || "";
+    lastWatchedStr = localStorage.getItem(WATCHED_KEY) || "";
     schedulePush();
   }
 });

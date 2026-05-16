@@ -152,24 +152,17 @@
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--border);
-  transition: all 0.25s;
+  transition:
+    border-color 0.25s,
+    box-shadow 0.25s,
+    transform 0.25s;
   display: flex;
   flex-direction: column;
 }
-.vod-card:hover {
-  border-color: var(--accent);
-  box-shadow:
-    0 12px 32px rgba(0, 0, 0, 0.35),
-    0 0 20px var(--accent-glow);
-  transform: translateY(-3px);
-}
 
 /* ─── Watched VODs ─── */
-.vod-card.watched {
-  opacity: 0.55 !important;
-}
-.vod-card.watched:hover {
-  opacity: 0.85 !important;
+.vod-card.watched .thumb {
+  filter: grayscale(0.4) brightness(0.7);
 }
 
 .watched-badge {
@@ -210,10 +203,9 @@
   object-fit: cover;
   background: var(--bg-elevated);
   display: block;
-  transition: transform 0.4s;
-}
-.vod-card:hover .thumb {
-  transform: scale(1.05);
+  transition:
+    filter 0.25s,
+    transform 0.4s;
 }
 
 .vod-card .thumb-overlay {
@@ -289,10 +281,6 @@
   transition: all 0.25s;
   box-shadow: 0 4px 20px var(--accent-glow);
 }
-.vod-card:hover .play-icon {
-  opacity: 1;
-  transform: translate(-50%, -50%) scale(1);
-}
 .vod-card .play-icon svg {
   width: 22px;
   height: 22px;
@@ -317,9 +305,6 @@
   overflow: hidden;
   transition: color 0.2s;
 }
-.vod-card:hover .vod-title {
-  color: var(--accent-soft);
-}
 
 /* ─── Chapter Strip (streams page) ─── */
 .chapter-strip {
@@ -342,10 +327,6 @@
 .vod-card.has-resume .chapter-strip {
   bottom: 3px;
 }
-.vod-card:hover .chapter-strip {
-  height: 16px;
-  opacity: 1;
-}
 .chapter-seg {
   position: relative;
   height: 100%;
@@ -358,10 +339,6 @@
   );
   transition: filter 0.15s ease;
 }
-.chapter-seg:hover {
-  filter: brightness(1.35) saturate(1.1);
-}
-
 .chapter-seg.color-0 {
   background-color: #ef4d5b;
 }
@@ -421,18 +398,10 @@
   border: 4px solid transparent;
   border-top-color: rgba(8, 8, 10, 0.96);
 }
-.chapter-seg:hover .chapter-seg-tip {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
-
 /* Edge-anchor tooltips so narrow first/last segments don't get clipped */
 .chapter-seg:first-child .chapter-seg-tip {
   left: 0;
   transform: translateX(0) translateY(4px);
-}
-.chapter-seg:first-child:hover .chapter-seg-tip {
-  transform: translateX(0) translateY(0);
 }
 .chapter-seg:first-child .chapter-seg-tip::after {
   left: 14px;
@@ -443,9 +412,6 @@
   right: 0;
   transform: translateX(0) translateY(4px);
 }
-.chapter-seg:last-child:not(:first-child):hover .chapter-seg-tip {
-  transform: translateX(0) translateY(0);
-}
 .chapter-seg:last-child:not(:first-child) .chapter-seg-tip::after {
   left: auto;
   right: 14px;
@@ -454,6 +420,51 @@
 
 .vod-card.has-chapters .duration-badge {
   bottom: 14px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .vod-card:hover {
+    border-color: var(--accent);
+    box-shadow:
+      0 12px 32px rgba(0, 0, 0, 0.35),
+      0 0 20px var(--accent-glow);
+    transform: translateY(-3px);
+  }
+
+  .vod-card:hover .thumb {
+    transform: scale(1.05);
+  }
+
+  .vod-card:hover .play-icon {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .vod-card:hover .vod-title {
+    color: var(--accent-soft);
+  }
+
+  .vod-card:hover .chapter-strip {
+    height: 16px;
+    opacity: 1;
+  }
+
+  .chapter-seg:hover {
+    filter: brightness(1.35) saturate(1.1);
+  }
+
+  .chapter-seg:hover .chapter-seg-tip {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .chapter-seg:first-child:hover .chapter-seg-tip {
+    transform: translateX(0) translateY(0);
+  }
+
+  .chapter-seg:last-child:not(:first-child):hover .chapter-seg-tip {
+    transform: translateX(0) translateY(0);
+  }
 }
 
 @media (max-width: 768px) {

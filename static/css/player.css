@@ -57,20 +57,10 @@
 }
 
 .part-btn {
-  font-family: var(--font-body);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  color: var(--text-dim);
-  padding: 5px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  transition: all 0.2s;
+  flex-shrink: 0;
 }
 
-.part-btn.active,
-.part-btn:hover {
+.part-btn.active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
@@ -170,6 +160,11 @@
   padding: 3px 0;
   line-height: 1.4;
   word-wrap: break-word;
+}
+
+.theatre-mode .chat-msg {
+  padding: 4px 0;
+  line-height: 1.5;
 }
 
 .chat-timestamp {
@@ -296,20 +291,9 @@
 
 /* ─── Theatre Mode ─── */
 .theatre-btn {
-  font-family: var(--font-body);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  color: var(--text-dim);
-  padding: 5px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  transition: all 0.2s;
   flex-shrink: 0;
 }
 
-.theatre-btn:hover,
 .theatre-mode .theatre-btn {
   background: var(--accent);
   border-color: var(--accent);
@@ -377,29 +361,6 @@
   display: flex;
   gap: 8px;
   justify-content: flex-end;
-}
-
-.up-next-actions button {
-  font-family: var(--font-body);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  color: var(--text-dim);
-  padding: 5px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.up-next-actions #up-next-play-now {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-.up-next-actions button:hover {
-  filter: brightness(1.15);
 }
 
 @media (max-width: 900px) {
