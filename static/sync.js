@@ -187,23 +187,47 @@ function el(id) {
   return document.getElementById(id);
 }
 
+function requiredEl(id) {
+  var node = el(id);
+  if (!node) throw new Error("[Sync] Missing #" + id + " element");
+  return node;
+}
+
+function requiredInput(id) {
+  var node = requiredEl(id);
+  if (!(node instanceof HTMLInputElement)) {
+    throw new Error("[Sync] Expected #" + id + " to be an input");
+  }
+  return node;
+}
+
 function initSettingsUi() {
   var btn = el("sync-btn");
-  var dlg = el("sync-dialog");
+  var dlg = /** @type {HTMLDialogElement | null} */ (el("sync-dialog"));
   if (!btn || !dlg) return;
+  var status = requiredEl("sync-status");
+  var tokenBlock = requiredEl("sync-token-block");
+  var disconnectBtn = requiredEl("sync-disconnect");
+  var tokenValue = requiredInput("sync-token-value");
+  var importBlock = requiredEl("sync-import-block");
+  var generateBtn = requiredEl("sync-generate");
+  var importShowBtn = requiredEl("sync-import-show");
+  var importInput = requiredInput("sync-import-input");
+  var importConfirmBtn = requiredEl("sync-import-confirm");
+  var copyBtn = requiredEl("sync-copy");
 
   function refreshUi() {
     var token = getToken();
     var connected = !!token;
     btn.classList.toggle("connected", connected);
     btn.title = connected ? "Sync: connected" : "Cross-device sync";
-    el("sync-status").textContent = connected
+    status.textContent = connected
       ? "Connected. Your watch history syncs to any device using this token."
       : "Not connected. Generate a token and copy it to your other devices.";
-    el("sync-token-block").hidden = !connected;
-    el("sync-disconnect").hidden = !connected;
-    if (connected) el("sync-token-value").value = token;
-    el("sync-import-block").hidden = true;
+    tokenBlock.hidden = !connected;
+    disconnectBtn.hidden = !connected;
+    if (connected) tokenValue.value = token;
+    importBlock.hidden = true;
   }
 
   function positionDialog() {
@@ -238,7 +262,7 @@ function initSettingsUi() {
     if (e.target === dlg) dlg.close();
   });
 
-  el("sync-generate").addEventListener("click", function () {
+  generateBtn.addEventListener("click", function () {
     var t = generateToken();
     setToken(t);
     refreshUi();
@@ -246,47 +270,46 @@ function initSettingsUi() {
     push();
   });
 
-  el("sync-import-show").addEventListener("click", function () {
-    el("sync-import-block").hidden = false;
-    el("sync-import-input").focus();
+  importShowBtn.addEventListener("click", function () {
+    importBlock.hidden = false;
+    importInput.focus();
   });
 
-  el("sync-import-confirm").addEventListener("click", function () {
-    var raw = (el("sync-import-input").value || "")
+  importConfirmBtn.addEventListener("click", function () {
+    var raw = (importInput.value || "")
       .trim()
       .replace(/[\s-]/g, "")
       .toUpperCase();
     if (!isValidToken(raw)) {
-      el("sync-status").textContent =
+      status.textContent =
         "Invalid token. Expected 26+ characters of A–Z, 2–7.";
       return;
     }
     setToken(raw);
     refreshUi();
     pull().then(function () {
-      el("sync-status").textContent = "Connected. Pulled remote history.";
+      status.textContent = "Connected. Pulled remote history.";
     });
   });
 
-  el("sync-disconnect").addEventListener("click", function () {
+  disconnectBtn.addEventListener("click", function () {
     setToken("");
     refreshUi();
   });
 
-  el("sync-copy").addEventListener("click", function () {
-    var v = el("sync-token-value").value;
+  copyBtn.addEventListener("click", function () {
+    var v = tokenValue.value;
     if (!v) return;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(v);
     } else {
-      el("sync-token-value").select();
+      tokenValue.select();
       try {
         document.execCommand("copy");
       } catch (e) {
         /* ignore */
       }
     }
-    var copyBtn = el("sync-copy");
     var orig = copyBtn.textContent;
     copyBtn.textContent = "Copied!";
     setTimeout(function () {

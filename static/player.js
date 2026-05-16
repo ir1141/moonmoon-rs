@@ -32,7 +32,7 @@ var dataEl = document.getElementById("vod-data");
 if (!dataEl) {
   throw new Error("[Player] Missing #vod-data element");
 }
-var VOD_ID = dataEl.dataset.vodId;
+var VOD_ID = dataEl.dataset.vodId || "";
 var GAME_HINT = dataEl.dataset.gameHint || "";
 var HAS_EXPLICIT_HINT = GAME_HINT.length > 0;
 var YOUTUBE_PARTS = parseYoutubePartsDataset(
@@ -448,6 +448,7 @@ document.body.addEventListener("htmx:beforeSwap", dismissTransientChatUi);
 
 chatContainer.addEventListener("mouseover", function (e) {
   var el = e.target;
+  if (!(el instanceof HTMLElement)) return;
   if (el.classList.contains("chat-emote") && el.dataset.tooltip) {
     emoteTooltip.textContent = el.dataset.tooltip;
     emoteTooltip.style.display = "block";
@@ -459,6 +460,7 @@ chatContainer.addEventListener("mouseover", function (e) {
 });
 
 chatContainer.addEventListener("mouseout", function (e) {
+  if (!(e.target instanceof HTMLElement)) return;
   if (e.target.classList.contains("chat-emote")) {
     emoteTooltip.style.display = "none";
   }
@@ -491,7 +493,7 @@ document
   .addEventListener("click", function () {
     if (chatFontSize > MIN_CHAT_SIZE) {
       chatFontSize -= 1;
-      localStorage.setItem(CHAT_SIZE_KEY, chatFontSize);
+      localStorage.setItem(CHAT_SIZE_KEY, String(chatFontSize));
       applyChatSize();
     }
   });
@@ -499,7 +501,7 @@ document
 document.getElementById("chat-size-up").addEventListener("click", function () {
   if (chatFontSize < MAX_CHAT_SIZE) {
     chatFontSize += 1;
-    localStorage.setItem(CHAT_SIZE_KEY, chatFontSize);
+    localStorage.setItem(CHAT_SIZE_KEY, String(chatFontSize));
     applyChatSize();
   }
 });
@@ -624,9 +626,10 @@ function buildPartSelector() {
     var btn = document.createElement("button");
     btn.className = "btn-chip part-btn";
     btn.textContent = "Part " + (i + 1);
-    btn.dataset.index = i;
+    btn.dataset.index = String(i);
     btn.addEventListener("click", function () {
-      switchPart(parseInt(this.dataset.index, 10));
+      var button = /** @type {HTMLButtonElement} */ (this);
+      switchPart(parseInt(button.dataset.index || "0", 10));
     });
     partSelector.appendChild(btn);
   }
@@ -634,7 +637,9 @@ function buildPartSelector() {
 }
 
 function updatePartSelector() {
-  var buttons = partSelector.querySelectorAll(".part-btn");
+  var buttons = /** @type {NodeListOf<HTMLButtonElement>} */ (
+    partSelector.querySelectorAll(".part-btn")
+  );
   for (var i = 0; i < buttons.length; i++) {
     if (parseInt(buttons[i].dataset.index, 10) === currentPart) {
       buttons[i].classList.add("active");
@@ -1085,7 +1090,10 @@ chatPaused.addEventListener("click", function () {
 });
 
 chatContainer.addEventListener("click", function (e) {
-  if (!e.target.classList.contains("chat-reply-btn")) {
+  if (
+    !(e.target instanceof HTMLElement) ||
+    !e.target.classList.contains("chat-reply-btn")
+  ) {
     dismissReplyPopup();
   }
 });
@@ -1334,7 +1342,7 @@ function maybeShowUpNext() {
       pendingNextId = data.next_id;
       upNextTitleEl.textContent = data.next_title || "Next stream";
       var remaining = UP_NEXT_SECONDS;
-      upNextSecondsEl.textContent = remaining;
+      upNextSecondsEl.textContent = String(remaining);
       upNextOverlay.hidden = false;
       upNextInterval = setInterval(function () {
         remaining -= 1;
@@ -1344,7 +1352,7 @@ function maybeShowUpNext() {
           navigateToNext(id);
           return;
         }
-        upNextSecondsEl.textContent = remaining;
+        upNextSecondsEl.textContent = String(remaining);
       }, 1000);
     })
     .catch(function (err) {
@@ -1381,7 +1389,11 @@ theatreBtn.addEventListener("click", function () {
 });
 
 document.addEventListener("keydown", function (e) {
-  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  if (
+    e.target instanceof HTMLElement &&
+    (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")
+  )
+    return;
   if (e.key === "t" && !e.ctrlKey && !e.metaKey && !e.altKey) {
     setTheatre(!document.body.classList.contains("theatre-mode"));
   }

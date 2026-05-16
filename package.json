@@ -4,9 +4,13 @@
   "type": "module",
   "description": "Test harness for static/lib/* pure helpers used by player.js and sync.js (uses bun's native test runner).",
   "scripts": {
+    "check": "bun test && bun run check:js",
+    "check:js": "tsc --noEmit",
     "test": "bun test"
   },
   "devDependencies": {
-    "prettier": "3.8.3"
+    "@types/bun": "^1.3.14",
+    "prettier": "3.8.3",
+    "typescript": "^6.0.3"
   }
 }

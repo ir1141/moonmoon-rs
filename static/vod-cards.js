@@ -62,11 +62,14 @@ function applyWatchedState(card, watchedStore) {
   }
 }
 
+/**
+ * @param {Document | Element} [root]
+ */
 export function applyVodCardState(root = document) {
   const resumeStore = readStore(RESUME_KEY);
   const watchedStore = readStore(WATCHED_KEY);
   const cards =
-    root.matches && root.matches(".vod-card[data-vod-id]")
+    root instanceof Element && root.matches(".vod-card[data-vod-id]")
       ? [root]
       : root.querySelectorAll(".vod-card[data-vod-id]");
 

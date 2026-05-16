@@ -3,10 +3,27 @@ export const defaultHistorySort = "recent";
 
 const supportedHistorySorts = new Set([defaultHistorySort, "game"]);
 
+/**
+ * @typedef {{
+ *   get?: (key: string) => unknown,
+ *   getItem?: (key: string) => string | null,
+ *   set?: (key: string, value: string) => unknown,
+ *   setItem?: (key: string, value: string) => unknown,
+ * }} HistorySortStorage
+ */
+
+/**
+ * @param {unknown} value
+ */
 export function normalizeHistorySort(value) {
-  return supportedHistorySorts.has(value) ? value : defaultHistorySort;
+  return typeof value === "string" && supportedHistorySorts.has(value)
+    ? value
+    : defaultHistorySort;
 }
 
+/**
+ * @param {HistorySortStorage} [storage]
+ */
 export function readHistorySort(storage = localStorage) {
   try {
     if (storage && typeof storage.getItem === "function") {
@@ -22,7 +39,12 @@ export function readHistorySort(storage = localStorage) {
   return defaultHistorySort;
 }
 
-export function writeHistorySort(storage = localStorage, value) {
+/**
+ * @param {HistorySortStorage} storage
+ * @param {unknown} value
+ */
+export function writeHistorySort(storage, value) {
+  storage = storage || localStorage;
   const sort = normalizeHistorySort(value);
 
   try {

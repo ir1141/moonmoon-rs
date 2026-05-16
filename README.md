@@ -26,7 +26,7 @@ A Rust port of [OP-Archives/MOONMOON-site](https://github.com/OP-Archives/MOONMO
 - **htmx** — loaded from unpkg in `base.html`; drives pagination & search without a bundler
 - **reqwest** — upstream API client
 - **tokio** — async runtime
-- No bundler, no frontend build step
+- No bundler, no frontend build step; browser JavaScript is checked with TypeScript
 
 Rust edition 2024.
 
@@ -45,6 +45,7 @@ SYNC_STORE_PATH=/var/lib/moonmoon/sync.json cargo run  # sync store location (de
 cargo test                                   # unit tests
 cargo clippy --all-targets -- -D warnings    # CI-equivalent Rust lints
 bun test                                     # JS helper tests
+bun run check:js                             # TypeScript check for browser JS
 ```
 
 `/api/*` routes are rate-limited (2 rps, burst 20) per smart-detected client IP via `tower_governor`.
@@ -93,6 +94,7 @@ static/
 ├── player.js            # Player logic, chat sync, emotes, resume, Up Next overlay
 ├── sync.js              # Cross-device sync: token storage, pull/push, settings dialog
 ├── lib/                 # Pure JS helpers covered by bun test
+├── types.d.ts           # Ambient browser/API types for TypeScript checking
 └── css/                 # Split per concern: base, header, games, vods, calendar, player, sync
 ```
 

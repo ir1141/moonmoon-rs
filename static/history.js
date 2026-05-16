@@ -37,7 +37,9 @@ function showMessage(grid, text) {
 function initHistoryPage() {
   const stats = document.getElementById("history-stats");
   const grid = document.getElementById("history-grid");
-  const sortSel = document.getElementById("history-sort");
+  const sortSel = /** @type {HTMLSelectElement | null} */ (
+    document.getElementById("history-sort")
+  );
   if (!stats || !grid || !sortSel) return;
 
   sortSel.value = readHistorySort();
