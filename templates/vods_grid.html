@@ -35,11 +35,23 @@
   </div>
   <a href="{{ vod.watch_url }}" class="card-body">
     <div class="vod-title">{{ vod.display_title }}</div>
+    {% if let Some(label) = vod.match_label %}
+    <div class="vod-match-label">{{ label }}</div>
+    {% endif %}
   </a>
 </div>
 {% endfor %}
 {% if vods.is_empty() %}
-<div class="no-results">No streams found</div>
+<div class="no-results">
+  {% if is_filtered %}
+  No streams match these filters. Clear filters to reset the list.
+  {% else %}
+  No streams found
+  {% endif %}
+</div>
+{% endif %}
+{% if !vods.is_empty() && !has_more %}
+<div class="list-end" role="status">End of results</div>
 {% endif %}
 {% if has_more %}
 <div class="load-sentinel" hx-get="{{ next_url }}" hx-trigger="revealed" hx-swap="outerHTML"></div>

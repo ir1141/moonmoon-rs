@@ -18,19 +18,22 @@
   {% endif %}
   <div class="game-info">
     <h2>{{ game_name }}</h2>
-    <div class="meta"><span>{{ vod_count }}</span> streams archived</div>
+    <div class="meta"><span>{{ metadata.unfiltered_count }}</span> streams archived</div>
   </div>
 </div>
 
-<div class="vod-toolbar">
-  <input type="text" name="search" class="toolbar-search" placeholder="Search streams..."
-         hx-get="/game/{{ game_name|urlencode }}/vods" hx-trigger="input changed delay:300ms"
-         hx-target="#vod-grid" hx-swap="innerHTML"
-         hx-include="[name='sort'], [name='from'], [name='to']">
+<form id="vod-filters" class="vod-toolbar" action="/game/{{ game_name|urlencode }}" method="get">
+  <input type="search" name="search" class="toolbar-search" placeholder="Search streams..."
+         aria-label="Search {{ game_name }} streams"
+         hx-get="/game/{{ game_name|urlencode }}" hx-trigger="input changed delay:300ms"
+         hx-select="#vod-results" hx-target="#vod-results" hx-swap="outerHTML"
+         hx-push-url="true" hx-include="#vod-filters" hx-indicator="#vod-loading"
+         {% if let Some(s) = search %}value="{{ s }}"{% endif %}>
   <select name="sort" class="toolbar-select"
-          hx-get="/game/{{ game_name|urlencode }}/vods" hx-trigger="change"
-          hx-target="#vod-grid" hx-swap="innerHTML"
-          hx-include="[name='search'], [name='from'], [name='to']">
+          aria-label="Sort streams"
+          hx-get="/game/{{ game_name|urlencode }}" hx-trigger="change"
+          hx-select="#vod-results" hx-target="#vod-results" hx-swap="outerHTML"
+          hx-push-url="true" hx-include="#vod-filters" hx-indicator="#vod-loading">
     <option value="newest" {% if sort == "newest" %}selected{% endif %}>Newest First</option>
     <option value="oldest" {% if sort == "oldest" %}selected{% endif %}>Oldest First</option>
     <option value="longest" {% if sort == "longest" %}selected{% endif %}>Longest</option>
@@ -38,21 +41,42 @@
   </select>
   <div class="toolbar-dates">
     <span class="toolbar-label">From</span>
-    <input type="month" name="from" class="toolbar-date"
-           hx-get="/game/{{ game_name|urlencode }}/vods" hx-trigger="change"
-           hx-target="#vod-grid" hx-swap="innerHTML"
-           hx-include="[name='search'], [name='sort'], [name='to']"
+    <input type="date" name="from" class="toolbar-date" aria-label="Filter from date"
+           hx-get="/game/{{ game_name|urlencode }}" hx-trigger="change"
+           hx-select="#vod-results" hx-target="#vod-results" hx-swap="outerHTML"
+           hx-push-url="true" hx-include="#vod-filters" hx-indicator="#vod-loading"
            {% if let Some(f) = from %}value="{{ f }}"{% endif %}>
     <span class="toolbar-label">To</span>
-    <input type="month" name="to" class="toolbar-date"
-           hx-get="/game/{{ game_name|urlencode }}/vods" hx-trigger="change"
-           hx-target="#vod-grid" hx-swap="innerHTML"
-           hx-include="[name='search'], [name='sort'], [name='from']"
+    <input type="date" name="to" class="toolbar-date" aria-label="Filter to date"
+           hx-get="/game/{{ game_name|urlencode }}" hx-trigger="change"
+           hx-select="#vod-results" hx-target="#vod-results" hx-swap="outerHTML"
+           hx-push-url="true" hx-include="#vod-filters" hx-indicator="#vod-loading"
            {% if let Some(t) = to %}value="{{ t }}"{% endif %}>
   </div>
-</div>
+</form>
 
-<div id="vod-grid" class="vod-grid">
-  {% include "vods_grid.html" %}
-</div>
+<section id="vod-results" class="vod-results" data-list-region aria-busy="false">
+  <div class="list-summary" aria-live="polite" data-filtered-count="{{ metadata.filtered_count }}">
+    <div class="stats list-count">
+      {{ metadata.result_label }}
+      {% if metadata.is_filtered %}
+      <span class="list-count-total">of {{ metadata.unfiltered_count }} archived</span>
+      {% else %}
+      <span class="list-count-total">archived</span>
+      {% endif %}
+    </div>
+    {% if metadata.is_filtered %}
+    <div class="active-filters" aria-label="Active filters">
+      {% for filter in metadata.active_filters %}
+      <span class="filter-chip">{{ filter.label }}</span>
+      {% endfor %}
+      <a class="filter-clear" href="{{ metadata.clear_url }}">Clear filters</a>
+    </div>
+    {% endif %}
+  </div>
+  <div id="vod-loading" class="list-loading" role="status" aria-live="polite">Loading streams...</div>
+  <div id="vod-grid" class="vod-grid">
+    {% include "vods_grid.html" %}
+  </div>
+</section>
 {% endblock %}
