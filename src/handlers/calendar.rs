@@ -1,4 +1,4 @@
-use super::{Section, days_to_civil, render_template, vod_stream_time};
+use super::{Section, days_in_month, days_to_civil, render_template, vod_stream_time};
 use crate::SharedState;
 use crate::middleware::CspNonce;
 use askama::Template;
@@ -58,21 +58,6 @@ fn month_name(m: u32) -> &'static str {
         11 => "November",
         12 => "December",
         _ => "Unknown",
-    }
-}
-
-fn days_in_month(year: i32, month: u32) -> u32 {
-    match month {
-        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-        4 | 6 | 9 | 11 => 30,
-        2 => {
-            if (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 {
-                29
-            } else {
-                28
-            }
-        }
-        _ => 30,
     }
 }
 

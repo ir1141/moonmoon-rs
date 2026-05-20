@@ -172,42 +172,6 @@
   margin: 0 -2px;
 }
 
-.search-bar {
-  position: relative;
-}
-.search-toggle {
-  display: none;
-}
-.search-bar input {
-  font-family: var(--font-body);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 9px 16px 9px 40px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 400;
-  width: 260px;
-  outline: none;
-  transition: all 0.25s;
-}
-.search-bar input::placeholder {
-  color: var(--text-muted);
-}
-.search-bar input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
-  background: var(--bg-card);
-}
-.search-bar svg {
-  position: absolute;
-  left: 13px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-dim);
-  pointer-events: none;
-}
-
 @keyframes headerFadeIn {
   from {
     opacity: 0;
@@ -245,9 +209,6 @@
     letter-spacing: 1px;
     padding: 9px 11px;
   }
-  .search-bar input {
-    width: 180px;
-  }
   /* view_title (subtitle + its sep) competes for space at this width —
      hide it; the page itself still shows the heading inside .content. */
   .header > .subtitle,
@@ -272,30 +233,6 @@
   .header-nav {
     order: 3;
     flex: 1 1 100%;
-  }
-  .search-bar {
-    display: none;
-  }
-  .search-toggle {
-    display: inline-flex;
-  }
-  .search-sep {
-    display: none;
-  }
-  .header-right.search-open {
-    flex-wrap: nowrap;
-  }
-  .header-right.search-open .search-bar {
-    display: block;
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 16px;
-    right: 16px;
-    z-index: 101;
-    filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.35));
-  }
-  .search-bar input {
-    width: 100%;
   }
   .nav-link {
     padding: 8px 10px;

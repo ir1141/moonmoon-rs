@@ -87,6 +87,11 @@ pub(crate) struct FilteredVodDisplays {
     pub metadata: ListMetadata,
 }
 
+pub(crate) struct FilteredGames {
+    pub games: Vec<Game>,
+    pub metadata: ListMetadata,
+}
+
 pub(crate) struct ChapterSegment {
     pub name: String,
     pub width_pct: f64,
@@ -199,20 +204,48 @@ pub(crate) fn render_template(tmpl: &impl Template) -> axum::response::Response 
 // ─── Helpers ───
 
 pub(crate) fn filter_games(games: &[Game], params: &ListQuery) -> Vec<Game> {
-    let mut filtered: Vec<Game> = if let Some(ref search) = params.search {
-        let search_lower = search.to_lowercase();
-        if !search_lower.is_empty() {
-            games
-                .iter()
-                .filter(|g| g.name.to_lowercase().contains(&search_lower))
-                .cloned()
-                .collect()
-        } else {
-            games.to_vec()
-        }
+    filter_and_sort_games(games.to_vec(), params)
+}
+
+pub(crate) fn filter_games_with_metadata(
+    games: &[Game],
+    vods: &[Vod],
+    params: &ListQuery,
+    clear_base_url: &str,
+) -> FilteredGames {
+    let unfiltered_count = games.len();
+    let filtered = if list_date_filter_is_active(params) {
+        let matching_vods: Vec<Vod> = vods
+            .iter()
+            .filter(|vod| vod_matches_date_filter(vod, params))
+            .cloned()
+            .collect();
+        filter_and_sort_games(crate::vods::build_games(&matching_vods), params)
     } else {
-        games.to_vec()
+        filter_games(games, params)
     };
+
+    let filtered_count = filtered.len();
+    let metadata = build_list_metadata_for_kind(
+        unfiltered_count,
+        filtered_count,
+        params,
+        clear_base_url,
+        "game",
+        "games",
+    );
+
+    FilteredGames {
+        games: filtered,
+        metadata,
+    }
+}
+
+fn filter_and_sort_games(mut filtered: Vec<Game>, params: &ListQuery) -> Vec<Game> {
+    if let Some(search) = normalized_filter_value(&params.search) {
+        let search_lower = search.to_lowercase();
+        filtered.retain(|g| g.name.to_lowercase().contains(&search_lower));
+    }
 
     let sort = params.sort.as_deref().unwrap_or("most");
     match sort {
@@ -223,6 +256,29 @@ pub(crate) fn filter_games(games: &[Game], params: &ListQuery) -> Vec<Game> {
     }
 
     filtered
+}
+
+fn list_date_filter_is_active(params: &ListQuery) -> bool {
+    normalized_filter_value(&params.from).is_some() || normalized_filter_value(&params.to).is_some()
+}
+
+fn vod_matches_date_filter(vod: &Vod, params: &ListQuery) -> bool {
+    let stream_time = vod_stream_time(vod);
+    let date = stream_time.get(..10).unwrap_or(stream_time);
+
+    if let Some(from) = date_filter_lower_bound(&params.from)
+        && date < from.as_str()
+    {
+        return false;
+    }
+
+    if let Some(to) = date_filter_upper_bound(&params.to)
+        && date > to.as_str()
+    {
+        return false;
+    }
+
+    true
 }
 
 pub(crate) fn filter_vod_displays_with_metadata(
@@ -257,11 +313,11 @@ pub(crate) fn filter_vod_displays_with_metadata(
         });
     }
 
-    if let Some(from) = normalized_filter_value(&params.from) {
+    if let Some(from) = date_filter_lower_bound(&params.from) {
         displays.retain(|v| vod_display_date(v) >= from.as_str());
     }
 
-    if let Some(to) = normalized_filter_value(&params.to) {
+    if let Some(to) = date_filter_upper_bound(&params.to) {
         displays.retain(|v| vod_display_date(v) <= to.as_str());
     }
 
@@ -316,11 +372,65 @@ fn normalized_filter_value(value: &Option<String>) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
+fn date_filter_lower_bound(value: &Option<String>) -> Option<String> {
+    normalized_date_filter_value(value, false)
+}
+
+fn date_filter_upper_bound(value: &Option<String>) -> Option<String> {
+    normalized_date_filter_value(value, true)
+}
+
+fn normalized_date_filter_value(value: &Option<String>, upper_bound: bool) -> Option<String> {
+    let value = normalized_filter_value(value)?;
+    legacy_month_filter_bound(&value, upper_bound).or(Some(value))
+}
+
+fn legacy_month_filter_bound(value: &str, upper_bound: bool) -> Option<String> {
+    let bytes = value.as_bytes();
+    if bytes.len() != 7 || bytes[4] != b'-' {
+        return None;
+    }
+    if !bytes[..4].iter().all(u8::is_ascii_digit) || !bytes[5..].iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+
+    let year: i32 = value[..4].parse().ok()?;
+    let month: u32 = value[5..].parse().ok()?;
+    if !(1..=12).contains(&month) {
+        return None;
+    }
+
+    let day = if upper_bound {
+        days_in_month(year, month)
+    } else {
+        1
+    };
+    Some(format!("{year:04}-{month:02}-{day:02}"))
+}
+
 fn build_list_metadata(
     unfiltered_count: usize,
     filtered_count: usize,
     params: &ListQuery,
     clear_base_url: &str,
+) -> ListMetadata {
+    build_list_metadata_for_kind(
+        unfiltered_count,
+        filtered_count,
+        params,
+        clear_base_url,
+        "stream",
+        "streams",
+    )
+}
+
+fn build_list_metadata_for_kind(
+    unfiltered_count: usize,
+    filtered_count: usize,
+    params: &ListQuery,
+    clear_base_url: &str,
+    singular: &str,
+    plural: &str,
 ) -> ListMetadata {
     let search = normalized_filter_value(&params.search);
     let from = normalized_filter_value(&params.from);
@@ -350,7 +460,7 @@ fn build_list_metadata(
     }
 
     let is_filtered = !active_filters.is_empty();
-    let result_label = stream_count_label(filtered_count);
+    let result_label = count_label(filtered_count, singular, plural);
     let clear_url = build_clear_url(clear_base_url, params);
 
     ListMetadata {
@@ -363,8 +473,8 @@ fn build_list_metadata(
     }
 }
 
-fn stream_count_label(count: usize) -> String {
-    let noun = if count == 1 { "stream" } else { "streams" };
+fn count_label(count: usize, singular: &str, plural: &str) -> String {
+    let noun = if count == 1 { singular } else { plural };
     format!("{count} {noun}")
 }
 
@@ -501,6 +611,21 @@ fn month_abbr(month_part: &str) -> &str {
         "11" => "Nov",
         "12" => "Dec",
         other => other,
+    }
+}
+
+pub(crate) fn days_in_month(year: i32, month: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            if (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 {
+                29
+            } else {
+                28
+            }
+        }
+        _ => 30,
     }
 }
 
@@ -1146,6 +1271,100 @@ mod tests {
         assert_eq!(filtered_count, 40);
         assert_eq!(paged.len(), VOD_BATCH_SIZE);
         assert!(has_more);
+    }
+
+    #[test]
+    fn games_date_filter_recomputes_visible_counts() {
+        let vods = vec![
+            make_vod("elden-1", "2026-05-20T10:00:00Z", &["Elden Ring"]),
+            make_vod("elden-2", "2026-05-20T11:00:00Z", &["Elden Ring"]),
+            make_vod("hitman-in-range", "2026-05-20T12:00:00Z", &["HITMAN"]),
+            make_vod("hitman-old-1", "2026-05-18T12:00:00Z", &["HITMAN"]),
+            make_vod("hitman-old-2", "2026-05-17T12:00:00Z", &["HITMAN"]),
+            make_vod("terraria-old", "2026-05-18T12:00:00Z", &["Terraria"]),
+        ];
+        let all_games = crate::vods::build_games(&vods);
+        let params = ListQuery {
+            search: None,
+            sort: Some("most".into()),
+            from: Some("2026-05-20".into()),
+            to: Some("2026-05-20".into()),
+            page: None,
+        };
+
+        let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games");
+
+        assert_eq!(filtered.metadata.unfiltered_count, 3);
+        assert_eq!(filtered.metadata.filtered_count, 2);
+        assert_eq!(
+            filtered
+                .games
+                .iter()
+                .map(|game| (game.name.as_str(), game.vod_count))
+                .collect::<Vec<_>>(),
+            vec![("Elden Ring", 2), ("HITMAN", 1)]
+        );
+    }
+
+    #[test]
+    fn games_search_and_date_filters_compose() {
+        let vods = vec![
+            make_vod("alpha-quest-1", "2026-05-20T10:00:00Z", &["Alpha Quest"]),
+            make_vod("alpha-quest-2", "2026-05-20T11:00:00Z", &["Alpha Quest"]),
+            make_vod("alpha-zero", "2026-05-20T12:00:00Z", &["Alpha Zero"]),
+            make_vod("alpha-old", "2026-05-18T12:00:00Z", &["Alpha Classic"]),
+            make_vod("beta", "2026-05-20T13:00:00Z", &["Beta Quest"]),
+        ];
+        let all_games = crate::vods::build_games(&vods);
+        let params = ListQuery {
+            search: Some("alpha".into()),
+            sort: Some("fewest".into()),
+            from: Some("2026-05-20".into()),
+            to: Some("2026-05-20".into()),
+            page: None,
+        };
+
+        let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games");
+
+        assert_eq!(filtered.metadata.unfiltered_count, 4);
+        assert_eq!(filtered.metadata.filtered_count, 2);
+        assert_eq!(
+            filtered
+                .games
+                .iter()
+                .map(|game| (game.name.as_str(), game.vod_count))
+                .collect::<Vec<_>>(),
+            vec![("Alpha Zero", 1), ("Alpha Quest", 2)]
+        );
+    }
+
+    #[test]
+    fn games_date_filter_accepts_legacy_month_values() {
+        let vods = vec![
+            make_vod("may-1", "2026-05-01T00:00:00Z", &["HITMAN"]),
+            make_vod("may-2", "2026-05-31T23:59:59Z", &["HITMAN"]),
+            make_vod("june", "2026-06-01T00:00:00Z", &["Elden Ring"]),
+        ];
+        let all_games = crate::vods::build_games(&vods);
+        let params = ListQuery {
+            search: None,
+            sort: Some("most".into()),
+            from: Some("2026-05".into()),
+            to: Some("2026-05".into()),
+            page: None,
+        };
+
+        let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games");
+
+        assert_eq!(
+            filtered
+                .games
+                .iter()
+                .map(|game| (game.name.as_str(), game.vod_count))
+                .collect::<Vec<_>>(),
+            vec![("HITMAN", 2)]
+        );
+        assert_eq!(filtered.metadata.filtered_count, 1);
     }
 
     #[test]

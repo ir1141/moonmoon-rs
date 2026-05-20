@@ -2,18 +2,7 @@
 
 {% block title %}Games Browser{% endblock %}
 
-{% block search %}
-<span class="header-sep search-sep" aria-hidden="true"></span>
-<button class="icon-btn search-toggle" type="button" aria-label="Search games" aria-expanded="false" title="Search games">
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-</button>
-<div class="search-bar">
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-  <input type="search" name="search" aria-label="Search games" placeholder="Search games..."
-         hx-get="/games" hx-trigger="input changed delay:300ms"
-         hx-target="#games-grid" hx-swap="innerHTML">
-</div>
-{% endblock %}
+{% block search %}{% endblock %}
 
 {% block content %}
 <section id="continue-watching" class="continue-shelf" hidden aria-labelledby="continue-title">
@@ -44,36 +33,62 @@
 </section>
 <script type="module" src="/static/continue-watching.js" nonce="{{ nonce }}"></script>
 <div class="games-view">
-  <div class="games-toolbar">
-    <div class="stats">{{ games.len() }} games</div>
-    <div class="games-filters">
-      <select name="sort" class="toolbar-select"
-              hx-get="/games" hx-trigger="change"
-              hx-target="#games-grid" hx-swap="innerHTML"
-              hx-include="[name='search'], [name='from'], [name='to']">
-        <option value="most" {% if sort == "most" %}selected{% endif %}>Most streams</option>
-        <option value="fewest" {% if sort == "fewest" %}selected{% endif %}>Fewest streams</option>
-        <option value="az" {% if sort == "az" %}selected{% endif %}>A - Z</option>
-        <option value="za" {% if sort == "za" %}selected{% endif %}>Z - A</option>
-      </select>
-      <div class="toolbar-dates">
-        <span class="toolbar-label">From</span>
-        <input type="month" name="from" class="toolbar-date"
-               hx-get="/games" hx-trigger="change"
-               hx-target="#games-grid" hx-swap="innerHTML"
-               hx-include="[name='search'], [name='sort'], [name='to']"
-               {% if let Some(f) = from %}value="{{ f }}"{% endif %}>
-        <span class="toolbar-label">To</span>
-        <input type="month" name="to" class="toolbar-date"
-               hx-get="/games" hx-trigger="change"
-               hx-target="#games-grid" hx-swap="innerHTML"
-               hx-include="[name='search'], [name='sort'], [name='from']"
-               {% if let Some(t) = to %}value="{{ t }}"{% endif %}>
-      </div>
+  <form id="games-filters" class="games-toolbar" action="/games" method="get" data-list-filters>
+    <input type="search" name="search" class="toolbar-search" placeholder="Search games..."
+           aria-label="Search games"
+           hx-get="/games" hx-trigger="input changed delay:300ms"
+           hx-select="#games-results" hx-target="#games-results" hx-swap="outerHTML"
+           hx-push-url="true" hx-include="#games-filters" hx-indicator="#games-loading"
+           {% if let Some(s) = search %}value="{{ s }}"{% endif %}>
+    <select name="sort" class="toolbar-select"
+            aria-label="Sort games"
+            hx-get="/games" hx-trigger="change"
+            hx-select="#games-results" hx-target="#games-results" hx-swap="outerHTML"
+            hx-push-url="true" hx-include="#games-filters" hx-indicator="#games-loading">
+      <option value="most" {% if sort == "most" %}selected{% endif %}>Most streams</option>
+      <option value="fewest" {% if sort == "fewest" %}selected{% endif %}>Fewest streams</option>
+      <option value="az" {% if sort == "az" %}selected{% endif %}>A - Z</option>
+      <option value="za" {% if sort == "za" %}selected{% endif %}>Z - A</option>
+    </select>
+    <div class="toolbar-dates">
+      <span class="toolbar-label">From</span>
+      <input type="date" name="from" class="toolbar-date" aria-label="Filter from date"
+             hx-get="/games" hx-trigger="change"
+             hx-select="#games-results" hx-target="#games-results" hx-swap="outerHTML"
+             hx-push-url="true" hx-include="#games-filters" hx-indicator="#games-loading"
+             {% if let Some(f) = from %}value="{{ f }}"{% endif %}>
+      <span class="toolbar-label">To</span>
+      <input type="date" name="to" class="toolbar-date" aria-label="Filter to date"
+             hx-get="/games" hx-trigger="change"
+             hx-select="#games-results" hx-target="#games-results" hx-swap="outerHTML"
+             hx-push-url="true" hx-include="#games-filters" hx-indicator="#games-loading"
+             {% if let Some(t) = to %}value="{{ t }}"{% endif %}>
     </div>
-  </div>
-  <div id="games-grid" class="games-grid">
-    {% include "games_grid.html" %}
-  </div>
+  </form>
+
+  <section id="games-results" class="games-results" data-list-region aria-busy="false">
+    <div class="list-summary" aria-live="polite" data-filtered-count="{{ metadata.filtered_count }}">
+      <div class="stats list-count">
+        {{ metadata.result_label }}
+        {% if metadata.is_filtered %}
+        <span class="list-count-total">of {{ metadata.unfiltered_count }} archived</span>
+        {% else %}
+        <span class="list-count-total">archived</span>
+        {% endif %}
+      </div>
+      {% if metadata.is_filtered %}
+      <div class="active-filters" aria-label="Active filters">
+        {% for filter in metadata.active_filters %}
+        <span class="filter-chip">{{ filter.label }}</span>
+        {% endfor %}
+        <a class="filter-clear" href="{{ metadata.clear_url }}">Clear filters</a>
+      </div>
+      {% endif %}
+    </div>
+    <div id="games-loading" class="list-loading" role="status" aria-live="polite">Loading games...</div>
+    <div id="games-grid" class="games-grid">
+      {% include "games_grid.html" %}
+    </div>
+  </section>
 </div>
 {% endblock %}

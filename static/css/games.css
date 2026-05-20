@@ -119,6 +119,12 @@ a.game-card {
   color: inherit;
   display: block;
 }
+
+a.game-card:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 3px;
+}
+
 .game-card {
   position: relative;
   background: var(--bg-card);

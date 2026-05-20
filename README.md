@@ -55,7 +55,8 @@ bun run check:js                             # TypeScript check for browser JS
 | Path | Description |
 | --- | --- |
 | `/` | Games grid (default landing) |
-| `/games` | htmx partial for the games grid (paginated) |
+| `/games` | Games grid |
+| `/games/grid` | htmx partial for the games grid (paginated) |
 | `/game/{name}` | VODs for a single game, grouped by playing period |
 | `/game/{name}/vods` | htmx partial for a game's VOD grid |
 | `/streams` | All VODs |
@@ -81,7 +82,7 @@ src/
 ├── sync_store.rs        # In-memory sync blob store, atomic JSON persistence
 └── handlers/
     ├── mod.rs           # Shared helpers: VodDisplay, pagination, filters, date helpers
-    ├── games.rs         # /, /games
+    ├── games.rs         # /, /games, /games/grid
     ├── vods.rs          # /game/{name}, /streams
     ├── watch.rs         # /watch/{id}, /random, /api/vod, /api/next
     ├── calendar.rs      # /calendar
@@ -104,7 +105,7 @@ static/
 
 ### Templates
 
-Each list view has two templates: a full-page one (e.g. `games.html`) and a grid-only partial (`games_grid.html`) that htmx swaps in for pagination and search. Resume state lives in `localStorage` (`moonmoon_resume`) and is reapplied after every `htmx:afterSwap`; player-only preferences use additional local keys such as `moonmoon_part_durations`, `moonmoon_chat_size`, and `moonmoon_theatre`. Templates are compiled into the binary by Askama, so edits to `templates/*.html` require a rebuild.
+Each list view has two templates: a full-page one (e.g. `games.html`) and a grid-only partial (`games_grid.html`). htmx swaps selected full-page result regions for filters and grid-only partials for pagination. Resume state lives in `localStorage` (`moonmoon_resume`) and is reapplied after every `htmx:afterSwap`; player-only preferences use additional local keys such as `moonmoon_part_durations`, `moonmoon_chat_size`, and `moonmoon_theatre`. Templates are compiled into the binary by Askama, so edits to `templates/*.html` require a rebuild.
 
 ### Cross-device sync
 

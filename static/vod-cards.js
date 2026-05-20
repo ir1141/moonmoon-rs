@@ -83,73 +83,8 @@ function applyFromEvent(event) {
   applyVodCardState((event.detail && event.detail.target) || document);
 }
 
-function listRegionFromEvent(event) {
-  const detailTarget = event.detail && event.detail.target;
-  const target =
-    detailTarget instanceof Element
-      ? detailTarget
-      : event.target instanceof Element
-        ? event.target
-        : null;
-
-  if (!target) return null;
-  return target.matches("[data-list-region]")
-    ? target
-    : target.closest("[data-list-region]");
-}
-
-function setListBusyFromEvent(event) {
-  const region = listRegionFromEvent(event);
-  if (region) region.setAttribute("aria-busy", "true");
-}
-
-function clearListBusy() {
-  document
-    .querySelectorAll('[data-list-region][aria-busy="true"]')
-    .forEach((region) => {
-      region.setAttribute("aria-busy", "false");
-    });
-}
-
-function parameterIsEmpty(value) {
-  if (Array.isArray(value)) return value.every(parameterIsEmpty);
-  return value == null || String(value).trim() === "";
-}
-
-function deleteParameter(parameters, key) {
-  if (parameters instanceof FormData) {
-    const values = parameters.getAll(key);
-    if (!values.length || values.every(parameterIsEmpty)) parameters.delete(key);
-    return;
-  }
-
-  if (
-    parameters &&
-    Object.prototype.hasOwnProperty.call(parameters, key) &&
-    parameterIsEmpty(parameters[key])
-  ) {
-    delete parameters[key];
-  }
-}
-
-function pruneEmptyListParameters(event) {
-  const detail = event.detail || {};
-  const elt = detail.elt instanceof Element ? detail.elt : null;
-  const form = elt && (elt.matches("#vod-filters") ? elt : elt.closest("#vod-filters"));
-  if (!form) return;
-
-  ["search", "from", "to", "page"].forEach((key) => {
-    deleteParameter(detail.parameters, key);
-  });
-}
-
 applyVodCardState();
 
-document.body.addEventListener("htmx:configRequest", pruneEmptyListParameters);
-document.body.addEventListener("htmx:beforeRequest", setListBusyFromEvent);
-document.body.addEventListener("htmx:afterSettle", clearListBusy);
-document.body.addEventListener("htmx:responseError", clearListBusy);
-document.body.addEventListener("htmx:sendError", clearListBusy);
 document.body.addEventListener("htmx:afterSwap", applyFromEvent);
 window.addEventListener("moonmoon:resumeChanged", () => applyVodCardState());
 window.addEventListener("moonmoon:watchedChanged", () => applyVodCardState());

@@ -5,7 +5,7 @@
 {% block search %}{% endblock %}
 
 {% block content %}
-<form id="vod-filters" class="vod-toolbar" action="/streams" method="get">
+<form id="vod-filters" class="vod-toolbar" action="/streams" method="get" data-list-filters>
   <input type="search" name="search" class="toolbar-search" placeholder="Search streams..."
          aria-label="Search streams"
          hx-get="/streams" hx-trigger="input changed delay:300ms"

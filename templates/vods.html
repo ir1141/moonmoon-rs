@@ -22,7 +22,7 @@
   </div>
 </div>
 
-<form id="vod-filters" class="vod-toolbar" action="/game/{{ game_name|urlencode }}" method="get">
+<form id="vod-filters" class="vod-toolbar" action="/game/{{ game_name|urlencode }}" method="get" data-list-filters>
   <input type="search" name="search" class="toolbar-search" placeholder="Search streams..."
          aria-label="Search {{ game_name }} streams"
          hx-get="/game/{{ game_name|urlencode }}" hx-trigger="input changed delay:300ms"

@@ -203,9 +203,142 @@ a {
   letter-spacing: 0.3px;
 }
 
+.vod-grid > .no-results,
+.games-grid > .no-results {
+  grid-column: 1 / -1;
+}
+
 .load-sentinel {
   height: 1px;
   grid-column: 1 / -1;
+}
+
+/* ─── List State ─── */
+[data-list-region] {
+  position: relative;
+}
+
+.list-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+  min-height: 32px;
+}
+
+.list-count {
+  margin-bottom: 0;
+  padding-left: 0;
+}
+
+.list-count-total {
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.2px;
+  margin-left: 6px;
+  text-transform: none;
+}
+
+.active-filters {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-chip,
+.filter-clear {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 7px 10px;
+}
+
+.filter-chip {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+}
+
+.filter-clear {
+  color: var(--accent-soft);
+  text-decoration: none;
+  transition:
+    border-color 0.2s,
+    color 0.2s,
+    background 0.2s;
+}
+
+.filter-clear:hover {
+  background: var(--bg-elevated);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.filter-clear:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
+}
+
+.list-loading,
+.list-error {
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 1.2px;
+  margin: -8px 0 16px;
+  text-transform: uppercase;
+}
+
+.list-loading {
+  display: none;
+  color: var(--text-muted);
+}
+
+.list-loading::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: listSpin 0.75s linear infinite;
+}
+
+.list-loading.htmx-request {
+  display: flex;
+}
+
+.list-error {
+  display: flex;
+  color: #f19a9a;
+}
+
+[data-list-region][aria-busy="true"] .vod-grid,
+[data-list-region][aria-busy="true"] .games-grid {
+  opacity: 0.72;
+}
+
+.list-end {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  padding: 18px 0 4px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+@keyframes listSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ─── Animations ─── */

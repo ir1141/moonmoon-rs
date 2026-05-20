@@ -23,8 +23,8 @@
   <link rel="stylesheet" href="/static/css/player.css">
   <link rel="stylesheet" href="/static/css/calendar.css">
   <link rel="stylesheet" href="/static/css/sync.css">
+  <script type="module" src="/static/list-feedback.js" nonce="{{ nonce }}"></script>
   <script type="module" src="/static/vod-cards.js" nonce="{{ nonce }}"></script>
-  <script type="module" src="/static/header.js" nonce="{{ nonce }}"></script>
   <script src="https://unpkg.com/htmx.org@2.0.4"
           integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
           crossorigin="anonymous"
@@ -41,7 +41,7 @@
       Moonmoon
     </a>
     <nav class="header-nav" aria-label="Primary">
-      <a href="/"         class="btn-pill nav-link{% if active_section.slug() == "games"    %} active{% endif %}"{% if active_section.slug() == "games"    %} aria-current="page"{% endif %}>Games</a>
+      <a href="/games"    class="btn-pill nav-link{% if active_section.slug() == "games"    %} active{% endif %}"{% if active_section.slug() == "games"    %} aria-current="page"{% endif %}>Games</a>
       <a href="/streams"  class="btn-pill nav-link{% if active_section.slug() == "streams"  %} active{% endif %}"{% if active_section.slug() == "streams"  %} aria-current="page"{% endif %}>Streams</a>
       <a href="/calendar" class="btn-pill nav-link{% if active_section.slug() == "calendar" %} active{% endif %}"{% if active_section.slug() == "calendar" %} aria-current="page"{% endif %}>Calendar</a>
       <a href="/history"  class="btn-pill nav-link{% if active_section.slug() == "history"  %} active{% endif %}"{% if active_section.slug() == "history"  %} aria-current="page"{% endif %}>History</a>

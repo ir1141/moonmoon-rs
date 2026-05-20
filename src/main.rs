@@ -124,7 +124,8 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(handlers::games_page))
-        .route("/games", get(handlers::games_grid))
+        .route("/games", get(handlers::games_page))
+        .route("/games/grid", get(handlers::games_grid))
         .route("/game/{name}", get(handlers::game_vods_page))
         .route("/game/{name}/vods", get(handlers::game_vods_grid))
         .route("/streams", get(handlers::all_streams_page))
