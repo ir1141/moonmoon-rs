@@ -30,7 +30,17 @@ function applyResumeState(card, resumeStore) {
   const duration = Number(card.dataset.durationSecs);
   const resume = resumeStore[id];
   const fill = card.querySelector(".resume-bar-fill");
-  const time = Number(resume && resume.time);
+  const historyState = card.dataset.historyState;
+  const time =
+    historyState === "in_progress"
+      ? Number(card.dataset.progressSeconds)
+      : Number(resume && resume.time);
+
+  if (historyState === "watched") {
+    card.classList.remove("has-resume");
+    if (fill) fill.style.width = "0%";
+    return;
+  }
 
   if (
     Number.isFinite(time) &&
@@ -49,7 +59,13 @@ function applyResumeState(card, resumeStore) {
 }
 
 function applyWatchedState(card, watchedStore) {
-  const watched = hasWatchedVod(watchedStore, card.dataset.vodId);
+  const historyState = card.dataset.historyState;
+  const watched =
+    historyState === "watched"
+      ? true
+      : historyState === "in_progress"
+        ? false
+        : hasWatchedVod(watchedStore, card.dataset.vodId);
   const existingBadge = card.querySelector(".watched-badge");
 
   card.classList.toggle("watched", watched);

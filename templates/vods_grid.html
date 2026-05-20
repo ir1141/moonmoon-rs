@@ -2,7 +2,7 @@
 {% if let Some(header) = vod.period_header %}
 <div class="vod-period-header">{{ header }}</div>
 {% endif %}
-<div class="vod-card{% if show_game_tags && !vod.chapter_segments.is_empty() %} has-chapters{% endif %}" data-vod-id="{{ vod.id }}" data-duration-secs="{{ vod.duration_seconds }}">
+<div class="vod-card{% if show_game_tags && !vod.chapter_segments.is_empty() %} has-chapters{% endif %}" data-vod-id="{{ vod.id }}" data-duration-secs="{{ vod.duration_seconds }}"{% if let Some(history_state) = vod.history_state %} data-history-state="{{ history_state }}"{% endif %}{% if let Some(progress) = vod.progress_seconds %} data-progress-seconds="{{ progress }}"{% endif %}>
   <div class="thumb-wrap">
     <a href="{{ vod.watch_url }}" class="thumb-link" aria-label="{{ vod.display_title }}">
       {% if let Some(thumb) = vod.thumbnail_url %}
@@ -37,6 +37,9 @@
     <div class="vod-title">{{ vod.display_title }}</div>
     {% if let Some(label) = vod.match_label %}
     <div class="vod-match-label">{{ label }}</div>
+    {% endif %}
+    {% if let Some(label) = vod.status_label %}
+    <div class="vod-status-label">{{ label }}</div>
     {% endif %}
   </a>
 </div>

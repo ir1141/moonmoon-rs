@@ -1,30 +1,12 @@
+import {
+  buildHistoryEntries,
+  readJsonStore,
+  serializeHistoryRequest,
+} from "./lib/history-state.js";
 import { readHistorySort, writeHistorySort } from "./lib/history-sort.js";
 
 const RESUME_KEY = "moonmoon_resume";
-
-function readResumeStore() {
-  try {
-    return JSON.parse(localStorage.getItem(RESUME_KEY)) || {};
-  } catch (error) {
-    return {};
-  }
-}
-
-function buildHistoryEntries(store) {
-  const entries = [];
-
-  for (const id in store) {
-    if (store[id] && store[id].updated) {
-      entries.push({
-        id,
-        updated: store[id].updated,
-        time: Math.floor(store[id].time || 0),
-      });
-    }
-  }
-
-  return entries.sort((a, b) => b.updated - a.updated);
-}
+const WATCHED_KEY = "moonmoon_watched";
 
 function showMessage(grid, text) {
   grid.replaceChildren();
@@ -44,28 +26,28 @@ function initHistoryPage() {
 
   sortSel.value = readHistorySort();
 
-  const entries = buildHistoryEntries(readResumeStore());
+  const entries = buildHistoryEntries(
+    readJsonStore(localStorage, RESUME_KEY),
+    readJsonStore(localStorage, WATCHED_KEY),
+  );
 
   if (entries.length === 0) {
     stats.textContent = "No watch history";
-    showMessage(grid, "No streams watched yet");
+    showMessage(grid, "No watch history");
     return;
   }
 
-  stats.textContent = `${entries.length} watched`;
-
-  const ids = entries.map((entry) => entry.id).join(",");
-  const times = entries.map((entry) => entry.time).join(",");
+  stats.textContent =
+    entries.length === 1 ? "1 history entry" : `${entries.length} history entries`;
 
   function load() {
-    const params = new URLSearchParams({
-      ids,
-      times,
-      sort: sortSel.value,
-    });
+    const params = serializeHistoryRequest(entries, sortSel.value);
 
     fetch(`/history/vods?${params.toString()}`)
-      .then((response) => response.text())
+      .then((response) => {
+        if (!response.ok) throw new Error("history fetch failed");
+        return response.text();
+      })
       .then((html) => {
         grid.replaceChildren();
         const temp = document.createElement("template");
@@ -75,6 +57,9 @@ function initHistoryPage() {
           detail: { target: grid },
         });
         document.body.dispatchEvent(event);
+        if (!grid.querySelector(".vod-card")) {
+          showMessage(grid, "No matching archived streams found");
+        }
       })
       .catch(() => {
         showMessage(grid, "Failed to load history");
