@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { nextSearchOverlayState } from "../static/lib/header-search.js";
+import {
+  nextSearchOverlayState,
+  shouldLockSearchOverlayScroll,
+} from "../static/lib/header-search.js";
 
 describe("nextSearchOverlayState", () => {
   test("open shows the overlay and requests input focus", () => {
@@ -51,5 +54,17 @@ describe("nextSearchOverlayState", () => {
         { type: "backdrop", onBackdrop: false },
       ),
     ).toEqual({ open: true, query: "moon", focusInput: false });
+  });
+
+  test("body scroll lock applies only while an overlay is open on mobile", () => {
+    expect(shouldLockSearchOverlayScroll({ open: true, mobile: true })).toBe(
+      true,
+    );
+    expect(shouldLockSearchOverlayScroll({ open: true, mobile: false })).toBe(
+      false,
+    );
+    expect(shouldLockSearchOverlayScroll({ open: false, mobile: true })).toBe(
+      false,
+    );
   });
 });

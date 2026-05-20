@@ -82,6 +82,40 @@ pub(crate) struct ListMetadata {
     pub result_label: String,
 }
 
+pub(crate) struct SortOption {
+    pub value: &'static str,
+    pub label: &'static str,
+    pub selected: bool,
+}
+
+pub(crate) struct ListFilterConfig {
+    pub form_id: &'static str,
+    pub toolbar_class: &'static str,
+    pub action: String,
+    pub title: &'static str,
+    pub search_placeholder: &'static str,
+    pub search_label: String,
+    pub sort_label: &'static str,
+    pub hx_get: String,
+    pub results_id: &'static str,
+    pub loading_id: &'static str,
+    pub sort_options: Vec<SortOption>,
+}
+
+pub(crate) fn list_sort_options(
+    selected: &str,
+    options: &[(&'static str, &'static str)],
+) -> Vec<SortOption> {
+    options
+        .iter()
+        .map(|(value, label)| SortOption {
+            value,
+            label,
+            selected: *value == selected,
+        })
+        .collect()
+}
+
 pub(crate) struct FilteredVodDisplays {
     pub vods: Vec<VodDisplay>,
     pub metadata: ListMetadata,

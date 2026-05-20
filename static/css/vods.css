@@ -407,32 +407,7 @@
   height: 8px;
   border-radius: 999px;
   flex: 0 0 auto;
-  background: var(--accent);
-}
-
-.chapter-link-marker.color-0 {
-  background-color: #ef4d5b;
-}
-.chapter-link-marker.color-1 {
-  background-color: #f08a3a;
-}
-.chapter-link-marker.color-2 {
-  background-color: #e8c247;
-}
-.chapter-link-marker.color-3 {
-  background-color: #6dcf4a;
-}
-.chapter-link-marker.color-4 {
-  background-color: #38c79a;
-}
-.chapter-link-marker.color-5 {
-  background-color: #2fb3d8;
-}
-.chapter-link-marker.color-6 {
-  background-color: #4d8ee8;
-}
-.chapter-link-marker.color-7 {
-  background-color: #d650b0;
+  background: var(--chapter-color, var(--accent));
 }
 
 .chapter-link-name {
@@ -467,7 +442,7 @@
   position: relative;
   height: 100%;
   min-width: 2px;
-  background-color: var(--accent);
+  background-color: var(--chapter-color, var(--accent));
   background-image: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.08),
@@ -475,29 +450,29 @@
   );
   transition: filter 0.15s ease;
 }
-.chapter-seg.color-0 {
-  background-color: #ef4d5b;
+:is(.chapter-seg, .chapter-link-marker).color-0 {
+  --chapter-color: #ef4d5b;
 }
-.chapter-seg.color-1 {
-  background-color: #f08a3a;
+:is(.chapter-seg, .chapter-link-marker).color-1 {
+  --chapter-color: #f08a3a;
 }
-.chapter-seg.color-2 {
-  background-color: #e8c247;
+:is(.chapter-seg, .chapter-link-marker).color-2 {
+  --chapter-color: #e8c247;
 }
-.chapter-seg.color-3 {
-  background-color: #6dcf4a;
+:is(.chapter-seg, .chapter-link-marker).color-3 {
+  --chapter-color: #6dcf4a;
 }
-.chapter-seg.color-4 {
-  background-color: #38c79a;
+:is(.chapter-seg, .chapter-link-marker).color-4 {
+  --chapter-color: #38c79a;
 }
-.chapter-seg.color-5 {
-  background-color: #2fb3d8;
+:is(.chapter-seg, .chapter-link-marker).color-5 {
+  --chapter-color: #2fb3d8;
 }
-.chapter-seg.color-6 {
-  background-color: #4d8ee8;
+:is(.chapter-seg, .chapter-link-marker).color-6 {
+  --chapter-color: #4d8ee8;
 }
-.chapter-seg.color-7 {
-  background-color: #d650b0;
+:is(.chapter-seg, .chapter-link-marker).color-7 {
+  --chapter-color: #d650b0;
 }
 
 .chapter-seg-tip {

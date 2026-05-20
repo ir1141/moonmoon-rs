@@ -1,9 +1,18 @@
-import { nextSearchOverlayState } from "./lib/header-search.js";
+import {
+  nextSearchOverlayState,
+  shouldLockSearchOverlayScroll,
+} from "./lib/header-search.js";
+
+const searchOverlayMedia = window.matchMedia("(max-width: 768px)");
 
 function updateBodyOverlayState() {
+  const open = !!document.querySelector("[data-search-overlay].is-search-open");
   document.body.classList.toggle(
     "search-overlay-open",
-    !!document.querySelector("[data-search-overlay].is-search-open"),
+    shouldLockSearchOverlayScroll({
+      open,
+      mobile: searchOverlayMedia.matches,
+    }),
   );
 }
 
@@ -72,3 +81,9 @@ function initSearchOverlay(form) {
 document
   .querySelectorAll("[data-search-overlay]")
   .forEach((form) => initSearchOverlay(form));
+
+if (typeof searchOverlayMedia.addEventListener === "function") {
+  searchOverlayMedia.addEventListener("change", updateBodyOverlayState);
+} else if (typeof searchOverlayMedia.addListener === "function") {
+  searchOverlayMedia.addListener(updateBodyOverlayState);
+}

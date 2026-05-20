@@ -1,6 +1,6 @@
 use super::{
-    GAME_BATCH_SIZE, ListMetadata, ListQuery, Section, filter_games_with_metadata,
-    paginate_with_nav, render_template,
+    GAME_BATCH_SIZE, ListFilterConfig, ListMetadata, ListQuery, Section,
+    filter_games_with_metadata, list_sort_options, paginate_with_nav, render_template,
 };
 use crate::SharedState;
 use crate::middleware::CspNonce;
@@ -15,8 +15,8 @@ use std::sync::Arc;
 struct GamesPageTemplate {
     games: Vec<Game>,
     metadata: ListMetadata,
+    filter: ListFilterConfig,
     search: Option<String>,
-    sort: String,
     from: Option<String>,
     to: Option<String>,
     has_more: bool,
@@ -74,8 +74,28 @@ pub async fn games_page(
     render_template(&GamesPageTemplate {
         games: prepared.games,
         metadata: prepared.metadata,
+        filter: ListFilterConfig {
+            form_id: "games-filters",
+            toolbar_class: "games-toolbar",
+            action: "/games".to_string(),
+            title: "Filter games",
+            search_placeholder: "Search games...",
+            search_label: "Search games".to_string(),
+            sort_label: "Sort games",
+            hx_get: "/games".to_string(),
+            results_id: "games-results",
+            loading_id: "games-loading",
+            sort_options: list_sort_options(
+                &sort,
+                &[
+                    ("most", "Most streams"),
+                    ("fewest", "Fewest streams"),
+                    ("az", "A - Z"),
+                    ("za", "Z - A"),
+                ],
+            ),
+        },
         search,
-        sort,
         from: params.from,
         to: params.to,
         has_more: prepared.has_more,

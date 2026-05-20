@@ -19,3 +19,7 @@ export function nextSearchOverlayState(state, action) {
       return { open: !!state.open, query, focusInput: false };
   }
 }
+
+export function shouldLockSearchOverlayScroll(state) {
+  return !!state.open && !!state.mobile;
+}

@@ -1,7 +1,7 @@
 use super::{
-    ListMetadata, ListQuery, Section, VOD_BATCH_SIZE, VodDisplay, assign_period_headers,
-    filter_vod_displays_with_metadata, find_game_image, get_chapter_start, paginate_with_nav,
-    render_template, vod_has_game,
+    ListFilterConfig, ListMetadata, ListQuery, Section, VOD_BATCH_SIZE, VodDisplay,
+    assign_period_headers, filter_vod_displays_with_metadata, find_game_image, get_chapter_start,
+    list_sort_options, paginate_with_nav, render_template, vod_has_game,
 };
 use crate::SharedState;
 use crate::middleware::CspNonce;
@@ -16,9 +16,9 @@ struct VodsPageTemplate {
     game_name: String,
     game_image: Option<String>,
     metadata: ListMetadata,
+    filter: ListFilterConfig,
     search: Option<String>,
     vods: Vec<VodDisplay>,
-    sort: String,
     from: Option<String>,
     to: Option<String>,
     has_more: bool,
@@ -43,9 +43,9 @@ struct VodsGridTemplate {
 #[template(path = "all_streams.html")]
 struct AllStreamsPageTemplate {
     metadata: ListMetadata,
+    filter: ListFilterConfig,
     search: Option<String>,
     vods: Vec<VodDisplay>,
-    sort: String,
     from: Option<String>,
     to: Option<String>,
     has_more: bool,
@@ -107,6 +107,8 @@ pub async fn game_vods_page(
     let from = params.from.clone();
     let to = params.to.clone();
     let sort = params.sort.clone().unwrap_or("newest".to_string());
+    let page_base = format!("/game/{}", urlencoding::encode(&name));
+    let game_search_label = format!("Search {name} streams");
     let prepared = prepare_game_vods(&state, &name, &params, &sort).await;
     let is_filtered = prepared.metadata.is_filtered;
 
@@ -114,9 +116,29 @@ pub async fn game_vods_page(
         game_name: name,
         game_image,
         metadata: prepared.metadata,
+        filter: ListFilterConfig {
+            form_id: "vod-filters",
+            toolbar_class: "vod-toolbar",
+            action: page_base.clone(),
+            title: "Filter streams",
+            search_placeholder: "Search streams...",
+            search_label: game_search_label,
+            sort_label: "Sort streams",
+            hx_get: page_base,
+            results_id: "vod-results",
+            loading_id: "vod-loading",
+            sort_options: list_sort_options(
+                &sort,
+                &[
+                    ("newest", "Newest First"),
+                    ("oldest", "Oldest First"),
+                    ("longest", "Longest"),
+                    ("shortest", "Shortest"),
+                ],
+            ),
+        },
         search,
         vods: prepared.vods,
-        sort,
         from,
         to,
         has_more: prepared.has_more,
@@ -176,9 +198,29 @@ pub async fn all_streams_page(
 
     render_template(&AllStreamsPageTemplate {
         metadata: prepared.metadata,
+        filter: ListFilterConfig {
+            form_id: "vod-filters",
+            toolbar_class: "vod-toolbar",
+            action: "/streams".to_string(),
+            title: "Filter streams",
+            search_placeholder: "Search streams...",
+            search_label: "Search streams".to_string(),
+            sort_label: "Sort streams",
+            hx_get: "/streams".to_string(),
+            results_id: "vod-results",
+            loading_id: "vod-loading",
+            sort_options: list_sort_options(
+                &sort,
+                &[
+                    ("newest", "Newest First"),
+                    ("oldest", "Oldest First"),
+                    ("longest", "Longest"),
+                    ("shortest", "Shortest"),
+                ],
+            ),
+        },
         search,
         vods: prepared.vods,
-        sort,
         from,
         to,
         has_more: prepared.has_more,

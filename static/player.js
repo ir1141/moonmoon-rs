@@ -22,6 +22,7 @@ import {
   chatEmptyStatusText,
   chatErrorStatusText,
   chatLoadStatusText,
+  nextPlayerFallbackState,
   playerFallbackText,
 } from "./lib/player-feedback.js";
 import { isEmoteCandidate } from "./lib/emote-heuristic.js";
@@ -391,9 +392,15 @@ var playerWrap = document.getElementById("player-wrap");
 var playerFallback = document.getElementById("player-fallback");
 var youtubePlayerElement = document.getElementById("youtube-player");
 var youtubeReady = false;
-var playerFallbackShown = false;
+var playerFallbackState = {
+  shown: false,
+  playerHidden: false,
+  reason: null,
+};
+var playerFallbackNotice = null;
 var chatRetryOffset;
 var PLAYER_INIT_TIMEOUT_MS = 8000;
+var playerInitTimeout = null;
 
 function chatNow() {
   return window.performance && typeof window.performance.now === "function"
@@ -1200,10 +1207,15 @@ function tick() {
 // ─── YouTube IFrame API ───
 
 function showPlayerFallback(reason) {
-  if (playerFallbackShown) return;
-  playerFallbackShown = true;
+  if (playerFallbackState.shown) return;
+  playerFallbackState = nextPlayerFallbackState(playerFallbackState, {
+    type: "show",
+    reason: reason,
+  });
 
-  if (youtubePlayerElement) youtubePlayerElement.hidden = true;
+  if (youtubePlayerElement) {
+    youtubePlayerElement.hidden = playerFallbackState.playerHidden;
+  }
   if (playerFallback) {
     playerFallback.textContent = playerFallbackText(reason);
     playerFallback.hidden = false;
@@ -1215,11 +1227,34 @@ function showPlayerFallback(reason) {
     notice.className = "player-fallback";
     notice.textContent = playerFallbackText(reason);
     playerWrap.appendChild(notice);
+    playerFallbackNotice = notice;
   }
+}
+
+function clearPlayerFallback() {
+  playerFallbackState = nextPlayerFallbackState(playerFallbackState, {
+    type: "player-ready",
+  });
+  if (youtubePlayerElement) youtubePlayerElement.hidden = false;
+  if (playerFallback) {
+    playerFallback.textContent = "";
+    playerFallback.hidden = true;
+  }
+  if (playerFallbackNotice) {
+    playerFallbackNotice.remove();
+    playerFallbackNotice = null;
+  }
+}
+
+function clearPlayerInitTimeout() {
+  if (!playerInitTimeout) return;
+  window.clearTimeout(playerInitTimeout);
+  playerInitTimeout = null;
 }
 
 window.onYouTubeIframeAPIReady = function () {
   youtubeReady = true;
+  clearPlayerInitTimeout();
   if (!YOUTUBE_IDS || YOUTUBE_IDS.length === 0) {
     showPlayerFallback("missing-video");
     return;
@@ -1248,7 +1283,8 @@ window.onYouTubeIframeAPIReady = function () {
 if (!YOUTUBE_IDS || YOUTUBE_IDS.length === 0) {
   showPlayerFallback("missing-video");
 } else {
-  window.setTimeout(function () {
+  playerInitTimeout = window.setTimeout(function () {
+    playerInitTimeout = null;
     if (!youtubeReady && !player) showPlayerFallback("api-failed");
   }, PLAYER_INIT_TIMEOUT_MS);
 }
@@ -1262,6 +1298,9 @@ if (typeof YT !== "undefined" && YT && typeof YT.Player === "function") {
 }
 
 function onPlayerReady() {
+  clearPlayerInitTimeout();
+  clearPlayerFallback();
+
   // Prefill partDurations from any cached real durations BEFORE any seek
   // logic runs. Without this, multi-part resumes compute global offsets
   // against the 3h MAX_PART_DURATION placeholder and chat lands on the

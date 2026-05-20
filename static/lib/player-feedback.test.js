@@ -3,6 +3,7 @@ import {
   chatEmptyStatusText,
   chatErrorStatusText,
   chatLoadStatusText,
+  nextPlayerFallbackState,
   playerFallbackText,
 } from "./player-feedback.js";
 
@@ -23,4 +24,22 @@ test("player fallback copy distinguishes missing videos and player failures", ()
     "No playable YouTube video",
   );
   expect(playerFallbackText("api-failed")).toContain("Player unavailable");
+});
+
+test("player fallback recovers when the YouTube player becomes ready late", () => {
+  const failed = nextPlayerFallbackState(
+    { shown: false, playerHidden: false, reason: null },
+    { type: "show", reason: "api-failed" },
+  );
+
+  expect(failed).toEqual({
+    shown: true,
+    playerHidden: true,
+    reason: "api-failed",
+  });
+  expect(nextPlayerFallbackState(failed, { type: "player-ready" })).toEqual({
+    shown: false,
+    playerHidden: false,
+    reason: null,
+  });
 });

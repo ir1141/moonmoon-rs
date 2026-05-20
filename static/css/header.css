@@ -192,10 +192,6 @@
   gap: 8px;
 }
 
-body.search-overlay-open {
-  overflow: hidden;
-}
-
 @keyframes headerFadeIn {
   from {
     opacity: 0;
@@ -242,6 +238,10 @@ body.search-overlay-open {
 }
 
 @media (max-width: 768px) {
+  body.search-overlay-open {
+    overflow: hidden;
+  }
+
   .header {
     padding: 12px 16px;
     flex-wrap: wrap;

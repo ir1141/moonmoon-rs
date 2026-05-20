@@ -1,0 +1,45 @@
+<button type="button" class="btn-chip toolbar-search-open" data-search-overlay-open aria-controls="{{ filter.form_id }}" aria-expanded="false">Search filters</button>
+<form id="{{ filter.form_id }}" class="{{ filter.toolbar_class }}" action="{{ filter.action }}" method="get" data-list-filters data-search-overlay>
+  <div class="toolbar-overlay-panel">
+    <div class="toolbar-mobile-actions">
+      <span>{{ filter.title }}</span>
+      <div class="toolbar-mobile-buttons">
+        <button type="button" class="btn-chip" data-search-overlay-clear>Clear</button>
+        <button type="button" class="icon-btn" data-search-overlay-close aria-label="Close search filters" title="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 6 6 18"></path><path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <input type="search" name="search" class="toolbar-search" placeholder="{{ filter.search_placeholder }}"
+           aria-label="{{ filter.search_label }}"
+           hx-get="{{ filter.hx_get }}" hx-trigger="input changed delay:300ms"
+           hx-select="#{{ filter.results_id }}" hx-target="#{{ filter.results_id }}" hx-swap="outerHTML"
+           hx-push-url="true" hx-include="#{{ filter.form_id }}" hx-indicator="#{{ filter.loading_id }}"
+           {% if let Some(s) = search %}value="{{ s }}"{% endif %}>
+    <select name="sort" class="toolbar-select"
+            aria-label="{{ filter.sort_label }}"
+            hx-get="{{ filter.hx_get }}" hx-trigger="change"
+            hx-select="#{{ filter.results_id }}" hx-target="#{{ filter.results_id }}" hx-swap="outerHTML"
+            hx-push-url="true" hx-include="#{{ filter.form_id }}" hx-indicator="#{{ filter.loading_id }}">
+      {% for option in filter.sort_options %}
+      <option value="{{ option.value }}" {% if option.selected %}selected{% endif %}>{{ option.label }}</option>
+      {% endfor %}
+    </select>
+    <div class="toolbar-dates">
+      <span class="toolbar-label">From</span>
+      <input type="date" name="from" class="toolbar-date" aria-label="Filter from date"
+             hx-get="{{ filter.hx_get }}" hx-trigger="change"
+             hx-select="#{{ filter.results_id }}" hx-target="#{{ filter.results_id }}" hx-swap="outerHTML"
+             hx-push-url="true" hx-include="#{{ filter.form_id }}" hx-indicator="#{{ filter.loading_id }}"
+             {% if let Some(f) = from %}value="{{ f }}"{% endif %}>
+      <span class="toolbar-label">To</span>
+      <input type="date" name="to" class="toolbar-date" aria-label="Filter to date"
+             hx-get="{{ filter.hx_get }}" hx-trigger="change"
+             hx-select="#{{ filter.results_id }}" hx-target="#{{ filter.results_id }}" hx-swap="outerHTML"
+             hx-push-url="true" hx-include="#{{ filter.form_id }}" hx-indicator="#{{ filter.loading_id }}"
+             {% if let Some(t) = to %}value="{{ t }}"{% endif %}>
+    </div>
+  </div>
+</form>

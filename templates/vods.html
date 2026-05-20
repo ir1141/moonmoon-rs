@@ -22,52 +22,7 @@
   </div>
 </div>
 
-<button type="button" class="btn-chip toolbar-search-open" data-search-overlay-open aria-controls="vod-filters" aria-expanded="false">Search filters</button>
-<form id="vod-filters" class="vod-toolbar" action="/game/{{ game_name|urlencode }}" method="get" data-list-filters data-search-overlay>
-  <div class="toolbar-overlay-panel">
-    <div class="toolbar-mobile-actions">
-      <span>Filter streams</span>
-      <div class="toolbar-mobile-buttons">
-        <button type="button" class="btn-chip" data-search-overlay-clear>Clear</button>
-        <button type="button" class="icon-btn" data-search-overlay-close aria-label="Close search filters" title="Close">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M18 6 6 18"></path><path d="m6 6 12 12"></path>
-          </svg>
-        </button>
-      </div>
-    </div>
-    <input type="search" name="search" class="toolbar-search" placeholder="Search streams..."
-           aria-label="Search {{ game_name }} streams"
-           hx-get="/game/{{ game_name|urlencode }}" hx-trigger="input changed delay:300ms"
-           hx-select="#vod-results" hx-target="#vod-results" hx-swap="outerHTML"
-           hx-push-url="true" hx-include="#vod-filters" hx-indicator="#vod-loading"
-           {% if let Some(s) = search %}value="{{ s }}"{% endif %}>
-    <select name="sort" class="toolbar-select"
-            aria-label="Sort streams"
-            hx-get="/game/{{ game_name|urlencode }}" hx-trigger="change"
-            hx-select="#vod-results" hx-target="#vod-results" hx-swap="outerHTML"
-            hx-push-url="true" hx-include="#vod-filters" hx-indicator="#vod-loading">
-      <option value="newest" {% if sort == "newest" %}selected{% endif %}>Newest First</option>
-      <option value="oldest" {% if sort == "oldest" %}selected{% endif %}>Oldest First</option>
-      <option value="longest" {% if sort == "longest" %}selected{% endif %}>Longest</option>
-      <option value="shortest" {% if sort == "shortest" %}selected{% endif %}>Shortest</option>
-    </select>
-    <div class="toolbar-dates">
-      <span class="toolbar-label">From</span>
-      <input type="date" name="from" class="toolbar-date" aria-label="Filter from date"
-             hx-get="/game/{{ game_name|urlencode }}" hx-trigger="change"
-             hx-select="#vod-results" hx-target="#vod-results" hx-swap="outerHTML"
-             hx-push-url="true" hx-include="#vod-filters" hx-indicator="#vod-loading"
-             {% if let Some(f) = from %}value="{{ f }}"{% endif %}>
-      <span class="toolbar-label">To</span>
-      <input type="date" name="to" class="toolbar-date" aria-label="Filter to date"
-             hx-get="/game/{{ game_name|urlencode }}" hx-trigger="change"
-             hx-select="#vod-results" hx-target="#vod-results" hx-swap="outerHTML"
-             hx-push-url="true" hx-include="#vod-filters" hx-indicator="#vod-loading"
-             {% if let Some(t) = to %}value="{{ t }}"{% endif %}>
-    </div>
-  </div>
-</form>
+{% include "list_filters.html" %}
 
 <section id="vod-results" class="vod-results" data-list-region aria-busy="false">
   <div class="list-summary" aria-live="polite" data-filtered-count="{{ metadata.filtered_count }}">
