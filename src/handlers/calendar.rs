@@ -22,6 +22,7 @@ pub struct CalendarDay {
     pub date: u32,
     pub games: Vec<CalendarGame>,
     pub duration_display: String,
+    pub mobile_cue: String,
     pub glow: f64,
     pub date_str: String,
 }
@@ -95,6 +96,30 @@ fn calendar_day_for_month(vod: &crate::vods::Vod, month_prefix: &str, dim: u32) 
         return Some(d);
     }
     None
+}
+
+fn calendar_duration_display(total_minutes: i64) -> String {
+    if total_minutes >= 60 {
+        format!("{}h {}m", total_minutes / 60, total_minutes % 60)
+    } else {
+        format!("{total_minutes}m")
+    }
+}
+
+fn calendar_mobile_cue(stream_count: usize, total_minutes: i64) -> String {
+    let noun = if stream_count == 1 {
+        "stream"
+    } else {
+        "streams"
+    };
+    if total_minutes > 0 {
+        format!(
+            "{stream_count} {noun} · {}",
+            calendar_duration_display(total_minutes)
+        )
+    } else {
+        format!("{stream_count} {noun}")
+    }
 }
 
 pub async fn calendar_page(
@@ -171,15 +196,12 @@ pub async fn calendar_page(
                     }
                 }
                 let total = *day_minutes.get(&d).unwrap_or(&0);
-                let duration_display = if total >= 60 {
-                    format!("{}h {}m", total / 60, total % 60)
-                } else {
-                    format!("{total}m")
-                };
+                let duration_display = calendar_duration_display(total);
                 CalendarDay {
                     date: d,
                     games,
                     duration_display,
+                    mobile_cue: calendar_mobile_cue(dvods.len(), total),
                     glow: (total as f64 / max_minutes as f64).clamp(0.15, 1.0),
                     date_str: format!("{year:04}-{month:02}-{d:02}"),
                 }
@@ -252,5 +274,12 @@ mod tests {
 
         assert_eq!(calendar_day_for_month(&vod, "2026-05", 31), Some(9));
         assert_eq!(calendar_day_for_month(&vod, "2026-05", 8), None);
+    }
+
+    #[test]
+    fn test_calendar_mobile_cue_includes_count_and_duration() {
+        assert_eq!(calendar_mobile_cue(1, 0), "1 stream");
+        assert_eq!(calendar_mobile_cue(2, 185), "2 streams · 3h 5m");
+        assert_eq!(calendar_mobile_cue(3, 45), "3 streams · 45m");
     }
 }

@@ -27,6 +27,19 @@
   height: 100%;
 }
 
+.player-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: 15px;
+  line-height: 1.4;
+  padding: 24px;
+  text-align: center;
+}
+
 .player-bar {
   padding: 12px 16px;
   background: var(--bg-surface);
@@ -130,6 +143,30 @@
   color: var(--text-muted);
   text-transform: none;
   letter-spacing: 0;
+}
+
+.chat-retry-btn {
+  font-family: var(--font-body);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--accent-soft);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  min-height: 24px;
+  padding: 0 8px;
+}
+
+.chat-retry-btn:hover {
+  background: var(--bg-elevated);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.chat-retry-btn:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
 }
 
 .chat-messages {

@@ -33,36 +33,50 @@
 </section>
 <script type="module" src="/static/continue-watching.js" nonce="{{ nonce }}"></script>
 <div class="games-view">
-  <form id="games-filters" class="games-toolbar" action="/games" method="get" data-list-filters>
-    <input type="search" name="search" class="toolbar-search" placeholder="Search games..."
-           aria-label="Search games"
-           hx-get="/games" hx-trigger="input changed delay:300ms"
-           hx-select="#games-results" hx-target="#games-results" hx-swap="outerHTML"
-           hx-push-url="true" hx-include="#games-filters" hx-indicator="#games-loading"
-           {% if let Some(s) = search %}value="{{ s }}"{% endif %}>
-    <select name="sort" class="toolbar-select"
-            aria-label="Sort games"
-            hx-get="/games" hx-trigger="change"
-            hx-select="#games-results" hx-target="#games-results" hx-swap="outerHTML"
-            hx-push-url="true" hx-include="#games-filters" hx-indicator="#games-loading">
-      <option value="most" {% if sort == "most" %}selected{% endif %}>Most streams</option>
-      <option value="fewest" {% if sort == "fewest" %}selected{% endif %}>Fewest streams</option>
-      <option value="az" {% if sort == "az" %}selected{% endif %}>A - Z</option>
-      <option value="za" {% if sort == "za" %}selected{% endif %}>Z - A</option>
-    </select>
-    <div class="toolbar-dates">
-      <span class="toolbar-label">From</span>
-      <input type="date" name="from" class="toolbar-date" aria-label="Filter from date"
-             hx-get="/games" hx-trigger="change"
+  <button type="button" class="btn-chip toolbar-search-open" data-search-overlay-open aria-controls="games-filters" aria-expanded="false">Search filters</button>
+  <form id="games-filters" class="games-toolbar" action="/games" method="get" data-list-filters data-search-overlay>
+    <div class="toolbar-overlay-panel">
+      <div class="toolbar-mobile-actions">
+        <span>Filter games</span>
+        <div class="toolbar-mobile-buttons">
+          <button type="button" class="btn-chip" data-search-overlay-clear>Clear</button>
+          <button type="button" class="icon-btn" data-search-overlay-close aria-label="Close search filters" title="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18"></path><path d="m6 6 12 12"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <input type="search" name="search" class="toolbar-search" placeholder="Search games..."
+             aria-label="Search games"
+             hx-get="/games" hx-trigger="input changed delay:300ms"
              hx-select="#games-results" hx-target="#games-results" hx-swap="outerHTML"
              hx-push-url="true" hx-include="#games-filters" hx-indicator="#games-loading"
-             {% if let Some(f) = from %}value="{{ f }}"{% endif %}>
-      <span class="toolbar-label">To</span>
-      <input type="date" name="to" class="toolbar-date" aria-label="Filter to date"
-             hx-get="/games" hx-trigger="change"
-             hx-select="#games-results" hx-target="#games-results" hx-swap="outerHTML"
-             hx-push-url="true" hx-include="#games-filters" hx-indicator="#games-loading"
-             {% if let Some(t) = to %}value="{{ t }}"{% endif %}>
+             {% if let Some(s) = search %}value="{{ s }}"{% endif %}>
+      <select name="sort" class="toolbar-select"
+              aria-label="Sort games"
+              hx-get="/games" hx-trigger="change"
+              hx-select="#games-results" hx-target="#games-results" hx-swap="outerHTML"
+              hx-push-url="true" hx-include="#games-filters" hx-indicator="#games-loading">
+        <option value="most" {% if sort == "most" %}selected{% endif %}>Most streams</option>
+        <option value="fewest" {% if sort == "fewest" %}selected{% endif %}>Fewest streams</option>
+        <option value="az" {% if sort == "az" %}selected{% endif %}>A - Z</option>
+        <option value="za" {% if sort == "za" %}selected{% endif %}>Z - A</option>
+      </select>
+      <div class="toolbar-dates">
+        <span class="toolbar-label">From</span>
+        <input type="date" name="from" class="toolbar-date" aria-label="Filter from date"
+               hx-get="/games" hx-trigger="change"
+               hx-select="#games-results" hx-target="#games-results" hx-swap="outerHTML"
+               hx-push-url="true" hx-include="#games-filters" hx-indicator="#games-loading"
+               {% if let Some(f) = from %}value="{{ f }}"{% endif %}>
+        <span class="toolbar-label">To</span>
+        <input type="date" name="to" class="toolbar-date" aria-label="Filter to date"
+               hx-get="/games" hx-trigger="change"
+               hx-select="#games-results" hx-target="#games-results" hx-swap="outerHTML"
+               hx-push-url="true" hx-include="#games-filters" hx-indicator="#games-loading"
+               {% if let Some(t) = to %}value="{{ t }}"{% endif %}>
+      </div>
     </div>
   </form>
 

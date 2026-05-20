@@ -207,6 +207,26 @@
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 }
 
+.cal-mobile-cue {
+  display: none;
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  z-index: 3;
+  overflow: hidden;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: rgba(8, 8, 10, 0.74);
+  color: var(--on-overlay);
+  font-size: 0.55rem;
+  font-weight: 600;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
+  white-space: nowrap;
+}
+
 .cal-day.has-streams:hover .cal-duration {
   color: var(--accent-soft);
 }
@@ -226,6 +246,9 @@
   .cal-duration {
     display: none;
   }
+  .cal-mobile-cue {
+    display: block;
+  }
 }
 
 @media (max-width: 480px) {
@@ -240,6 +263,12 @@
   }
   .cal-games {
     border-radius: 3px;
+  }
+  .cal-mobile-cue {
+    left: 3px;
+    right: 3px;
+    bottom: 3px;
+    font-size: 0.5rem;
   }
   .cal-nav-btn {
     width: 34px;

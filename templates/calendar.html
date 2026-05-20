@@ -49,6 +49,7 @@
         {% endfor %}
       </div>
       <div class="cal-duration">{{ day.duration_display }}</div>
+      <div class="cal-mobile-cue">{{ day.mobile_cue }}</div>
     </a>
     {% when None %}
     <div class="cal-day empty{% if loop.index == today_day %} today{% elif loop.index > today_day %} future{% endif %}">

@@ -20,11 +20,12 @@
       </div>
     </a>
     {% if show_game_tags && !vod.chapter_segments.is_empty() %}
-    <div class="chapter-strip" aria-label="Chapters in this stream">
+    <div class="chapter-strip" aria-hidden="true">
       {% for seg in vod.chapter_segments %}
       <a href="{{ seg.watch_url }}"
          class="chapter-seg color-{{ seg.color_idx }}"
          style="flex-basis: {{ seg.width_pct }}%"
+         tabindex="-1"
          aria-label="Jump to {{ seg.name }}">
         <span class="chapter-seg-tip">{{ seg.name }}</span>
       </a>
@@ -42,6 +43,19 @@
     <div class="vod-status-label">{{ label }}</div>
     {% endif %}
   </a>
+  {% if show_game_tags && !vod.chapter_segments.is_empty() %}
+  <details class="chapter-disclosure">
+    <summary>Chapters</summary>
+    <div class="chapter-list" aria-label="Chapter links">
+      {% for seg in vod.chapter_segments %}
+      <a href="{{ seg.watch_url }}" class="chapter-link">
+        <span class="chapter-link-marker color-{{ seg.color_idx }}" aria-hidden="true"></span>
+        <span class="chapter-link-name">{{ seg.name }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
 </div>
 {% endfor %}
 {% if vods.is_empty() %}

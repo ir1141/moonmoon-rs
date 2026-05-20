@@ -20,6 +20,7 @@ declare global {
           events?: {
             onReady?: () => void;
             onStateChange?: (event: PlayerStateEvent) => void;
+            onError?: () => void;
           };
         },
       );

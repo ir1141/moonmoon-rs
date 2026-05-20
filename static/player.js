@@ -18,6 +18,12 @@ import {
   shouldFinalizePlaybackAtTick,
   shouldSaveResume,
 } from "./lib/player-completion.js";
+import {
+  chatEmptyStatusText,
+  chatErrorStatusText,
+  chatLoadStatusText,
+  playerFallbackText,
+} from "./lib/player-feedback.js";
 import { isEmoteCandidate } from "./lib/emote-heuristic.js";
 import { getCachedEmote, setCachedEmote } from "./lib/emote-cache.js";
 import { EmoteLookupPolicy } from "./lib/emote-lookup-policy.js";
@@ -377,9 +383,17 @@ loadEmotes();
 // DOM refs
 var chatContainer = document.getElementById("chat-messages");
 var chatStatus = document.getElementById("chat-status");
+var chatRetry = document.getElementById("chat-retry");
 var chatPaused = document.getElementById("chat-paused");
 var chatTimestampToggle = document.getElementById("chat-timestamp-toggle");
 var partSelector = document.getElementById("part-selector");
+var playerWrap = document.getElementById("player-wrap");
+var playerFallback = document.getElementById("player-fallback");
+var youtubePlayerElement = document.getElementById("youtube-player");
+var youtubeReady = false;
+var playerFallbackShown = false;
+var chatRetryOffset;
+var PLAYER_INIT_TIMEOUT_MS = 8000;
 
 function chatNow() {
   return window.performance && typeof window.performance.now === "function"
@@ -445,6 +459,21 @@ function dismissTransientChatUi() {
 }
 
 document.body.addEventListener("htmx:beforeSwap", dismissTransientChatUi);
+
+function setChatStatus(text) {
+  if (chatStatus) chatStatus.textContent = text;
+}
+
+function setChatRetryVisible(visible) {
+  if (chatRetry) chatRetry.hidden = !visible;
+}
+
+if (chatRetry) {
+  chatRetry.addEventListener("click", function () {
+    setChatRetryVisible(false);
+    loadChat(chatRetryOffset);
+  });
+}
 
 chatContainer.addEventListener("mouseover", function (e) {
   var el = e.target;
@@ -783,6 +812,9 @@ function finalizeCurrentVod() {
 function loadChat(fromOffset) {
   if (chatLoading) return;
   chatLoading = true;
+  chatRetryOffset = fromOffset;
+  setChatRetryVisible(false);
+  setChatStatus(chatLoadStatusText());
 
   var url;
   if (chatCursor && fromOffset === undefined) {
@@ -804,13 +836,17 @@ function loadChat(fromOffset) {
       }
       chatCursor = data.cursor || null;
       chatLoading = false;
+      if (chatMessages.length === 0) {
+        setChatStatus(chatEmptyStatusText());
+      } else {
+        setChatStatus("");
+      }
     })
     .catch(function (err) {
       console.warn("[Chat] Failed to load:", err);
       chatLoading = false;
-      if (chatMessages.length === 0) {
-        chatStatus.textContent = "Chat unavailable";
-      }
+      setChatStatus(chatErrorStatusText());
+      setChatRetryVisible(true);
     });
 }
 
@@ -1110,6 +1146,7 @@ function resetChat(fromOffset) {
   dismissReplyPopup();
   clearChatContainer();
   chatPaused.style.display = "none";
+  setChatRetryVisible(false);
   loadChat(fromOffset);
 }
 
@@ -1162,30 +1199,59 @@ function tick() {
 
 // ─── YouTube IFrame API ───
 
-window.onYouTubeIframeAPIReady = function () {
-  if (!YOUTUBE_IDS || YOUTUBE_IDS.length === 0) {
-    var wrap = document.getElementById("player-wrap");
-    var notice = document.createElement("div");
-    notice.style.cssText =
-      "display:flex;align-items:center;justify-content:center;height:100%;color:#8b8a96;font-size:16px;";
-    notice.textContent = "No YouTube videos available";
-    wrap.appendChild(notice);
+function showPlayerFallback(reason) {
+  if (playerFallbackShown) return;
+  playerFallbackShown = true;
+
+  if (youtubePlayerElement) youtubePlayerElement.hidden = true;
+  if (playerFallback) {
+    playerFallback.textContent = playerFallbackText(reason);
+    playerFallback.hidden = false;
     return;
   }
 
-  player = new YT.Player("youtube-player", {
-    videoId: YOUTUBE_IDS[0],
-    playerVars: {
-      autoplay: 1,
-      modestbranding: 1,
-      rel: 0,
-    },
-    events: {
-      onReady: onPlayerReady,
-      onStateChange: onPlayerStateChange,
-    },
-  });
+  if (playerWrap) {
+    var notice = document.createElement("div");
+    notice.className = "player-fallback";
+    notice.textContent = playerFallbackText(reason);
+    playerWrap.appendChild(notice);
+  }
+}
+
+window.onYouTubeIframeAPIReady = function () {
+  youtubeReady = true;
+  if (!YOUTUBE_IDS || YOUTUBE_IDS.length === 0) {
+    showPlayerFallback("missing-video");
+    return;
+  }
+
+  try {
+    player = new YT.Player("youtube-player", {
+      videoId: YOUTUBE_IDS[0],
+      playerVars: {
+        autoplay: 1,
+        modestbranding: 1,
+        rel: 0,
+      },
+      events: {
+        onReady: onPlayerReady,
+        onStateChange: onPlayerStateChange,
+        onError: onPlayerError,
+      },
+    });
+  } catch (err) {
+    console.warn("[Player] YouTube player failed to initialize:", err);
+    showPlayerFallback("api-failed");
+  }
 };
+
+if (!YOUTUBE_IDS || YOUTUBE_IDS.length === 0) {
+  showPlayerFallback("missing-video");
+} else {
+  window.setTimeout(function () {
+    if (!youtubeReady && !player) showPlayerFallback("api-failed");
+  }, PLAYER_INIT_TIMEOUT_MS);
+}
 
 // player.js is a module (deferred). The YT iframe API may have already fired
 // its ready callback before this script ran — in that case our newly-assigned
@@ -1281,6 +1347,10 @@ function onPlayerStateChange(event) {
       maybeShowUpNext();
     }
   }
+}
+
+function onPlayerError() {
+  showPlayerFallback("api-failed");
 }
 
 // ─── Up Next (auto-continue to next VOD in playing period) ───
