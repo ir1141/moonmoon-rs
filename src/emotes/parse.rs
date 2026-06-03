@@ -123,6 +123,48 @@ fn absorb_bttv_items(out: &mut HashMap<String, EmoteRecord>, items: &[serde_json
     }
 }
 
+/// Parse FFZ's `/v1/room/id/{id}` and `/v1/set/global` — same shape:
+/// `{ "sets": { "<setid>": { "emoticons": [...] } } }`.
+pub fn parse_ffz(json: &serde_json::Value) -> HashMap<String, EmoteRecord> {
+    let mut out = HashMap::new();
+    let Some(sets) = json.get("sets").and_then(|s| s.as_object()) else {
+        return out;
+    };
+    for set in sets.values() {
+        let Some(items) = set.get("emoticons").and_then(|e| e.as_array()) else {
+            continue;
+        };
+        for item in items {
+            let Some(name) = item.get("name").and_then(|n| n.as_str()) else {
+                continue;
+            };
+            let url = pick_ffz_url(item.get("urls"));
+            let Some(url) = url else { continue };
+            let owner = item
+                .get("owner")
+                .and_then(|o| o.get("display_name"))
+                .and_then(|n| n.as_str())
+                .map(str::to_string);
+            out.entry(name.to_string()).or_insert(EmoteRecord {
+                url,
+                provider: EmoteProvider::Ffz,
+                owner,
+            });
+        }
+    }
+    out
+}
+
+fn pick_ffz_url(urls: Option<&serde_json::Value>) -> Option<String> {
+    let urls = urls?.as_object()?;
+    for key in ["1", "2", "4"] {
+        if let Some(u) = urls.get(key).and_then(|v| v.as_str()) {
+            return Some(normalize_url(u));
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,5 +240,30 @@ mod tests {
         assert!(map.contains_key(":tf:"));
         assert!(map.contains_key("CiGrip"));
         assert_eq!(map.get("CiGrip").unwrap().owner, None);
+    }
+
+    #[test]
+    fn ffz_channel_parses_room_set() {
+        let json = load_fixture("tests/fixtures/emotes/ffz_channel.json");
+        let map = parse_ffz(&json);
+        let r = map.get("ZreknarF").unwrap();
+        assert_eq!(r.url, "https://cdn.frankerfacez.com/emote/28138/1");
+        assert_eq!(r.owner.as_deref(), Some("Zreknarf"));
+    }
+
+    #[test]
+    fn ffz_global_passes_absolute_https_url_through() {
+        let json = load_fixture("tests/fixtures/emotes/ffz_global.json");
+        let map = parse_ffz(&json);
+        assert_eq!(
+            map.get("ZreknarP").unwrap().url,
+            "https://cdn.frankerfacez.com/emote/28136/1"
+        );
+    }
+
+    #[test]
+    fn ffz_handles_missing_sets() {
+        let json: serde_json::Value = serde_json::from_str("{}").unwrap();
+        assert!(parse_ffz(&json).is_empty());
     }
 }
