@@ -1,7 +1,14 @@
+pub mod fetch;
 pub mod parse;
 pub mod store;
 
 use serde::{Deserialize, Serialize};
+
+// Re-exports consumed by main.rs in Task 8.
+#[allow(unused_imports)]
+pub use fetch::{MOONMOON_TWITCH_ID, load_prefetched};
+#[allow(unused_imports)]
+pub use store::{EmoteIndex, Lookup, ResolvedEntry};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
