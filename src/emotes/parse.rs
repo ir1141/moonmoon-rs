@@ -82,6 +82,47 @@ fn normalize_url(url: &str) -> String {
     }
 }
 
+/// Parse BTTV's `/3/cached/users/twitch/{id}` response. Shape:
+/// `{ "channelEmotes": [...], "sharedEmotes": [...] }`.
+pub fn parse_bttv_user(json: &serde_json::Value) -> HashMap<String, EmoteRecord> {
+    let mut out = HashMap::new();
+    for key in ["channelEmotes", "sharedEmotes"] {
+        if let Some(items) = json.get(key).and_then(|v| v.as_array()) {
+            absorb_bttv_items(&mut out, items);
+        }
+    }
+    out
+}
+
+/// Parse BTTV's `/3/cached/emotes/global` response. Top-level JSON array.
+pub fn parse_bttv_global(json: &serde_json::Value) -> HashMap<String, EmoteRecord> {
+    let mut out = HashMap::new();
+    if let Some(items) = json.as_array() {
+        absorb_bttv_items(&mut out, items);
+    }
+    out
+}
+
+fn absorb_bttv_items(out: &mut HashMap<String, EmoteRecord>, items: &[serde_json::Value]) {
+    for item in items {
+        let id = item.get("id").and_then(|v| v.as_str());
+        let code = item.get("code").and_then(|v| v.as_str());
+        let (Some(id), Some(code)) = (id, code) else {
+            continue;
+        };
+        let owner = item
+            .get("user")
+            .and_then(|u| u.get("displayName"))
+            .and_then(|n| n.as_str())
+            .map(str::to_string);
+        out.entry(code.to_string()).or_insert(EmoteRecord {
+            url: format!("https://cdn.betterttv.net/emote/{id}/1x"),
+            provider: EmoteProvider::Bttv,
+            owner,
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,5 +175,28 @@ mod tests {
         )
         .unwrap();
         assert_eq!(seventv_owner(&owner).as_deref(), Some("SomeCreator"));
+    }
+
+    #[test]
+    fn bttv_user_parses_channel_and_shared() {
+        let json = load_fixture("tests/fixtures/emotes/bttv_channel.json");
+        let map = parse_bttv_user(&json);
+        assert_eq!(
+            map.get("catJAM").unwrap().url,
+            "https://cdn.betterttv.net/emote/5f1b0186cf6d2144653d2970/1x"
+        );
+        assert_eq!(
+            map.get("Pepega").unwrap().owner.as_deref(),
+            Some("OmegaPepega")
+        );
+    }
+
+    #[test]
+    fn bttv_global_parses_top_level_array() {
+        let json = load_fixture("tests/fixtures/emotes/bttv_global.json");
+        let map = parse_bttv_global(&json);
+        assert!(map.contains_key(":tf:"));
+        assert!(map.contains_key("CiGrip"));
+        assert_eq!(map.get("CiGrip").unwrap().owner, None);
     }
 }
