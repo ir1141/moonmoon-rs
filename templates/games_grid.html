@@ -4,7 +4,7 @@
     {% if let Some(image) = game.image %}
     <img class="art" src="{{ image }}" alt="{{ game.name }}" loading="lazy" onerror="this.style.display='none'">
     {% endif %}
-    <div class="stream-badge">{{ game.vod_count }}</div>
+    <div class="stream-badge">{{ game.vod_count }} VODs</div>
   </div>
   <div class="info">
     <div class="name" title="{{ game.name }}">{{ game.name }}</div>

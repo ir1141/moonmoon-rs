@@ -9,7 +9,7 @@ mod watch;
 pub use api::chat_proxy;
 pub use calendar::calendar_page;
 pub use games::{games_grid, games_page};
-pub use history::{history_page, history_vods_grid};
+pub use history::{continue_resume, history_page, history_vods_grid};
 pub use sync::{sync_get, sync_put};
 pub use vods::{all_streams_grid, all_streams_page, game_vods_grid, game_vods_page};
 pub use watch::{next_in_period, random_vod, vod_detail, watch_page};
@@ -131,6 +131,7 @@ pub(crate) struct ChapterSegment {
     pub width_pct: f64,
     pub watch_url: String,
     pub color_idx: u8,
+    pub start_label: String,
 }
 
 pub(crate) struct VodDisplay {
@@ -815,9 +816,23 @@ pub(crate) fn get_chapter_segments(vod: &Vod, total_duration_secs: i64) -> Vec<C
             width_pct,
             watch_url: build_watch_url(&vod.id, Some(start), None),
             color_idx: (h % 8) as u8,
+            start_label: format_chapter_start(start),
         });
     }
     out
+}
+
+fn format_chapter_start(seconds: i64) -> String {
+    let seconds = seconds.max(0);
+    let hours = seconds / 3600;
+    let minutes = (seconds % 3600) / 60;
+    let secs = seconds % 60;
+
+    if hours > 0 {
+        format!("{hours}:{minutes:02}:{secs:02}")
+    } else {
+        format!("{minutes}:{secs:02}")
+    }
 }
 
 pub(crate) fn get_game_tags(vod: &Vod) -> Vec<String> {
@@ -1431,6 +1446,7 @@ mod tests {
                 width_pct: 0.0,
                 watch_url: String::new(),
                 color_idx: 0,
+                start_label: "0:00".into(),
             })
             .collect();
         d
@@ -1729,6 +1745,8 @@ mod tests {
         assert_eq!(segments[2].width_pct, 50.0);
         assert_eq!(segments[3].width_pct, 10.0);
         assert_eq!(segments[0].watch_url, "/watch/chapters?t=100");
+        assert_eq!(segments[0].start_label, "1:40");
+        assert_eq!(segments[2].start_label, "6:40");
     }
 
     #[test]

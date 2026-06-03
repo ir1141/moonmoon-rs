@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-  buildContinueWatchingUrl,
+  buildContinueResumeUrl,
   resumePercent,
   selectContinueWatchingEntries,
 } from "../static/lib/continue-watching.js";
@@ -33,22 +33,27 @@ describe("selectContinueWatchingEntries", () => {
     expect(result).toEqual([{ id: "good", time: 61, updated: 600 }]);
   });
 
+  test("defaults to the single latest resume entry", () => {
+    const result = selectContinueWatchingEntries({
+      older: { time: 100, updated: 200 },
+      newest: { time: 40, updated: 900 },
+      middle: { time: 80, updated: 500 },
+    });
+
+    expect(result).toEqual([{ id: "newest", time: 40, updated: 900 }]);
+  });
+
   test("handles non-object stores", () => {
     expect(selectContinueWatchingEntries(null)).toEqual([]);
     expect(selectContinueWatchingEntries("oops")).toEqual([]);
   });
 });
 
-describe("buildContinueWatchingUrl", () => {
-  test("builds a history-grid URL for compact exact-resume cards", () => {
-    const url = buildContinueWatchingUrl([
-      { id: "1430", time: 3724 },
-      { id: "2768249708", time: 98 },
-    ]);
+describe("buildContinueResumeUrl", () => {
+  test("builds a server-rendered resume hero URL for the latest entry", () => {
+    const url = buildContinueResumeUrl({ id: "1430", time: 3724 });
 
-    expect(url).toBe(
-      "/history/vods?ids=1430%2C2768249708&times=3724%2C98&sort=recent&resume_links=true&headers=false",
-    );
+    expect(url).toBe("/history/resume?id=1430&time=3724");
   });
 });
 
