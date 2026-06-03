@@ -1,0 +1,22 @@
+{
+  "id": "user-id",
+  "emote_set": {
+    "id": "set-id",
+    "emotes": [
+      {
+        "id": "01F6Q5BG1R000179HAZRRJVAY7",
+        "name": "moon2A",
+        "data": {
+          "host": { "url": "//cdn.7tv.app/emote/01F6Q5BG1R000179HAZRRJVAY7" },
+          "owner": {
+            "display_name": "MOONMOON",
+            "connections": [{ "platform": "TWITCH", "display_name": "MOONMOON" }]
+          }
+        }
+      },
+      {
+        "name": "missing-host-field"
+      }
+    ]
+  }
+}

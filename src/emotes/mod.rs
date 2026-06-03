@@ -2,8 +2,6 @@ pub mod parse;
 
 use serde::{Deserialize, Serialize};
 
-// `allow(dead_code)` is dropped in Task 2 when the parsers begin returning these.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum EmoteProvider {
@@ -13,7 +11,6 @@ pub enum EmoteProvider {
     Ffz,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EmoteRecord {
     pub url: String,
