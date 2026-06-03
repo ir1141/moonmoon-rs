@@ -1,3 +1,4 @@
+import "./lib/emote-cache.js";
 import {
   getCachedPartDurations as getCachedPartDurationsPure,
   savePartDuration as savePartDurationPure,
