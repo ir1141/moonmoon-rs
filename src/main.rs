@@ -8,6 +8,7 @@ use tower_governor::{
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
+mod emotes;
 mod handlers;
 mod middleware;
 mod sync_store;
