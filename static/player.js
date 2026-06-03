@@ -26,13 +26,7 @@ import {
   playerFallbackText,
 } from "./lib/player-feedback.js";
 import { isEmoteCandidate } from "./lib/emote-heuristic.js";
-import { getCachedEmote, setCachedEmote } from "./lib/emote-cache.js";
-import { EmoteLookupPolicy } from "./lib/emote-lookup-policy.js";
-import {
-  buildSearchUrl,
-  parseSearchResponse,
-  PROVIDERS,
-} from "./lib/emote-providers.js";
+import { fetchChannelEmotes, lookupEmote } from "./lib/emote-client.js";
 import { markWatchedVod } from "./lib/watched.js";
 
 var dataEl = document.getElementById("vod-data");
@@ -57,11 +51,8 @@ var PART_DURATIONS_KEY = "moonmoon_part_durations";
 var MAX_PART_DURATION_ENTRIES = 500;
 var MAX_CHAT_DOM_NODES = 2000;
 var CHAT_SCROLL_INTENT_MS = 800;
-var EMOTE_PROVIDER_COOLDOWN_MS = 60 * 1000;
-var EMOTE_NAME_COOLDOWN_MS = 15 * 1000;
 
 var MAX_PART_DURATION = 10800; // 3 hours
-var MOONMOON_TWITCH_ID = "121059319";
 
 var player = null;
 var currentPart = 0;
@@ -96,132 +87,25 @@ var REPLY_CHAIN_MAX = 5;
 var thirdPartyEmotes = {};
 
 function loadEmotes() {
-  // 7TV
-  fetch("https://7tv.io/v3/emote-sets/global")
-    .then(function (r) {
-      return r.json();
-    })
-    .then(function (data) {
-      parse7TV(data.emotes || []);
-    })
-    .catch(function (err) {
-      console.warn("[7TV] Failed to load global emotes:", err);
-    });
-
-  fetch("https://7tv.io/v3/users/twitch/" + MOONMOON_TWITCH_ID)
-    .then(function (r) {
-      return r.json();
-    })
-    .then(function (data) {
-      if (data.emote_set) parse7TV(data.emote_set.emotes || []);
-    })
-    .catch(function (err) {
-      console.warn("[7TV] Failed to load channel emotes:", err);
-    });
-
-  // BTTV
-  fetch("https://api.betterttv.net/3/cached/emotes/global")
-    .then(function (r) {
-      return r.json();
-    })
-    .then(function (emotes) {
-      parseBTTV(emotes);
-    })
-    .catch(function (err) {
-      console.warn("[BTTV] Failed to load global emotes:", err);
-    });
-
-  fetch("https://api.betterttv.net/3/cached/users/twitch/" + MOONMOON_TWITCH_ID)
-    .then(function (r) {
-      return r.json();
-    })
-    .then(function (data) {
-      parseBTTV(data.channelEmotes || []);
-      parseBTTV(data.sharedEmotes || []);
-    })
-    .catch(function (err) {
-      console.warn("[BTTV] Failed to load channel emotes:", err);
-    });
-
-  // FFZ
-  fetch("https://api.frankerfacez.com/v1/set/global")
-    .then(function (r) {
-      return r.json();
-    })
-    .then(function (data) {
-      parseFFZ(data.sets || {});
-    })
-    .catch(function (err) {
-      console.warn("[FFZ] Failed to load global emotes:", err);
-    });
-
-  fetch("https://api.frankerfacez.com/v1/room/id/" + MOONMOON_TWITCH_ID)
-    .then(function (r) {
-      return r.json();
-    })
-    .then(function (data) {
-      parseFFZ(data.sets || {});
-    })
-    .catch(function (err) {
-      console.warn("[FFZ] Failed to load channel emotes:", err);
-    });
-}
-
-function parse7TV(emotes) {
-  for (var i = 0; i < emotes.length; i++) {
-    var e = emotes[i];
-    var host = e.data && e.data.host;
-    if (host && host.url && !thirdPartyEmotes[e.name]) {
-      thirdPartyEmotes[e.name] = {
-        url: "https:" + host.url + "/1x.webp",
-        provider: "7TV",
-      };
-    }
-  }
-}
-
-function parseBTTV(emotes) {
-  for (var i = 0; i < emotes.length; i++) {
-    var e = emotes[i];
-    if (e.id && e.code && !thirdPartyEmotes[e.code]) {
-      thirdPartyEmotes[e.code] = {
-        url: "https://cdn.betterttv.net/emote/" + e.id + "/1x",
-        provider: "BTTV",
-      };
-    }
-  }
-}
-
-function parseFFZ(sets) {
-  var keys = Object.keys(sets);
-  for (var k = 0; k < keys.length; k++) {
-    var emotes = sets[keys[k]].emoticons || [];
-    for (var i = 0; i < emotes.length; i++) {
-      var e = emotes[i];
-      if (e.name && e.urls && !thirdPartyEmotes[e.name]) {
-        thirdPartyEmotes[e.name] = {
-          url: e.urls["1"] || e.urls["2"] || e.urls["4"],
-          provider: "FFZ",
-        };
+  fetchChannelEmotes().then(function (emotes) {
+    var names = Object.keys(emotes);
+    for (var i = 0; i < names.length; i++) {
+      if (!thirdPartyEmotes[names[i]]) {
+        thirdPartyEmotes[names[i]] = emotes[names[i]];
       }
     }
-  }
+  });
 }
 
-// ─── Lazy 7TV lookup ───
-// Emotes from non-Moonmoon 7TV sets (e.g. TANIMURA, owned by another channel)
-// won't appear in any of the bulk-loaded sets above. When we see an unknown
-// word that *looks* like an emote, query 7TV's search API once. Hits go into
-// thirdPartyEmotes and are also persisted via the Cache API so the next page
-// load skips the fetch. Misses go into emoteMissCache + the same persistent
-// cache so we never re-query a known non-emote.
+// ─── Lazy lookup ───
+// Emotes from non-Moonmoon sets (e.g. TANIMURA, owned by another channel)
+// won't appear in the prefetched channel map above. When we see an unknown
+// word that *looks* like an emote, ask the server once via lookupEmote. Hits
+// go into thirdPartyEmotes; misses go into emoteMissCache so we never re-query
+// a known non-emote. Transient failures are left unrecorded so they retry.
 
 var emoteMissCache = Object.create(null);
 var pendingEmoteLookups = Object.create(null);
-var emoteLookupPolicy = new EmoteLookupPolicy({
-  providerCooldownMs: EMOTE_PROVIDER_COOLDOWN_MS,
-  nameCooldownMs: EMOTE_NAME_COOLDOWN_MS,
-});
 
 function lazyResolveEmote(name, textNode) {
   if (!isEmoteCandidate(name)) return;
@@ -230,7 +114,6 @@ function lazyResolveEmote(name, textNode) {
     return;
   }
   if (emoteMissCache[name]) return;
-  if (!emoteLookupPolicy.canLookupName(name)) return;
 
   if (pendingEmoteLookups[name]) {
     pendingEmoteLookups[name].then(
@@ -242,14 +125,7 @@ function lazyResolveEmote(name, textNode) {
     return;
   }
 
-  var p = getCachedEmote(name).then(function (cached) {
-    if (cached) return cached;
-    return fetchEmoteFromAnyProvider(name).then(function (record) {
-      if (!record.transient) setCachedEmote(name, record);
-      return record;
-    });
-  });
-
+  var p = lookupEmote(name);
   pendingEmoteLookups[name] = p;
   p.then(
     function (record) {
@@ -260,16 +136,13 @@ function lazyResolveEmote(name, textNode) {
           provider: record.provider,
           owner: record.owner,
         };
-      } else if (!record || !record.transient) {
+        applyResolved(name, record, textNode);
+      } else if (record && !record.transient) {
         emoteMissCache[name] = true;
       }
-      applyResolved(name, record, textNode);
     },
-    function (err) {
+    function () {
       delete pendingEmoteLookups[name];
-      console.warn("[Emote] lookup failed for", name, err);
-      // Transient error — don't poison emoteMissCache or the persistent
-      // Cache API. Next occurrence of `name` will retry.
     },
   );
 }
@@ -307,76 +180,6 @@ function formatEmoteTooltip(name, emote) {
   if (emote.owner) label += " · " + emote.owner;
   label += "]";
   return name + " " + label;
-}
-
-// Race eligible providers in parallel for the lookup. First exact-match hit
-// wins; only mark `name` a miss if at least one provider responded
-// successfully without a hit. Provider failures enter a short cooldown so an
-// outage or rate-limit does not fan out into one request per chat token.
-function fetchEmoteFromAnyProvider(name) {
-  var providers = emoteLookupPolicy.availableProviders(PROVIDERS);
-  if (providers.length === 0) {
-    emoteLookupPolicy.recordNameFailure(name);
-    return Promise.resolve({ hit: false, transient: true });
-  }
-
-  var attempts = providers.map(function (provider) {
-    return fetchOneProvider(provider, name);
-  });
-
-  return new Promise(function (resolve, reject) {
-    var remaining = attempts.length;
-    var sawSuccessfulMiss = false;
-    var lastErr = null;
-    attempts.forEach(function (p) {
-      p.then(
-        function (record) {
-          if (record && record.hit) {
-            resolve(record);
-            return;
-          }
-          sawSuccessfulMiss = true;
-          if (--remaining === 0) finish();
-        },
-        function (err) {
-          lastErr = err;
-          if (--remaining === 0) finish();
-        },
-      );
-    });
-
-    function finish() {
-      if (sawSuccessfulMiss) resolve({ hit: false });
-      else {
-        emoteLookupPolicy.recordNameFailure(name);
-        reject(lastErr || new Error("all emote providers failed"));
-      }
-    }
-  });
-}
-
-function fetchOneProvider(provider, name) {
-  var req = buildSearchUrl(provider, name);
-  var init = { method: req.method };
-  if (req.headers) init.headers = req.headers;
-  if (req.body) init.body = req.body;
-  return fetch(req.url, init)
-    .then(function (r) {
-      if (!r.ok) {
-        var err = new Error(provider + " HTTP " + r.status);
-        err.status = r.status;
-        throw err;
-      }
-      emoteLookupPolicy.recordProviderSuccess(provider);
-      return r.json();
-    })
-    .then(function (json) {
-      return parseSearchResponse(provider, json, name);
-    })
-    .catch(function (err) {
-      emoteLookupPolicy.recordFailure(provider, name);
-      throw err;
-    });
 }
 
 loadEmotes();
