@@ -165,6 +165,73 @@ fn pick_ffz_url(urls: Option<&serde_json::Value>) -> Option<String> {
     None
 }
 
+/// Parse 7TV's GraphQL `SearchEmotes` response and return the record only when
+/// the result name matches `name` byte-for-byte. Provider search endpoints
+/// return prefix/substring matches; we only render on an exact match.
+pub fn parse_seventv_search(json: &serde_json::Value, name: &str) -> Option<EmoteRecord> {
+    let items = json.get("data")?.get("emotes")?.get("items")?.as_array()?;
+    for item in items {
+        if item.get("name").and_then(|n| n.as_str()) != Some(name) {
+            continue;
+        }
+        let host_url = item
+            .get("host")
+            .and_then(|h| h.get("url"))
+            .and_then(|u| u.as_str())?;
+        let owner = item.get("owner").and_then(seventv_owner);
+        return Some(EmoteRecord {
+            url: normalize_url(host_url) + "/1x.webp",
+            provider: EmoteProvider::SevenTv,
+            owner,
+        });
+    }
+    None
+}
+
+/// Parse BTTV's `/3/emotes/shared/search?query=...` response (top-level JSON array).
+pub fn parse_bttv_search(json: &serde_json::Value, name: &str) -> Option<EmoteRecord> {
+    let items = json.as_array()?;
+    for item in items {
+        if item.get("code").and_then(|c| c.as_str()) != Some(name) {
+            continue;
+        }
+        let id = item.get("id").and_then(|v| v.as_str())?;
+        let owner = item
+            .get("user")
+            .and_then(|u| u.get("displayName"))
+            .and_then(|n| n.as_str())
+            .map(str::to_string);
+        return Some(EmoteRecord {
+            url: format!("https://cdn.betterttv.net/emote/{id}/1x"),
+            provider: EmoteProvider::Bttv,
+            owner,
+        });
+    }
+    None
+}
+
+/// Parse FFZ's `/v1/emotes?q=...` response. Shape: `{ "emoticons": [...] }`.
+pub fn parse_ffz_search(json: &serde_json::Value, name: &str) -> Option<EmoteRecord> {
+    let items = json.get("emoticons")?.as_array()?;
+    for item in items {
+        if item.get("name").and_then(|n| n.as_str()) != Some(name) {
+            continue;
+        }
+        let url = pick_ffz_url(item.get("urls"))?;
+        let owner = item
+            .get("owner")
+            .and_then(|o| o.get("display_name"))
+            .and_then(|n| n.as_str())
+            .map(str::to_string);
+        return Some(EmoteRecord {
+            url,
+            provider: EmoteProvider::Ffz,
+            owner,
+        });
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -265,5 +332,81 @@ mod tests {
     fn ffz_handles_missing_sets() {
         let json: serde_json::Value = serde_json::from_str("{}").unwrap();
         assert!(parse_ffz(&json).is_empty());
+    }
+
+    #[test]
+    fn seventv_search_returns_hit_on_exact_case_sensitive_match() {
+        let json: serde_json::Value = serde_json::from_str(
+            r#"{ "data": { "emotes": { "items": [
+                { "name": "TANIMURA",
+                  "host": { "url": "//cdn.7tv.app/emote/abc" },
+                  "owner": { "display_name": "tanimuraXYZ",
+                    "connections": [{ "platform": "TWITCH", "display_name": "TanimuraTV" }] } }
+            ]}}}"#,
+        )
+        .unwrap();
+        let r = parse_seventv_search(&json, "TANIMURA").unwrap();
+        assert_eq!(r.url, "https://cdn.7tv.app/emote/abc/1x.webp");
+        assert_eq!(r.owner.as_deref(), Some("TanimuraTV"));
+    }
+
+    #[test]
+    fn seventv_search_returns_none_on_case_mismatch() {
+        let json: serde_json::Value = serde_json::from_str(
+            r#"{ "data": { "emotes": { "items": [
+                { "name": "tanimura", "host": { "url": "//x" } }
+            ]}}}"#,
+        )
+        .unwrap();
+        assert!(parse_seventv_search(&json, "TANIMURA").is_none());
+    }
+
+    #[test]
+    fn bttv_search_returns_hit_on_exact_code_match() {
+        let json: serde_json::Value = serde_json::from_str(
+            r#"[
+                { "id": "5f1b0186cf6d2144653d2970", "code": "catJAM",
+                  "user": { "displayName": "OmegaPepega" } },
+                { "id": "other", "code": "catjam" }
+            ]"#,
+        )
+        .unwrap();
+        let r = parse_bttv_search(&json, "catJAM").unwrap();
+        assert_eq!(
+            r.url,
+            "https://cdn.betterttv.net/emote/5f1b0186cf6d2144653d2970/1x"
+        );
+        assert_eq!(r.owner.as_deref(), Some("OmegaPepega"));
+    }
+
+    #[test]
+    fn bttv_search_returns_none_on_case_mismatch() {
+        let json: serde_json::Value =
+            serde_json::from_str(r#"[{ "id": "1", "code": "catjam" }]"#).unwrap();
+        assert!(parse_bttv_search(&json, "catJAM").is_none());
+    }
+
+    #[test]
+    fn ffz_search_returns_hit_on_exact_match() {
+        let json: serde_json::Value = serde_json::from_str(
+            r#"{ "emoticons": [
+                { "id": 28138, "name": "ZreknarF",
+                  "urls": { "1": "//cdn.frankerfacez.com/emote/28138/1" },
+                  "owner": { "display_name": "Zreknarf" } }
+            ]}"#,
+        )
+        .unwrap();
+        let r = parse_ffz_search(&json, "ZreknarF").unwrap();
+        assert_eq!(r.url, "https://cdn.frankerfacez.com/emote/28138/1");
+        assert_eq!(r.owner.as_deref(), Some("Zreknarf"));
+    }
+
+    #[test]
+    fn ffz_search_returns_none_when_no_exact_match() {
+        let json: serde_json::Value = serde_json::from_str(
+            r#"{ "emoticons": [{ "id": 1, "name": "zreknarf", "urls": {"1":"//x"} }] }"#,
+        )
+        .unwrap();
+        assert!(parse_ffz_search(&json, "ZreknarF").is_none());
     }
 }
