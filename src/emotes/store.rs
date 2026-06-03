@@ -1,6 +1,3 @@
-// Suppressed until the boot wiring / handlers land in Tasks 7-10.
-#![allow(dead_code)]
-
 use crate::emotes::EmoteRecord;
 use std::collections::HashMap;
 use std::sync::RwLock;

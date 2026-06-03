@@ -4,11 +4,12 @@ pub mod store;
 
 use serde::{Deserialize, Serialize};
 
-// Re-exports consumed by main.rs in Task 8.
+pub use fetch::load_prefetched;
+pub use store::EmoteIndex;
+
+// Consumed by the lookup handler in Task 10.
 #[allow(unused_imports)]
-pub use fetch::{MOONMOON_TWITCH_ID, load_prefetched};
-#[allow(unused_imports)]
-pub use store::{EmoteIndex, Lookup, ResolvedEntry};
+pub use store::{Lookup, ResolvedEntry};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]

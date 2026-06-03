@@ -21,6 +21,7 @@ pub struct AppState {
     pub http_client: reqwest::Client,
     pub refresh_lock: tokio::sync::Mutex<()>,
     pub sync_store: Arc<sync_store::SyncStore>,
+    pub emotes: RwLock<Arc<emotes::EmoteIndex>>,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -57,6 +58,21 @@ async fn main() {
     let games = vods::build_games(&all_vods);
     tracing::info!("found {} games", games.len());
 
+    const EMOTE_BOOT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+    let prefetched =
+        match tokio::time::timeout(EMOTE_BOOT_TIMEOUT, emotes::load_prefetched(&http_client)).await
+        {
+            Ok(map) => map,
+            Err(_) => {
+                tracing::warn!(
+                    "emote boot fetch timed out after {:?}; starting with empty index",
+                    EMOTE_BOOT_TIMEOUT
+                );
+                std::collections::HashMap::new()
+            }
+        };
+    tracing::info!("emotes: prefetched {} entries", prefetched.len());
+
     let sync_store_path: std::path::PathBuf = std::env::var("SYNC_STORE_PATH")
         .unwrap_or_else(|_| "sync.json".to_string())
         .into();
@@ -69,6 +85,7 @@ async fn main() {
         http_client,
         refresh_lock: tokio::sync::Mutex::new(()),
         sync_store,
+        emotes: RwLock::new(Arc::new(emotes::EmoteIndex::new(prefetched))),
     });
 
     const REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
@@ -92,6 +109,22 @@ async fn main() {
                     tracing::warn!("tick refresh: {e}")
                 }
             }
+        }
+    });
+
+    let emote_state = Arc::clone(&state);
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(REFRESH_INTERVAL);
+        tick.tick().await; // skip immediate tick; boot already loaded
+        loop {
+            tick.tick().await;
+            let prefetched = emotes::load_prefetched(&emote_state.http_client).await;
+            tracing::info!(
+                "emote tick refresh: {} prefetched entries",
+                prefetched.len()
+            );
+            let new_index = Arc::new(emotes::EmoteIndex::new(prefetched));
+            *emote_state.emotes.write().await = new_index;
         }
     });
 

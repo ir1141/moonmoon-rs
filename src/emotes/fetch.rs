@@ -1,6 +1,3 @@
-// Suppressed until the boot wiring lands in Task 8.
-#![allow(dead_code)]
-
 use crate::emotes::EmoteRecord;
 use crate::emotes::parse;
 use std::collections::HashMap;
