@@ -1,5 +1,3 @@
-// Suppressed until the fetch.rs / handler callers land in Tasks 7-10.
-#![allow(dead_code)]
 use crate::emotes::{EmoteProvider, EmoteRecord};
 use std::collections::HashMap;
 

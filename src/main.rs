@@ -151,6 +151,7 @@ async fn main() {
         .route("/api/vod/{vod_id}", get(handlers::vod_detail))
         .route("/api/next/{vod_id}", get(handlers::next_in_period))
         .route("/api/emotes/channel", get(handlers::channel_emotes))
+        .route("/api/emotes/lookup/{name}", get(handlers::lookup_emote))
         .route(
             "/api/sync/{token}",
             get(handlers::sync_get).put(handlers::sync_put),
