@@ -1,5 +1,6 @@
 mod api;
 mod calendar;
+mod emotes;
 mod games;
 mod history;
 mod sync;
@@ -8,6 +9,7 @@ mod watch;
 
 pub use api::chat_proxy;
 pub use calendar::calendar_page;
+pub use emotes::channel_emotes;
 pub use games::{games_grid, games_page};
 pub use history::{history_page, history_vods_grid};
 pub use sync::{sync_get, sync_put};

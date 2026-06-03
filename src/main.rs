@@ -150,6 +150,7 @@ async fn main() {
         .route("/api/chat/{vod_id}", get(handlers::chat_proxy))
         .route("/api/vod/{vod_id}", get(handlers::vod_detail))
         .route("/api/next/{vod_id}", get(handlers::next_in_period))
+        .route("/api/emotes/channel", get(handlers::channel_emotes))
         .route(
             "/api/sync/{token}",
             get(handlers::sync_get).put(handlers::sync_put),
