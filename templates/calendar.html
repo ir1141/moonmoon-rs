@@ -44,9 +44,10 @@
            title="{{ block.range }} · {{ block.total }}"
            aria-label="{{ day.weekday }} {{ day.date_label }} stream, {{ block.range }}, {{ block.primary_game }}">
           {% for seg in block.segments %}
-          <i class="chapter-seg color-{{ seg.color_idx }}" style="flex-basis: {{ seg.width_pct }}%; flex-grow: 0"></i>
+          <i class="cal-tg-seg chapter-seg color-{{ seg.color_idx }}" style="flex-basis: {{ seg.width_pct }}%; flex-grow: 0">
+            <span class="cal-tg-seglbl"><span class="t">{{ seg.range }}</span><b>{{ seg.name }}</b></span>
+          </i>
           {% endfor %}
-          <span class="cal-tg-lbl"><span class="t">{{ block.range }}</span><b>{{ block.primary_game }}</b></span>
         </a>
         {% endfor %}
         {% endif %}

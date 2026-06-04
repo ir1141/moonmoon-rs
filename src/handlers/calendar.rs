@@ -1,6 +1,6 @@
 use super::{
-    ChapterSegment, Section, build_watch_url, days_to_civil, get_chapter_segments,
-    parse_ymd_to_days, render_template, vod_stream_time,
+    Section, build_watch_url, days_to_civil, get_chapter_segments, parse_ymd_to_days,
+    render_template, vod_stream_time,
 };
 use crate::SharedState;
 use crate::middleware::CspNonce;
@@ -27,6 +27,7 @@ struct GuideSeg {
     name: String,
     width_pct: f64,
     color_idx: u8,
+    range: String,
 }
 
 struct GuideBlock {
@@ -292,7 +293,7 @@ fn color_idx_for_name(name: &str) -> u8 {
     (h % 8) as u8
 }
 
-fn fallback_segment(vod: &Vod) -> GuideSeg {
+fn fallback_segment(vod: &Vod, start_of_day_seconds: i64, duration_seconds: i64) -> GuideSeg {
     let name = vod
         .chapters
         .as_deref()
@@ -303,28 +304,34 @@ fn fallback_segment(vod: &Vod) -> GuideSeg {
         color_idx: color_idx_for_name(&name),
         name,
         width_pct: 100.0,
+        range: format_time_range(start_of_day_seconds, duration_seconds),
     }
 }
 
-fn guide_segments(vod: &Vod, duration_seconds: i64) -> Vec<GuideSeg> {
+fn guide_segments(vod: &Vod, duration_seconds: i64, start_of_day_seconds: i64) -> Vec<GuideSeg> {
     let segments = get_chapter_segments(vod, duration_seconds);
     if segments.is_empty() {
-        return vec![fallback_segment(vod)];
+        return vec![fallback_segment(
+            vod,
+            start_of_day_seconds,
+            duration_seconds,
+        )];
     }
     segments
-        .into_iter()
-        .map(
-            |ChapterSegment {
-                 name,
-                 width_pct,
-                 color_idx,
-                 ..
-             }| GuideSeg {
-                name,
-                width_pct,
-                color_idx,
-            },
-        )
+        .iter()
+        .enumerate()
+        .map(|(i, segment)| {
+            let end_secs = segments
+                .get(i + 1)
+                .map_or(duration_seconds, |next| next.start_secs);
+            let len_secs = (end_secs - segment.start_secs).max(0);
+            GuideSeg {
+                name: segment.name.clone(),
+                width_pct: segment.width_pct,
+                color_idx: segment.color_idx,
+                range: format_time_range(start_of_day_seconds + segment.start_secs, len_secs),
+            }
+        })
         .collect()
 }
 
@@ -377,7 +384,11 @@ fn block_position(start_seconds: i64, duration_seconds: i64) -> (f64, f64) {
 }
 
 fn build_guide_block(session: &RawSession<'_>, watch_url: String) -> GuideBlock {
-    let segments = guide_segments(session.vod, session.duration_seconds);
+    let segments = guide_segments(
+        session.vod,
+        session.duration_seconds,
+        session.local.seconds_of_day,
+    );
     let primary_game = primary_game(&segments);
     let (left_pct, width_pct) =
         block_position(session.local.seconds_of_day, session.duration_seconds);
@@ -594,7 +605,33 @@ mod tests {
         assert_eq!(block.segments.len(), 2);
         assert_eq!(block.segments[0].name, "Elden Ring");
         assert_close(block.segments[0].width_pct, 63.15);
+        assert_eq!(block.segments[0].range, "1:30 - 5:30 PM");
         assert_eq!(block.segments[1].name, "Schedule I");
         assert_close(block.segments[1].width_pct, 36.84);
+        assert_eq!(block.segments[1].range, "5:30 - 7:50 PM");
+    }
+
+    #[test]
+    fn test_single_game_segment_range_matches_block_range() {
+        let week_start = parse_date_query_days("2026-05-24").unwrap();
+        let vod = test_vod(
+            "v2",
+            "2026-05-25T20:30:00.000Z",
+            3 * 3600,
+            vec![Chapter {
+                name: Some("Old School RuneScape".into()),
+                image: None,
+                start: Some(0.0),
+                duration: Some(3.0 * 3600.0),
+                end: None,
+            }],
+        );
+
+        let guide = build_time_guide(&[vod], week_start, week_start + 7);
+        let block = &guide.days[1].blocks[0];
+
+        assert_eq!(block.segments.len(), 1);
+        assert_eq!(block.segments[0].name, "Old School RuneScape");
+        assert_eq!(block.segments[0].range, block.range);
     }
 }
