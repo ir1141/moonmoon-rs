@@ -1,7 +1,7 @@
 /* ─── Calendar ─── */
 
 .calendar-page {
-  max-width: 1000px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 0 1rem 3rem;
 }
@@ -9,18 +9,18 @@
 .calendar-nav {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 1.5rem;
+  justify-content: flex-start;
+  gap: 0.75rem;
   margin: 2rem 0 1.5rem;
 }
 
 .cal-month-title {
   font-family: var(--font-display);
-  font-size: 2rem;
+  font-size: 1.6rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  min-width: 280px;
-  text-align: center;
+  letter-spacing: 0.03em;
+  min-width: 0;
+  text-align: left;
   color: var(--text);
 }
 
@@ -42,193 +42,179 @@
   pointer-events: none;
 }
 
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
-}
-
-.cal-weekday {
+/* Calendar · Time-of-day guide */
+.cal-tg-note {
+  margin: -0.9rem 0 1rem;
+  margin-left: 2px;
+  color: var(--text-muted);
   font-family: var(--font-display);
-  font-size: 0.7rem;
-  font-weight: 600;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-align: left;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-muted);
-  text-align: center;
-  padding: 0.5rem 0;
 }
 
-.cal-day {
-  aspect-ratio: 1;
-  background: var(--bg-card);
-  border-radius: 8px;
-  border: 1px solid var(--border);
+.cal-tg {
+  padding: 4px 8px 0;
+}
+
+.cal-tg-head {
+  display: grid;
+  grid-template-columns: 122px 1fr;
+  margin-bottom: 2px;
+}
+
+.cal-tg-axis {
   position: relative;
-  overflow: hidden;
-  padding: 4px;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  text-decoration: none;
-  display: block;
+  height: 20px;
 }
 
-.cal-day.pad {
-  background: transparent;
-  border-color: transparent;
-}
-
-.cal-day.empty {
-  opacity: 0.35;
-  background: var(--bg-deep);
-  border-color: transparent;
-}
-
-.cal-day.future {
-  opacity: 0.12;
-  background: transparent;
-  border: 1px dashed var(--border);
-}
-
-.cal-day.future .cal-date {
-  color: var(--text-muted);
-  text-shadow: none;
-}
-
-.cal-day.today {
-  border: 1.5px solid var(--accent);
-  box-shadow:
-    0 0 0 1px var(--accent-glow),
-    0 0 14px var(--accent-glow);
-  opacity: 1;
-}
-
-.cal-day.today .cal-date {
-  color: var(--accent);
-  font-weight: 700;
-}
-
-.cal-day.has-streams {
-  cursor: pointer;
-  border-color: rgba(108, 92, 231, calc(0.15 + var(--glow, 0) * 0.55));
-  box-shadow: 0 0 calc(var(--glow, 0) * 18px)
-    rgba(108, 92, 231, calc(var(--glow, 0) * 0.2));
-}
-
-.cal-day.has-streams:hover {
-  transform: scale(1.06);
-  border-color: var(--accent);
-  box-shadow: 0 0 22px var(--accent-glow);
-  z-index: 2;
-}
-
-.cal-date {
+.cal-tg-axis span {
   position: absolute;
-  top: 4px;
-  right: 6px;
-  font-family: var(--font-body);
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--text);
-  z-index: 2;
-  line-height: 1;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
-}
-
-.cal-date.dim {
+  top: 3px;
   color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  transform: translateX(-50%);
 }
 
-.cal-games {
+.cal-tg-row {
+  display: grid;
+  grid-template-columns: 122px 1fr;
+  align-items: center;
+  height: 54px;
+  border-top: 1px solid var(--border);
+}
+
+.cal-tg-row:last-child {
+  border-bottom: 1px solid var(--border);
+}
+
+.cal-tg-day {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0;
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  border-radius: 7px;
+  gap: 8px;
+  align-items: baseline;
+  padding-left: 2px;
 }
 
-.cal-game-art {
-  flex: 1 1 40%;
-  min-width: 40%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top center;
-  opacity: 0.8;
-  transition: opacity 0.2s;
-}
-
-.cal-day.has-streams:hover .cal-game-art {
-  opacity: 1;
-}
-
-/* Single game fills the whole cell */
-.cal-games .cal-game-art:only-child {
-  flex: 1 1 100%;
-  min-width: 100%;
-}
-
-/* Two games split 50/50 */
-.cal-games .cal-game-art:first-child:nth-last-child(2),
-.cal-games .cal-game-art:first-child:nth-last-child(2) ~ .cal-game-art {
-  flex: 1 1 50%;
-  min-width: 50%;
-}
-
-/* Three+ games: first takes left half, rest stack on right */
-.cal-games .cal-game-art:first-child:nth-last-child(n + 3) {
-  flex: 1 1 50%;
-  min-width: 50%;
-}
-.cal-games .cal-game-art:first-child:nth-last-child(n + 3) ~ .cal-game-art {
-  flex: 1 1 50%;
-  min-width: 50%;
-  height: 50%;
-}
-
-.cal-game-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  opacity: 0.7;
-}
-
-.cal-duration {
-  position: absolute;
-  bottom: 4px;
-  left: 5px;
-  font-family: var(--font-body);
-  font-size: 0.55rem;
-  font-weight: 500;
-  color: var(--text-dim);
-  z-index: 2;
-  letter-spacing: 0.02em;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
-}
-
-.cal-mobile-cue {
-  display: none;
-  position: absolute;
-  left: 4px;
-  right: 4px;
-  bottom: 4px;
-  z-index: 3;
-  overflow: hidden;
-  padding: 2px 4px;
-  border-radius: 4px;
-  background: rgba(8, 8, 10, 0.74);
-  color: var(--on-overlay);
-  font-size: 0.55rem;
+.cal-tg-day b {
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 14px;
   font-weight: 600;
-  line-height: 1.1;
-  text-overflow: ellipsis;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
-  white-space: nowrap;
 }
 
-.cal-day.has-streams:hover .cal-duration {
-  color: var(--accent-soft);
+.cal-tg-day span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.cal-tg-track {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0 1px,
+    transparent 1px calc(100% / 6)
+  );
+}
+
+.cal-tg-block {
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  display: flex;
+  overflow: hidden;
+  min-width: 4px;
+  border-radius: 7px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  text-decoration: none;
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.cal-tg-block > .cal-tg-seg {
+  height: 100%;
+  min-width: 2px;
+  background-color: var(--chapter-color, var(--accent));
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.16),
+    rgba(0, 0, 0, 0.18)
+  );
+}
+
+.cal-tg-seg {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  container-type: inline-size;
+}
+
+.cal-tg-seg + .cal-tg-seg {
+  box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.28);
+}
+
+.cal-tg-seglbl {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+  padding: 0 11px;
+  color: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+  opacity: 0;
+}
+
+.cal-tg-seglbl .t {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+  display: none;
+}
+
+.cal-tg-seglbl b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+@container (min-width: 78px) {
+  .cal-tg-seglbl {
+    opacity: 1;
+  }
+}
+
+@container (min-width: 150px) {
+  .cal-tg-seglbl .t {
+    display: block;
+  }
+}
+
+.cal-tg-off {
+  position: absolute;
+  top: 50%;
+  padding-left: 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+  transform: translateY(-50%);
+}
+
+.cal-tg-block:hover {
+  box-shadow: 0 0 18px var(--accent-glow);
+  transform: translateY(-1px);
+}
+
+.cal-tg-seg:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 3px;
 }
 
 /* Calendar responsive */
@@ -237,17 +223,24 @@
     font-size: 1.4rem;
     min-width: auto;
   }
-  .calendar-grid {
-    gap: 3px;
+  .cal-tg-head,
+  .cal-tg-row {
+    grid-template-columns: 84px 1fr;
   }
-  .cal-date {
-    font-size: 0.6rem;
+  .cal-tg {
+    padding-inline: 0;
   }
-  .cal-duration {
+  .cal-tg-day {
+    gap: 5px;
+  }
+  .cal-tg-day b {
+    font-size: 12px;
+  }
+  .cal-tg-day span {
+    font-size: 10px;
+  }
+  .cal-tg-seglbl {
     display: none;
-  }
-  .cal-mobile-cue {
-    display: block;
   }
 }
 
@@ -255,20 +248,23 @@
   .calendar-page {
     padding: 0 0.5rem 2rem;
   }
-  .calendar-grid {
-    gap: 2px;
+  .cal-tg-note {
+    margin-top: -0.75rem;
   }
-  .cal-day {
-    border-radius: 4px;
+  .cal-tg-head {
+    display: none;
   }
-  .cal-games {
-    border-radius: 3px;
+  .cal-tg-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    height: 72px;
+    padding: 8px 0;
   }
-  .cal-mobile-cue {
-    left: 3px;
-    right: 3px;
-    bottom: 3px;
-    font-size: 0.5rem;
+  .cal-tg-day {
+    padding-left: 0;
+  }
+  .cal-tg-track {
+    height: 34px;
   }
   .cal-nav-btn {
     width: 34px;

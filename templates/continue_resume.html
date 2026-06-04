@@ -1,0 +1,36 @@
+<a class="continue-still" href="{{ resume.resume_url }}" aria-label="Resume {{ resume.title }}">
+  {% if let Some(thumb) = resume.thumbnail_url %}
+  <img src="{{ thumb }}" alt="" loading="lazy">
+  {% else %}
+  <div class="continue-still-fallback"></div>
+  {% endif %}
+  <span class="continue-play" aria-hidden="true">
+    <svg viewBox="0 0 24 24" focusable="false">
+      <polygon points="5,3 19,12 5,21"></polygon>
+    </svg>
+  </span>
+  <span class="continue-progress" aria-hidden="true">
+    <span style="width: {{ resume.progress_pct }}%"></span>
+  </span>
+</a>
+<div class="continue-meta">
+  <div class="continue-eyebrow">Continue watching</div>
+  <h2 id="continue-title">{{ resume.title }}</h2>
+  <div class="continue-line">
+    <b>{{ resume.game_name }}</b>
+    · {{ resume.formatted_date }}
+    {% if let Some(duration) = resume.duration %}
+    · {{ duration }}
+    {% endif %}
+  </div>
+  <div class="continue-left">{{ resume.subline }}</div>
+  <div class="continue-actions">
+    <a class="continue-btn continue-btn-primary" href="{{ resume.resume_url }}">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <polygon points="5,3 19,12 5,21"></polygon>
+      </svg>
+      <span>Resume</span>
+    </a>
+    <a class="continue-btn" href="{{ resume.start_url }}">Start over</a>
+  </div>
+</div>

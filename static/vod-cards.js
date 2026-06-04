@@ -1,3 +1,4 @@
+import { nextChapterPopoverOpen } from "./lib/chapter-popover.js";
 import { hasWatchedVod } from "./lib/watched.js";
 
 const RESUME_KEY = "moonmoon_resume";
@@ -78,6 +79,58 @@ function applyWatchedState(card, watchedStore) {
   }
 }
 
+function setChapterPopoverOpen(card, open) {
+  const chip = card.querySelector(".game-count-chip");
+  const popover = card.querySelector(".chapter-pop");
+  if (!chip || !popover) return;
+
+  chip.setAttribute("aria-expanded", open ? "true" : "false");
+  popover.hidden = !open;
+  card.classList.toggle("chapter-pop-open", open);
+}
+
+function closeChapterPopovers(exceptCard = null) {
+  document.querySelectorAll(".vod-card.chapter-pop-open").forEach((card) => {
+    if (card !== exceptCard) setChapterPopoverOpen(card, false);
+  });
+}
+
+/**
+ * @param {Document | Element} [root]
+ */
+function initChapterPopovers(root = document) {
+  const cards =
+    root instanceof Element && root.matches(".vod-card")
+      ? [root]
+      : root.querySelectorAll(".vod-card");
+
+  cards.forEach((card) => {
+    if (card.dataset.chapterPopoverReady === "true") return;
+
+    const chip = card.querySelector(".game-count-chip");
+    const popover = card.querySelector(".chapter-pop");
+    if (!chip || !popover) return;
+
+    card.dataset.chapterPopoverReady = "true";
+    chip.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const nextOpen = nextChapterPopoverOpen(
+        card.classList.contains("chapter-pop-open"),
+        { type: "chip" },
+      );
+      closeChapterPopovers(card);
+      setChapterPopoverOpen(card, nextOpen);
+    });
+
+    popover.addEventListener("click", (event) => {
+      if (event.target instanceof Element && event.target.closest("a")) {
+        setChapterPopoverOpen(card, false);
+      }
+    });
+  });
+}
+
 /**
  * @param {Document | Element} [root]
  */
@@ -96,10 +149,13 @@ export function applyVodCardState(root = document) {
 }
 
 function applyFromEvent(event) {
-  applyVodCardState((event.detail && event.detail.target) || document);
+  const root = (event.detail && event.detail.target) || document;
+  applyVodCardState(root);
+  initChapterPopovers(root);
 }
 
 applyVodCardState();
+initChapterPopovers();
 
 document.body.addEventListener("htmx:afterSwap", applyFromEvent);
 window.addEventListener("moonmoon:resumeChanged", () => applyVodCardState());
@@ -107,4 +163,22 @@ window.addEventListener("moonmoon:watchedChanged", () => applyVodCardState());
 window.addEventListener("storage", (event) => {
   if (event.key === RESUME_KEY || event.key === WATCHED_KEY)
     applyVodCardState();
+});
+
+document.addEventListener("click", (event) => {
+  const target = event.target;
+  document.querySelectorAll(".vod-card.chapter-pop-open").forEach((card) => {
+    if (target instanceof Node && card.contains(target)) return;
+    setChapterPopoverOpen(
+      card,
+      nextChapterPopoverOpen(true, { type: "outside" }),
+    );
+  });
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  document.querySelectorAll(".vod-card.chapter-pop-open").forEach((card) => {
+    setChapterPopoverOpen(card, nextChapterPopoverOpen(true, { type: "escape" }));
+  });
 });

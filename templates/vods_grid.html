@@ -14,20 +14,30 @@
       {% if let Some(dur) = vod.duration %}
       <div class="duration-badge">{{ dur }}</div>
       {% endif %}
+      {% if !(show_game_tags && !vod.chapter_segments.is_empty()) %}
       <div class="date-badge">{{ vod.formatted_date }}</div>
+      {% endif %}
       <div class="play-icon">
         <svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>
       </div>
     </a>
     {% if show_game_tags && !vod.chapter_segments.is_empty() %}
-    <div class="chapter-strip" aria-hidden="true">
+    <button class="game-count-chip" type="button" aria-haspopup="true" aria-expanded="false">
+      {% for seg in vod.chapter_segments %}
+      {% if loop.first %}
+      <span class="chapter-dot color-{{ seg.color_idx }}" aria-hidden="true"></span>
+      {% endif %}
+      {% endfor %}
+      <span>{{ vod.chapter_segments.len() }} {% if vod.chapter_segments.len() == 1 %}game{% else %}games{% endif %}</span>
+    </button>
+    <div class="chapter-strip">
       {% for seg in vod.chapter_segments %}
       <a href="{{ seg.watch_url }}"
          class="chapter-seg color-{{ seg.color_idx }}"
          style="flex-basis: {{ seg.width_pct }}%"
          tabindex="-1"
          aria-label="Jump to {{ seg.name }}">
-        <span class="chapter-seg-tip">{{ seg.name }}</span>
+        <span class="chapter-seg-tip">{{ seg.name }} · {{ seg.start_label }}</span>
       </a>
       {% endfor %}
     </div>
@@ -44,17 +54,16 @@
     {% endif %}
   </a>
   {% if show_game_tags && !vod.chapter_segments.is_empty() %}
-  <details class="chapter-disclosure">
-    <summary>Chapters</summary>
-    <div class="chapter-list" aria-label="Chapter links">
-      {% for seg in vod.chapter_segments %}
-      <a href="{{ seg.watch_url }}" class="chapter-link">
-        <span class="chapter-link-marker color-{{ seg.color_idx }}" aria-hidden="true"></span>
-        <span class="chapter-link-name">{{ seg.name }}</span>
-      </a>
-      {% endfor %}
-    </div>
-  </details>
+  <div class="chapter-pop" hidden>
+    <div class="chapter-pop-head">Jump to a game</div>
+    {% for seg in vod.chapter_segments %}
+    <a href="{{ seg.watch_url }}" class="chapter-pop-link">
+      <span class="chapter-link-marker color-{{ seg.color_idx }}" aria-hidden="true"></span>
+      <span class="chapter-link-name">{{ seg.name }}</span>
+      <span class="chapter-link-time">{{ seg.start_label }}</span>
+    </a>
+    {% endfor %}
+  </div>
   {% endif %}
 </div>
 {% endfor %}

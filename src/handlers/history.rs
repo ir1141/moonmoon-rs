@@ -1,5 +1,5 @@
 use super::{
-    Section, VodDisplay, assign_series_headers, find_vod_by_id, render_template,
+    Section, VodDisplay, assign_series_headers, build_watch_url, find_vod_by_id, render_template,
     resolve_watched_chapter,
 };
 use crate::SharedState;
@@ -7,6 +7,7 @@ use crate::middleware::CspNonce;
 use crate::vods::Vod;
 use askama::Template;
 use axum::extract::{Extension, Query, State};
+use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -43,6 +44,30 @@ struct VodsGridTemplate {
     next_url: String,
     show_game_tags: bool,
     is_filtered: bool,
+}
+
+#[derive(Template)]
+#[template(path = "continue_resume.html")]
+struct ContinueResumeTemplate {
+    resume: ContinueResumeView,
+}
+
+struct ContinueResumeView {
+    title: String,
+    game_name: String,
+    formatted_date: String,
+    duration: Option<String>,
+    thumbnail_url: Option<String>,
+    resume_url: String,
+    start_url: String,
+    progress_pct: String,
+    subline: String,
+}
+
+#[derive(Deserialize)]
+pub struct ContinueResumeQuery {
+    pub id: Option<String>,
+    pub time: Option<i64>,
 }
 
 #[derive(Clone, Copy)]
@@ -188,6 +213,81 @@ fn format_history_time(seconds: i64) -> String {
     }
 }
 
+fn format_continue_remaining(position: i64, duration: i64) -> Option<String> {
+    if duration <= 0 {
+        return None;
+    }
+
+    let remaining = (duration - position).max(0);
+    let hours = remaining / 3600;
+    let minutes = (remaining % 3600) / 60;
+
+    if hours > 0 {
+        Some(format!("{hours}h {minutes}m left"))
+    } else if minutes > 0 {
+        Some(format!("{minutes}m left"))
+    } else {
+        Some("Less than a minute left".to_string())
+    }
+}
+
+fn build_continue_resume_view(
+    vods: &[Vod],
+    requested_id: &str,
+    resume_time: Option<i64>,
+) -> Option<ContinueResumeView> {
+    let resume_time = resume_time.filter(|time| *time > 10)?;
+    let vod = find_vod_by_id(vods, requested_id)?;
+    let resolved_game = resolve_watched_chapter(vod, Some(resume_time));
+    let game_name = resolved_game
+        .as_ref()
+        .map(|(name, _)| name.clone())
+        .unwrap_or_else(|| "Stream".to_string());
+    let game_hint = resolved_game.as_ref().map(|(name, _)| name.as_str());
+    let display = VodDisplay::from_vod_with(vod, Some(resume_time), game_hint);
+    let progress = if display.duration_seconds > 0 {
+        ((resume_time as f64 / display.duration_seconds as f64) * 100.0).clamp(0.0, 100.0)
+    } else {
+        0.0
+    };
+    let resume_at = format!("resumes at {}", format_history_time(resume_time));
+    let subline = match format_continue_remaining(resume_time, display.duration_seconds) {
+        Some(remaining) => format!("{remaining} · {resume_at}"),
+        None => resume_at,
+    };
+
+    Some(ContinueResumeView {
+        title: display.display_title,
+        game_name,
+        formatted_date: display.formatted_date,
+        duration: display.duration,
+        thumbnail_url: display.thumbnail_url,
+        resume_url: display.watch_url,
+        start_url: build_watch_url(&display.id, Some(0), None),
+        progress_pct: format!("{progress:.2}"),
+        subline,
+    })
+}
+
+pub async fn continue_resume(
+    State(state): State<SharedState>,
+    Query(params): Query<ContinueResumeQuery>,
+) -> axum::response::Response {
+    let Some(id) = params.id.as_deref().filter(|id| !id.is_empty()) else {
+        return StatusCode::NO_CONTENT.into_response();
+    };
+
+    let vods = {
+        let guard = state.vods.read().await;
+        Arc::clone(&*guard)
+    };
+
+    match build_continue_resume_view(&vods, id, params.time) {
+        Some(resume) => render_template(&ContinueResumeTemplate { resume }),
+        None => StatusCode::NO_CONTENT.into_response(),
+    }
+}
+
 pub async fn history_vods_grid(
     State(state): State<SharedState>,
     Query(params): Query<HistoryVodsQuery>,
@@ -299,6 +399,20 @@ mod tests {
 
         assert_eq!(displays[0].id, "v1");
         assert_eq!(displays[0].watch_url, "/watch/v1?t=5000&game=Terraria");
+    }
+
+    #[test]
+    fn continue_resume_view_uses_explicit_server_fields() {
+        let vods = vec![make_history_vod()];
+
+        let resume = build_continue_resume_view(&vods, "legacy-v1", Some(5000)).unwrap();
+
+        assert_eq!(resume.title, "Test stream");
+        assert_eq!(resume.game_name, "Terraria");
+        assert_eq!(resume.resume_url, "/watch/v1?t=5000&game=Terraria");
+        assert_eq!(resume.start_url, "/watch/v1?t=0");
+        assert_eq!(resume.progress_pct, "69.44");
+        assert_eq!(resume.subline, "36m left · resumes at 1:23:20");
     }
 
     #[test]

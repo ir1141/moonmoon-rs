@@ -1,5 +1,5 @@
 export function selectContinueWatchingEntries(store, options = {}) {
-  const limit = options.limit || 4;
+  const limit = options.limit || 1;
   const minTime = options.minTime || 10;
 
   if (!store || typeof store !== "object" || Array.isArray(store)) {
@@ -25,18 +25,13 @@ export function selectContinueWatchingEntries(store, options = {}) {
     .slice(0, limit);
 }
 
-export function buildContinueWatchingUrl(entries) {
-  const ids = entries.map((entry) => entry.id).join(",");
-  const times = entries.map((entry) => entry.time).join(",");
+export function buildContinueResumeUrl(entry) {
   const params = new URLSearchParams({
-    ids,
-    times,
-    sort: "recent",
-    resume_links: "true",
-    headers: "false",
+    id: entry.id,
+    time: String(entry.time),
   });
 
-  return `/history/vods?${params.toString()}`;
+  return `/history/resume?${params.toString()}`;
 }
 
 export function resumePercent(time, durationSeconds) {
