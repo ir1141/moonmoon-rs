@@ -39,16 +39,20 @@
         <span class="cal-tg-off">No stream</span>
         {% else %}
         {% for block in day.blocks %}
-        <a href="{{ block.watch_url }}" class="cal-tg-block"
-           style="left: {{ block.left_pct }}%; width: {{ block.width_pct }}%"
-           title="{{ block.range }} · {{ block.total }}"
-           aria-label="{{ day.weekday }} {{ day.date_label }} stream, {{ block.range }}, {{ block.primary_game }}">
+        <div class="cal-tg-block"
+             style="left: {{ block.left_pct }}%; width: {{ block.width_pct }}%"
+             title="{{ block.range }} · {{ block.total }}"
+             aria-label="{{ day.weekday }} {{ day.date_label }} stream, {{ block.range }}, {{ block.primary_game }}">
           {% for seg in block.segments %}
-          <i class="cal-tg-seg chapter-seg color-{{ seg.color_idx }}" style="flex-basis: {{ seg.width_pct }}%; flex-grow: 0">
+          <a href="{{ seg.watch_url }}"
+             class="cal-tg-seg chapter-seg color-{{ seg.color_idx }}"
+             style="flex-basis: {{ seg.width_pct }}%; flex-grow: 0"
+             title="{{ seg.label }}"
+             aria-label="{{ seg.label }}">
             <span class="cal-tg-seglbl"><span class="t">{{ seg.range }}</span><b>{{ seg.name }}</b></span>
-          </i>
+          </a>
           {% endfor %}
-        </a>
+        </div>
         {% endfor %}
         {% endif %}
       </div>

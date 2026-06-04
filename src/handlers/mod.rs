@@ -134,6 +134,7 @@ pub(crate) struct ChapterSegment {
     pub start_label: String,
     /// Clamped start offset (seconds) of this segment within the stream.
     pub start_secs: i64,
+    pub duration_secs: i64,
 }
 
 pub(crate) struct VodDisplay {
@@ -820,6 +821,7 @@ pub(crate) fn get_chapter_segments(vod: &Vod, total_duration_secs: i64) -> Vec<C
             color_idx: (h % 8) as u8,
             start_label: format_chapter_start(start),
             start_secs: start,
+            duration_secs: len,
         });
     }
     out
@@ -1451,6 +1453,7 @@ mod tests {
                 color_idx: 0,
                 start_label: "0:00".into(),
                 start_secs: 0,
+                duration_secs: 0,
             })
             .collect();
         d

@@ -28,6 +28,8 @@ struct GuideSeg {
     width_pct: f64,
     color_idx: u8,
     range: String,
+    label: String,
+    watch_url: String,
 }
 
 struct GuideBlock {
@@ -37,7 +39,6 @@ struct GuideBlock {
     total: String,
     primary_game: String,
     segments: Vec<GuideSeg>,
-    watch_url: String,
 }
 
 struct GuideDay {
@@ -302,6 +303,11 @@ fn fallback_segment(vod: &Vod, start_of_day_seconds: i64, duration_seconds: i64)
         .unwrap_or_else(|| "Stream".to_string());
     GuideSeg {
         color_idx: color_idx_for_name(&name),
+        label: format!(
+            "{name} · {}",
+            format_time_range(start_of_day_seconds, duration_seconds)
+        ),
+        watch_url: build_watch_url(&vod.id, None, None),
         name,
         width_pct: 100.0,
         range: format_time_range(start_of_day_seconds, duration_seconds),
@@ -319,18 +325,23 @@ fn guide_segments(vod: &Vod, duration_seconds: i64, start_of_day_seconds: i64) -
     }
     segments
         .iter()
-        .enumerate()
-        .map(|(i, segment)| {
-            let end_secs = segments
-                .get(i + 1)
-                .map_or(duration_seconds, |next| next.start_secs);
-            let len_secs = (end_secs - segment.start_secs).max(0);
-            GuideSeg {
-                name: segment.name.clone(),
-                width_pct: segment.width_pct,
-                color_idx: segment.color_idx,
-                range: format_time_range(start_of_day_seconds + segment.start_secs, len_secs),
-            }
+        .map(|segment| GuideSeg {
+            label: format!(
+                "{} · {}",
+                segment.name,
+                format_time_range(
+                    start_of_day_seconds + segment.start_secs,
+                    segment.duration_secs
+                )
+            ),
+            name: segment.name.clone(),
+            width_pct: segment.width_pct,
+            color_idx: segment.color_idx,
+            range: format_time_range(
+                start_of_day_seconds + segment.start_secs,
+                segment.duration_secs,
+            ),
+            watch_url: segment.watch_url.clone(),
         })
         .collect()
 }
@@ -383,7 +394,7 @@ fn block_position(start_seconds: i64, duration_seconds: i64) -> (f64, f64) {
     )
 }
 
-fn build_guide_block(session: &RawSession<'_>, watch_url: String) -> GuideBlock {
+fn build_guide_block(session: &RawSession<'_>) -> GuideBlock {
     let segments = guide_segments(
         session.vod,
         session.duration_seconds,
@@ -399,7 +410,6 @@ fn build_guide_block(session: &RawSession<'_>, watch_url: String) -> GuideBlock 
         total: calendar_duration_display(session.duration_seconds / 60),
         primary_game,
         segments,
-        watch_url,
     }
 }
 
@@ -434,22 +444,7 @@ fn build_time_guide(vods: &[Vod], week_start: i64, current_week_start: i64) -> T
         .map(|(idx, mut sessions)| {
             let day_days = week_start + idx as i64;
             sessions.sort_by_key(|session| session.local.seconds_of_day);
-            let stream_url = format!(
-                "/streams?from={date}&to={date}",
-                date = date_query(day_days)
-            );
-            let single_session = sessions.len() == 1;
-            let blocks = sessions
-                .iter()
-                .map(|session| {
-                    let watch_url = if single_session {
-                        build_watch_url(&session.vod.id, None, None)
-                    } else {
-                        stream_url.clone()
-                    };
-                    build_guide_block(session, watch_url)
-                })
-                .collect::<Vec<_>>();
+            let blocks = sessions.iter().map(build_guide_block).collect::<Vec<_>>();
 
             GuideDay {
                 weekday: weekday_label(day_days),
@@ -599,7 +594,7 @@ mod tests {
         assert_eq!(block.range, "1:30 - 7:50 PM");
         assert_eq!(block.total, "6h 20m");
         assert_eq!(block.primary_game, "Elden Ring");
-        assert_eq!(block.watch_url, "/watch/v1");
+        assert_eq!(block.segments[0].watch_url, "/watch/v1?t=0");
         assert_close(block.left_pct, 12.5);
         assert_close(block.width_pct, 52.77);
         assert_eq!(block.segments.len(), 2);
@@ -609,6 +604,89 @@ mod tests {
         assert_eq!(block.segments[1].name, "Schedule I");
         assert_close(block.segments[1].width_pct, 36.84);
         assert_eq!(block.segments[1].range, "5:30 - 7:50 PM");
+    }
+
+    #[test]
+    fn test_time_guide_segments_link_to_chapter_offsets_and_expose_hover_labels() {
+        let week_start = parse_date_query_days("2026-05-24").unwrap();
+        let vod = test_vod(
+            "segmented",
+            "2026-05-25T19:00:00.000Z",
+            6 * 3600,
+            vec![
+                Chapter {
+                    name: Some("Game 1".into()),
+                    image: None,
+                    start: Some(0.0),
+                    duration: Some(3600.0),
+                    end: None,
+                },
+                Chapter {
+                    name: Some("Game 2".into()),
+                    image: None,
+                    start: Some(3600.0),
+                    duration: Some(3600.0),
+                    end: None,
+                },
+                Chapter {
+                    name: Some("Game 3".into()),
+                    image: None,
+                    start: Some(7200.0),
+                    duration: Some(3600.0),
+                    end: None,
+                },
+                Chapter {
+                    name: Some("Tiny Fourth Game".into()),
+                    image: None,
+                    start: Some(10_800.0),
+                    duration: Some(120.0),
+                    end: None,
+                },
+            ],
+        );
+
+        let guide = build_time_guide(&[vod], week_start, week_start + 7);
+        let block = &guide.days[1].blocks[0];
+        let segment = &block.segments[3];
+
+        assert_eq!(segment.watch_url, "/watch/segmented?t=10800");
+        assert_eq!(segment.label, "Tiny Fourth Game · 3:00 - 3:02 PM");
+    }
+
+    #[test]
+    fn test_time_guide_multiple_sessions_link_to_each_vod_not_utc_date_filter() {
+        let week_start = parse_date_query_days("2026-05-24").unwrap();
+        let first = test_vod(
+            "v1",
+            "2026-05-25T20:30:00.000Z",
+            2 * 3600,
+            vec![Chapter {
+                name: Some("First Game".into()),
+                image: None,
+                start: Some(0.0),
+                duration: Some(2.0 * 3600.0),
+                end: None,
+            }],
+        );
+        let second = test_vod(
+            "v2",
+            "2026-05-25T23:30:00.000Z",
+            90 * 60,
+            vec![Chapter {
+                name: Some("Second Game".into()),
+                image: None,
+                start: Some(0.0),
+                duration: Some(90.0 * 60.0),
+                end: None,
+            }],
+        );
+
+        let guide = build_time_guide(&[first, second], week_start, week_start + 7);
+        let monday = &guide.days[1];
+
+        assert_eq!(monday.blocks.len(), 2);
+        assert_eq!(monday.blocks[0].segments[0].watch_url, "/watch/v1?t=0");
+        assert_eq!(monday.blocks[1].segments[0].watch_url, "/watch/v2?t=0");
     }
 
     #[test]
