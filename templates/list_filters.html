@@ -1,5 +1,5 @@
 <button type="button" class="btn-chip toolbar-search-open" data-search-overlay-open aria-controls="{{ filter.form_id }}" aria-expanded="false">Search filters</button>
-<form id="{{ filter.form_id }}" class="{{ filter.toolbar_class }}" action="{{ filter.action }}" method="get" data-list-filters data-search-overlay>
+<form id="{{ filter.form_id }}" class="{{ filter.toolbar_class }}" action="{{ filter.action }}" method="get" data-list-filters data-search-overlay hx-sync="closest form:replace">
   <div class="toolbar-overlay-panel">
     <div class="toolbar-mobile-actions">
       <span>{{ filter.title }}</span>

@@ -182,3 +182,19 @@ document.addEventListener("keydown", (event) => {
     setChapterPopoverOpen(card, nextChapterPopoverOpen(true, { type: "escape" }));
   });
 });
+
+// Hide broken game-art images. We can't use an inline `onerror` attribute: the
+// page CSP has no 'unsafe-inline'/'unsafe-hashes' in script-src, so the browser
+// blocks inline handlers. `error` events don't bubble, so listen in the capture
+// phase at the document root — this also covers cards htmx swaps in later
+// without any per-card re-binding.
+document.addEventListener(
+  "error",
+  (event) => {
+    const el = event.target;
+    if (el instanceof HTMLImageElement && el.classList.contains("art")) {
+      el.style.display = "none";
+    }
+  },
+  true,
+);

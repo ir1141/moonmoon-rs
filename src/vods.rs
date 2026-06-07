@@ -395,12 +395,7 @@ async fn fetch_catalog_snapshot(
     client: &reqwest::Client,
 ) -> Result<CatalogSnapshot, reqwest::Error> {
     let resp = fetch_api_response(client, &snapshot_url()).await?;
-    let latest = resp.data.first();
-    Ok(CatalogSnapshot {
-        total: resp.meta.total,
-        latest_id: latest.map(|vod| vod.id.clone()),
-        latest_updated_at: latest.and_then(|vod| vod.updated_at.clone()),
-    })
+    Ok(CatalogSnapshot::from_api_response(&resp))
 }
 
 pub fn is_playable_vod(vod: &Vod) -> bool {
@@ -817,6 +812,10 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
     let count = new_vods.len();
 
     {
+        // Acquire all three write guards together (vods → games → snapshot) so the
+        // swap is atomic from a reader's perspective. Safe against deadlock only
+        // because readers clone-and-release each guard and never hold two at once
+        // — see the lock-discipline note on `AppState`.
         let mut vods_w = state.vods.write().await;
         let mut games_w = state.games.write().await;
         let mut snapshot_w = state.catalog_snapshot.write().await;
