@@ -234,6 +234,11 @@ pub struct Game {
     pub name: String,
     pub image: Option<String>,
     pub vod_count: usize,
+    pub dominant_stream_count: usize,
+    pub first_streamed: Option<String>,
+    pub last_streamed: Option<String>,
+    pub first_streamed_label: Option<String>,
+    pub last_streamed_label: Option<String>,
 }
 
 #[must_use]
@@ -568,6 +573,11 @@ pub fn build_games(vods: &[Vod]) -> Vec<Game> {
                         name: name.clone(),
                         image: None,
                         vod_count: 0,
+                        dominant_stream_count: 0,
+                        first_streamed: None,
+                        last_streamed: None,
+                        first_streamed_label: None,
+                        last_streamed_label: None,
                     });
                     entry.vod_count += 1;
                     if entry.image.is_none() {
@@ -576,10 +586,194 @@ pub fn build_games(vods: &[Vod]) -> Vec<Game> {
                 }
             }
         }
+        if let Some(dominant) = dominant_game(vod) {
+            let key = dominant.name.to_lowercase();
+            let entry = games.entry(key).or_insert_with(|| Game {
+                name: dominant.name.clone(),
+                image: dominant.image.clone(),
+                vod_count: 0,
+                dominant_stream_count: 0,
+                first_streamed: None,
+                last_streamed: None,
+                first_streamed_label: None,
+                last_streamed_label: None,
+            });
+            if entry.image.is_none() {
+                entry.image = dominant.image;
+            }
+            update_dominant_stream_stats(entry, stream_time_for_vod(vod));
+        }
     }
     let mut games: Vec<Game> = games.into_values().collect();
     games.sort_by_key(|g| std::cmp::Reverse(g.vod_count));
     games
+}
+
+pub fn build_dominant_games(vods: &[Vod]) -> Vec<Game> {
+    use std::collections::HashMap;
+    let mut games: HashMap<String, Game> = HashMap::new();
+
+    for vod in vods {
+        let Some(dominant) = dominant_game(vod) else {
+            continue;
+        };
+        let key = dominant.name.to_lowercase();
+        let entry = games.entry(key).or_insert_with(|| Game {
+            name: dominant.name.clone(),
+            image: dominant.image.clone(),
+            vod_count: 0,
+            dominant_stream_count: 0,
+            first_streamed: None,
+            last_streamed: None,
+            first_streamed_label: None,
+            last_streamed_label: None,
+        });
+        entry.vod_count += 1;
+        if entry.image.is_none() {
+            entry.image = dominant.image;
+        }
+        update_dominant_stream_stats(entry, stream_time_for_vod(vod));
+    }
+
+    let mut games: Vec<Game> = games.into_values().collect();
+    games.sort_by_key(|g| std::cmp::Reverse(g.vod_count));
+    games
+}
+
+pub(crate) fn chapter_color_idx(game_name: &str) -> u8 {
+    let mut h: u32 = 0;
+    for b in game_name.bytes() {
+        h = h.wrapping_mul(31).wrapping_add(u32::from(b));
+    }
+    (h % 8) as u8
+}
+
+struct DominantGame {
+    name: String,
+    image: Option<String>,
+}
+
+fn dominant_game(vod: &Vod) -> Option<DominantGame> {
+    use std::collections::HashMap;
+
+    let chapters = vod.chapters.as_ref()?;
+    let total_duration = vod
+        .duration
+        .as_ref()
+        .map_or(0, |duration| duration.seconds());
+    let named: Vec<(usize, &Chapter)> = chapters
+        .iter()
+        .enumerate()
+        .filter(|(_, chapter)| chapter.name.as_deref().is_some_and(|name| !name.is_empty()))
+        .collect();
+    if named.is_empty() {
+        return None;
+    }
+
+    let mut totals: HashMap<String, (String, i64, Option<String>, usize)> = HashMap::new();
+    for (position, &(chapter_idx, chapter)) in named.iter().enumerate() {
+        let name = chapter.name.as_deref().unwrap_or_default();
+        let key = name.to_lowercase();
+        let duration = chapter_duration_seconds(&named, position, chapter_idx, total_duration);
+        let image = chapter.image.as_deref().map(upscale_chapter_image);
+        let entry = totals
+            .entry(key)
+            .or_insert_with(|| (name.to_string(), 0, image.clone(), chapter_idx));
+        entry.1 += duration;
+        if entry.2.is_none() {
+            entry.2 = image;
+        }
+        entry.3 = entry.3.min(chapter_idx);
+    }
+
+    totals
+        .into_values()
+        .max_by(|a, b| a.1.cmp(&b.1).then_with(|| b.3.cmp(&a.3)))
+        .map(|(name, _, image, _)| DominantGame { name, image })
+}
+
+fn chapter_duration_seconds(
+    named: &[(usize, &Chapter)],
+    position: usize,
+    chapter_idx: usize,
+    total_duration: i64,
+) -> i64 {
+    let chapter = named[position].1;
+    let start = chapter.start.map(|s| s as i64).unwrap_or(0).max(0);
+    let explicit_end = chapter
+        .end
+        .map(|end| end as i64)
+        .or_else(|| chapter.duration.map(|duration| start + duration as i64));
+    let inferred_end = named
+        .get(position + 1)
+        .and_then(|(_, next)| next.start.map(|start| start as i64))
+        .unwrap_or(total_duration);
+    let end = explicit_end
+        .unwrap_or(inferred_end)
+        .clamp(0, total_duration.max(0));
+    let duration = end.saturating_sub(start);
+    if duration > 0 {
+        return duration;
+    }
+    if named.len() == 1 || chapter_idx == named.last().map(|(idx, _)| *idx).unwrap_or(chapter_idx) {
+        total_duration.max(0)
+    } else {
+        0
+    }
+}
+
+fn update_dominant_stream_stats(game: &mut Game, stream_time: &str) {
+    game.dominant_stream_count += 1;
+    if game
+        .first_streamed
+        .as_deref()
+        .is_none_or(|first| stream_time < first)
+    {
+        game.first_streamed = Some(stream_time.to_string());
+        game.first_streamed_label = Some(format_stream_date(stream_time));
+    }
+    if game
+        .last_streamed
+        .as_deref()
+        .is_none_or(|last| stream_time > last)
+    {
+        game.last_streamed = Some(stream_time.to_string());
+        game.last_streamed_label = Some(format_stream_date(stream_time));
+    }
+}
+
+fn stream_time_for_vod(vod: &Vod) -> &str {
+    vod.started_at.as_deref().unwrap_or(&vod.created_at)
+}
+
+fn format_stream_date(timestamp: &str) -> String {
+    let Some(date_part) = timestamp.get(..10) else {
+        return timestamp.to_string();
+    };
+    let parts: Vec<&str> = date_part.split('-').collect();
+    if parts.len() != 3 {
+        return date_part.to_string();
+    }
+    let day = parts[2].trim_start_matches('0');
+    format!("{} {day}, {}", month_abbr(parts[1]), parts[0])
+}
+
+fn month_abbr(month_part: &str) -> &str {
+    match month_part {
+        "01" => "Jan",
+        "02" => "Feb",
+        "03" => "Mar",
+        "04" => "Apr",
+        "05" => "May",
+        "06" => "Jun",
+        "07" => "Jul",
+        "08" => "Aug",
+        "09" => "Sep",
+        "10" => "Oct",
+        "11" => "Nov",
+        "12" => "Dec",
+        other => other,
+    }
 }
 
 pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {

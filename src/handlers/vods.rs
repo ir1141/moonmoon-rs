@@ -1,7 +1,9 @@
 use super::{
     ListFilterConfig, ListMetadata, ListQuery, Section, VOD_BATCH_SIZE, VodDisplay,
-    assign_period_headers, filter_vod_displays_with_metadata, find_game_image, get_chapter_start,
-    list_sort_options, paginate_with_nav, render_template, vod_has_game,
+    archive_date_bounds, assign_period_headers, date_preset_state,
+    filter_vod_displays_with_metadata, find_game_image, get_chapter_start,
+    list_sort_options_grouped, paginate_with_nav, render_template, selected_sort_option,
+    vod_has_game,
 };
 use crate::SharedState;
 use crate::middleware::CspNonce;
@@ -61,6 +63,8 @@ struct PreparedVodList {
     metadata: ListMetadata,
     has_more: bool,
     next_url: String,
+    archive_min_date: String,
+    archive_max_date: String,
 }
 
 async fn prepare_game_vods(
@@ -73,6 +77,7 @@ async fn prepare_game_vods(
         let guard = state.vods.read().await;
         Arc::clone(&*guard)
     };
+    let (archive_min_date, archive_max_date) = archive_date_bounds(&vods);
     let displays: Vec<VodDisplay> = vods
         .iter()
         .filter(|v| vod_has_game(v, name))
@@ -90,6 +95,8 @@ async fn prepare_game_vods(
         metadata: filtered.metadata,
         has_more,
         next_url,
+        archive_min_date,
+        archive_max_date,
     }
 }
 
@@ -111,6 +118,19 @@ pub async fn game_vods_page(
     let game_search_label = format!("Search {name} streams");
     let prepared = prepare_game_vods(&state, &name, &params, &sort).await;
     let is_filtered = prepared.metadata.is_filtered;
+    let date_state = date_preset_state(
+        &from,
+        &to,
+        &prepared.archive_min_date,
+        &prepared.archive_max_date,
+    );
+    let sort_specs = [
+        ("newest", "Newest First", false),
+        ("oldest", "Oldest First", false),
+        ("longest", "Longest", true),
+        ("shortest", "Shortest", false),
+    ];
+    let (selected_sort_value, selected_sort_label) = selected_sort_option(&sort, &sort_specs);
 
     render_template(&VodsPageTemplate {
         game_name: name,
@@ -127,15 +147,13 @@ pub async fn game_vods_page(
             hx_get: page_base,
             results_id: "vod-results",
             loading_id: "vod-loading",
-            sort_options: list_sort_options(
-                &sort,
-                &[
-                    ("newest", "Newest First"),
-                    ("oldest", "Oldest First"),
-                    ("longest", "Longest"),
-                    ("shortest", "Shortest"),
-                ],
-            ),
+            sort_options: list_sort_options_grouped(selected_sort_value, &sort_specs),
+            selected_sort_value,
+            selected_sort_label,
+            archive_min_date: prepared.archive_min_date,
+            archive_max_date: prepared.archive_max_date,
+            date_preset: date_state.active,
+            show_custom_dates: date_state.show_custom,
         },
         search,
         vods: prepared.vods,
@@ -172,6 +190,7 @@ async fn prepare_all_streams(state: &SharedState, params: &ListQuery) -> Prepare
         let guard = state.vods.read().await;
         Arc::clone(&*guard)
     };
+    let (archive_min_date, archive_max_date) = archive_date_bounds(&vods);
     let displays: Vec<VodDisplay> = vods.iter().map(VodDisplay::from_vod).collect();
     let filtered = filter_vod_displays_with_metadata(displays, params, "/streams");
     let (paged, has_more, next_url) =
@@ -181,6 +200,8 @@ async fn prepare_all_streams(state: &SharedState, params: &ListQuery) -> Prepare
         metadata: filtered.metadata,
         has_more,
         next_url,
+        archive_min_date,
+        archive_max_date,
     }
 }
 
@@ -195,6 +216,19 @@ pub async fn all_streams_page(
     let sort = params.sort.clone().unwrap_or("newest".to_string());
     let prepared = prepare_all_streams(&state, &params).await;
     let is_filtered = prepared.metadata.is_filtered;
+    let date_state = date_preset_state(
+        &from,
+        &to,
+        &prepared.archive_min_date,
+        &prepared.archive_max_date,
+    );
+    let sort_specs = [
+        ("newest", "Newest First", false),
+        ("oldest", "Oldest First", false),
+        ("longest", "Longest", true),
+        ("shortest", "Shortest", false),
+    ];
+    let (selected_sort_value, selected_sort_label) = selected_sort_option(&sort, &sort_specs);
 
     render_template(&AllStreamsPageTemplate {
         metadata: prepared.metadata,
@@ -209,15 +243,13 @@ pub async fn all_streams_page(
             hx_get: "/streams".to_string(),
             results_id: "vod-results",
             loading_id: "vod-loading",
-            sort_options: list_sort_options(
-                &sort,
-                &[
-                    ("newest", "Newest First"),
-                    ("oldest", "Oldest First"),
-                    ("longest", "Longest"),
-                    ("shortest", "Shortest"),
-                ],
-            ),
+            sort_options: list_sort_options_grouped(selected_sort_value, &sort_specs),
+            selected_sort_value,
+            selected_sort_label,
+            archive_min_date: prepared.archive_min_date,
+            archive_max_date: prepared.archive_max_date,
+            date_preset: date_state.active,
+            show_custom_dates: date_state.show_custom,
         },
         search,
         vods: prepared.vods,

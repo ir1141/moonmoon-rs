@@ -32,14 +32,18 @@
     </div>
 
     {% for day in guide.days %}
-    <div class="cal-tg-row">
-      <div class="cal-tg-day"><b>{{ day.weekday }}</b><span>{{ day.date_label }}</span></div>
+    <div class="cal-tg-row{% if day.is_future %} is-future{% endif %}{% if day.is_today %} is-today{% endif %}">
+      <div class="cal-tg-day">
+        <b>{{ day.weekday }}</b><span>{{ day.date_label }}</span>
+        {% if day.is_today %}<span class="cal-tg-today-tag">Today</span>{% endif %}
+      </div>
       <div class="cal-tg-track">
-        {% if day.is_off %}
+        {% if day.is_future %}
+        {% else if day.is_off %}
         <span class="cal-tg-off">No stream</span>
         {% else %}
         {% for block in day.blocks %}
-        <div class="cal-tg-block"
+        <div class="cal-tg-block{% if block.is_live %} is-live{% endif %}"
              style="left: {{ block.left_pct }}%; width: {{ block.width_pct }}%"
              title="{{ block.range }} · {{ block.total }}"
              aria-label="{{ day.weekday }} {{ day.date_label }} stream, {{ block.range }}, {{ block.primary_game }}">
@@ -54,10 +58,21 @@
           {% endfor %}
         </div>
         {% endfor %}
+        {% if let Some(now_pct) = day.now_pct %}
+        <div class="cal-tg-now" style="left: {{ now_pct }}%"></div>
+        {% endif %}
         {% endif %}
       </div>
     </div>
     {% endfor %}
   </div>
+  {% if !guide.legend.is_empty() %}
+  <div class="cal-legend" aria-label="Games shown this week">
+    <div class="cal-legend-title">This week · games</div>
+    {% for item in guide.legend %}
+    <span class="cal-leg color-{{ item.color_idx }}"><i aria-hidden="true"></i>{{ item.name }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

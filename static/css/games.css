@@ -27,7 +27,7 @@
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: linear-gradient(120deg, var(--bg-card), #14131c);
+  background: linear-gradient(120deg, var(--bg-card), var(--continue-grad-end));
 }
 
 .continue-still {
@@ -272,6 +272,19 @@ a.game-card:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text);
+}
+
+.game-card .last {
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  margin-top: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 @media (hover: hover) and (pointer: fine) {

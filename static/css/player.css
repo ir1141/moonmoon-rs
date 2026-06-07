@@ -299,7 +299,7 @@
 
 .emote-tooltip {
   position: fixed;
-  background: #1a1a2e;
+  background: var(--tooltip-bg);
   color: #fff;
   font-size: 11px;
   padding: 4px 8px;

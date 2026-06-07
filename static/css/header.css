@@ -394,6 +394,8 @@
   .games-toolbar .toolbar-search,
   .vod-toolbar .toolbar-select,
   .games-toolbar .toolbar-select,
+  .vod-toolbar .toolbar-sort,
+  .games-toolbar .toolbar-sort,
   .vod-toolbar .toolbar-date,
   .games-toolbar .toolbar-date {
     width: 100%;

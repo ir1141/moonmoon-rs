@@ -16,6 +16,10 @@
   --button-hover-bg: #25232f;
   --on-overlay: #e8e6f0;
   --on-overlay-dim: #b8b6c4;
+  --continue-grad-end: #14131c;
+  --grid-line: rgba(255, 255, 255, 0.05);
+  --future-hatch: rgba(255, 255, 255, 0.045);
+  --tooltip-bg: #1a1a2e;
   --font-display: "Chakra Petch", sans-serif;
   --font-body: "Outfit", sans-serif;
   color-scheme: dark;
@@ -37,6 +41,10 @@
   --header-bg: rgba(241, 237, 226, 0.82);
   --input-bg: #faf6ec;
   --button-hover-bg: #e2dcc9;
+  --continue-grad-end: #f3eede;
+  --grid-line: rgba(0, 0, 0, 0.06);
+  --future-hatch: rgba(0, 0, 0, 0.05);
+  --tooltip-bg: var(--bg-elevated);
   color-scheme: light;
 }
 

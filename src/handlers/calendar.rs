@@ -38,6 +38,7 @@ struct GuideBlock {
     range: String,
     total: String,
     primary_game: String,
+    is_live: bool,
     segments: Vec<GuideSeg>,
 }
 
@@ -45,7 +46,15 @@ struct GuideDay {
     weekday: &'static str,
     date_label: String,
     is_off: bool,
+    is_future: bool,
+    is_today: bool,
+    now_pct: Option<f64>,
     blocks: Vec<GuideBlock>,
+}
+
+struct GuideLegendItem {
+    name: String,
+    color_idx: u8,
 }
 
 struct TimeGuideView {
@@ -56,6 +65,7 @@ struct TimeGuideView {
     timezone_note: &'static str,
     axis_ticks: Vec<AxisTick>,
     days: Vec<GuideDay>,
+    legend: Vec<GuideLegendItem>,
 }
 
 #[derive(Template)]
@@ -284,16 +294,6 @@ struct RawSession<'a> {
     duration_seconds: i64,
 }
 
-fn color_idx_for_name(name: &str) -> u8 {
-    let mut h: u32 = 5381;
-    for b in name.as_bytes() {
-        h = h
-            .wrapping_mul(33)
-            .wrapping_add(u32::from(b.to_ascii_lowercase()));
-    }
-    (h % 8) as u8
-}
-
 fn fallback_segment(vod: &Vod, start_of_day_seconds: i64, duration_seconds: i64) -> GuideSeg {
     let name = vod
         .chapters
@@ -302,7 +302,7 @@ fn fallback_segment(vod: &Vod, start_of_day_seconds: i64, duration_seconds: i64)
         .or_else(|| vod.title.clone())
         .unwrap_or_else(|| "Stream".to_string());
     GuideSeg {
-        color_idx: color_idx_for_name(&name),
+        color_idx: crate::vods::chapter_color_idx(&name),
         label: format!(
             "{name} · {}",
             format_time_range(start_of_day_seconds, duration_seconds)
@@ -394,7 +394,13 @@ fn block_position(start_seconds: i64, duration_seconds: i64) -> (f64, f64) {
     )
 }
 
-fn build_guide_block(session: &RawSession<'_>) -> GuideBlock {
+fn axis_pct_for_seconds(seconds: i64) -> f64 {
+    let hour = seconds as f64 / 3600.0;
+    let clipped = hour.clamp(AXIS_START_HOUR, AXIS_END_HOUR);
+    ((clipped - AXIS_START_HOUR) / (AXIS_END_HOUR - AXIS_START_HOUR)) * 100.0
+}
+
+fn build_guide_block(session: &RawSession<'_>, current_local: PacificLocalTime) -> GuideBlock {
     let segments = guide_segments(
         session.vod,
         session.duration_seconds,
@@ -403,17 +409,26 @@ fn build_guide_block(session: &RawSession<'_>) -> GuideBlock {
     let primary_game = primary_game(&segments);
     let (left_pct, width_pct) =
         block_position(session.local.seconds_of_day, session.duration_seconds);
+    let session_end = session.local.seconds_of_day + session.duration_seconds;
+    let is_live = session.local.days == current_local.days
+        && current_local.seconds_of_day >= session.local.seconds_of_day
+        && current_local.seconds_of_day < session_end;
     GuideBlock {
         left_pct,
         width_pct,
         range: format_time_range(session.local.seconds_of_day, session.duration_seconds),
         total: calendar_duration_display(session.duration_seconds / 60),
         primary_game,
+        is_live,
         segments,
     }
 }
 
-fn build_time_guide(vods: &[Vod], week_start: i64, current_week_start: i64) -> TimeGuideView {
+fn build_time_guide(
+    vods: &[Vod],
+    week_start: i64,
+    current_local: PacificLocalTime,
+) -> TimeGuideView {
     let mut sessions_by_day: Vec<Vec<RawSession<'_>>> = (0..7).map(|_| Vec::new()).collect();
 
     for vod in vods {
@@ -444,16 +459,26 @@ fn build_time_guide(vods: &[Vod], week_start: i64, current_week_start: i64) -> T
         .map(|(idx, mut sessions)| {
             let day_days = week_start + idx as i64;
             sessions.sort_by_key(|session| session.local.seconds_of_day);
-            let blocks = sessions.iter().map(build_guide_block).collect::<Vec<_>>();
+            let blocks = sessions
+                .iter()
+                .map(|session| build_guide_block(session, current_local))
+                .collect::<Vec<_>>();
+            let is_today = day_days == current_local.days;
+            let is_future = day_days > current_local.days;
 
             GuideDay {
                 weekday: weekday_label(day_days),
                 date_label: date_label(day_days),
                 is_off: blocks.is_empty(),
+                is_future,
+                is_today,
+                now_pct: is_today.then_some(axis_pct_for_seconds(current_local.seconds_of_day)),
                 blocks,
             }
         })
-        .collect();
+        .collect::<Vec<_>>();
+    let legend = build_guide_legend(&days);
+    let current_week_start = week_start_for_days(current_local.days);
 
     TimeGuideView {
         week_label: format_week_label(week_start),
@@ -463,7 +488,36 @@ fn build_time_guide(vods: &[Vod], week_start: i64, current_week_start: i64) -> T
         timezone_note: TIMEZONE_NOTE,
         axis_ticks: axis_ticks(),
         days,
+        legend,
     }
+}
+
+fn build_guide_legend(days: &[GuideDay]) -> Vec<GuideLegendItem> {
+    use std::collections::HashMap;
+
+    let mut seen: HashMap<String, GuideLegendItem> = HashMap::new();
+    for day in days {
+        if day.is_future {
+            continue;
+        }
+        for block in &day.blocks {
+            for segment in &block.segments {
+                seen.entry(segment.name.to_lowercase())
+                    .or_insert_with(|| GuideLegendItem {
+                        name: segment.name.clone(),
+                        color_idx: segment.color_idx,
+                    });
+            }
+        }
+    }
+
+    let mut items = seen.into_values().collect::<Vec<_>>();
+    items.sort_by(|a, b| {
+        a.color_idx
+            .cmp(&b.color_idx)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+    items
 }
 
 pub async fn calendar_page(
@@ -475,15 +529,14 @@ pub async fn calendar_page(
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs() as i64;
-    let current_local_days = pacific_local_from_unix_seconds(now).days;
-    let current_week_start = week_start_for_days(current_local_days);
-    let week_start = selected_week_start(&params, current_local_days);
+    let current_local = pacific_local_from_unix_seconds(now);
+    let week_start = selected_week_start(&params, current_local.days);
 
     let vods = {
         let guard = state.vods.read().await;
         Arc::clone(&*guard)
     };
-    let guide = build_time_guide(&vods, week_start, current_week_start);
+    let guide = build_time_guide(&vods, week_start, current_local);
 
     let tmpl = CalendarPageTemplate {
         guide,
@@ -533,6 +586,13 @@ mod tests {
         );
     }
 
+    fn current_local(days: i64) -> PacificLocalTime {
+        PacificLocalTime {
+            days,
+            seconds_of_day: 12 * 3600,
+        }
+    }
+
     #[test]
     fn test_time_guide_uses_existing_sunday_week_start() {
         let selected = parse_date_query_days("2026-05-26").unwrap();
@@ -540,7 +600,7 @@ mod tests {
 
         assert_eq!(date_query(week_start), "2026-05-24");
 
-        let guide = build_time_guide(&[], week_start, week_start + 7);
+        let guide = build_time_guide(&[], week_start, current_local(week_start + 7));
 
         assert_eq!(guide.week_label, "May 24 - 30, 2026");
         assert_eq!(guide.prev_week, "2026-05-17");
@@ -558,6 +618,26 @@ mod tests {
         assert_eq!(guide.days[0].weekday, "Sun");
         assert_eq!(guide.days[6].weekday, "Sat");
         assert!(guide.days.iter().all(|day| day.is_off));
+    }
+
+    #[test]
+    fn test_time_guide_marks_today_and_future_days_distinctly() {
+        let week_start = parse_date_query_days("2026-05-24").unwrap();
+        let guide = build_time_guide(
+            &[],
+            week_start,
+            PacificLocalTime {
+                days: week_start + 2,
+                seconds_of_day: 18 * 3600,
+            },
+        );
+
+        assert!(guide.days[1].is_off);
+        assert!(!guide.days[1].is_future);
+        assert!(guide.days[2].is_today);
+        assert_eq!(guide.days[2].now_pct, Some(50.0));
+        assert!(guide.days[3].is_future);
+        assert!(guide.days[3].is_off);
     }
 
     #[test]
@@ -585,7 +665,7 @@ mod tests {
             ],
         );
 
-        let guide = build_time_guide(&[vod], week_start, week_start + 7);
+        let guide = build_time_guide(&[vod], week_start, current_local(week_start + 7));
         let monday = &guide.days[1];
         let block = &monday.blocks[0];
 
@@ -645,7 +725,7 @@ mod tests {
             ],
         );
 
-        let guide = build_time_guide(&[vod], week_start, week_start + 7);
+        let guide = build_time_guide(&[vod], week_start, current_local(week_start + 7));
         let block = &guide.days[1].blocks[0];
         let segment = &block.segments[3];
 
@@ -681,7 +761,7 @@ mod tests {
             }],
         );
 
-        let guide = build_time_guide(&[first, second], week_start, week_start + 7);
+        let guide = build_time_guide(&[first, second], week_start, current_local(week_start + 7));
         let monday = &guide.days[1];
 
         assert_eq!(monday.blocks.len(), 2);
@@ -705,11 +785,47 @@ mod tests {
             }],
         );
 
-        let guide = build_time_guide(&[vod], week_start, week_start + 7);
+        let guide = build_time_guide(&[vod], week_start, current_local(week_start + 7));
         let block = &guide.days[1].blocks[0];
 
         assert_eq!(block.segments.len(), 1);
         assert_eq!(block.segments[0].name, "Old School RuneScape");
         assert_eq!(block.segments[0].range, block.range);
+    }
+
+    #[test]
+    fn test_time_guide_marks_in_progress_block_live_and_builds_legend() {
+        let week_start = parse_date_query_days("2026-05-24").unwrap();
+        let vod = test_vod(
+            "live",
+            "2026-05-25T20:00:00.000Z",
+            4 * 3600,
+            vec![Chapter {
+                name: Some("Ready or Not".into()),
+                image: None,
+                start: Some(0.0),
+                duration: Some(4.0 * 3600.0),
+                end: None,
+            }],
+        );
+
+        let guide = build_time_guide(
+            &[vod],
+            week_start,
+            PacificLocalTime {
+                days: week_start + 1,
+                seconds_of_day: 14 * 3600,
+            },
+        );
+
+        let monday = &guide.days[1];
+        assert!(monday.is_today);
+        assert!(monday.blocks[0].is_live);
+        assert_eq!(guide.legend.len(), 1);
+        assert_eq!(guide.legend[0].name, "Ready or Not");
+        assert_eq!(
+            guide.legend[0].color_idx,
+            crate::vods::chapter_color_idx("Ready or Not")
+        );
     }
 }

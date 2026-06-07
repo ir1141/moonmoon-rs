@@ -86,6 +86,7 @@ pub(crate) struct SortOption {
     pub value: &'static str,
     pub label: &'static str,
     pub selected: bool,
+    pub separator_before: bool,
 }
 
 pub(crate) struct ListFilterConfig {
@@ -100,20 +101,44 @@ pub(crate) struct ListFilterConfig {
     pub results_id: &'static str,
     pub loading_id: &'static str,
     pub sort_options: Vec<SortOption>,
+    pub selected_sort_value: &'static str,
+    pub selected_sort_label: &'static str,
+    pub archive_min_date: String,
+    pub archive_max_date: String,
+    pub date_preset: &'static str,
+    pub show_custom_dates: bool,
 }
 
-pub(crate) fn list_sort_options(
+pub(crate) fn list_sort_options_grouped(
     selected: &str,
-    options: &[(&'static str, &'static str)],
+    options: &[(&'static str, &'static str, bool)],
 ) -> Vec<SortOption> {
     options
         .iter()
-        .map(|(value, label)| SortOption {
+        .map(|(value, label, separator_before)| SortOption {
             value,
             label,
             selected: *value == selected,
+            separator_before: *separator_before,
         })
         .collect()
+}
+
+pub(crate) fn selected_sort_option(
+    selected: &str,
+    options: &[(&'static str, &'static str, bool)],
+) -> (&'static str, &'static str) {
+    options
+        .iter()
+        .find(|(value, _, _)| *value == selected)
+        .or_else(|| options.first())
+        .map(|(value, label, _)| (*value, *label))
+        .unwrap_or(("", ""))
+}
+
+pub(crate) struct DatePresetState {
+    pub active: &'static str,
+    pub show_custom: bool,
 }
 
 pub(crate) struct FilteredVodDisplays {
@@ -264,7 +289,7 @@ pub(crate) fn filter_games_with_metadata(
             .filter(|vod| vod_matches_date_filter(vod, params))
             .cloned()
             .collect();
-        filter_and_sort_games(crate::vods::build_games(&matching_vods), params)
+        filter_and_sort_games(crate::vods::build_dominant_games(&matching_vods), params)
     } else {
         filter_games(games, params)
     };
@@ -291,19 +316,148 @@ fn filter_and_sort_games(mut filtered: Vec<Game>, params: &ListQuery) -> Vec<Gam
         filtered.retain(|g| g.name.to_lowercase().contains(&search_lower));
     }
 
-    let sort = params.sort.as_deref().unwrap_or("most");
+    let sort = params.sort.as_deref().unwrap_or("recent");
     match sort {
-        "fewest" => filtered.sort_by_key(|a| a.vod_count),
+        "fewest" | "streams_asc" => filtered.sort_by_key(|a| a.vod_count),
+        "most" | "streams_desc" => filtered.sort_by_key(|a| std::cmp::Reverse(a.vod_count)),
         "az" => filtered.sort_by_key(|a| a.name.to_lowercase()),
         "za" => filtered.sort_by_key(|a| std::cmp::Reverse(a.name.to_lowercase())),
-        _ => filtered.sort_by_key(|a| std::cmp::Reverse(a.vod_count)),
+        "oldest" => sort_games_by_first_streamed(&mut filtered),
+        _ => sort_games_by_latest_streamed(&mut filtered),
     }
 
     filtered
 }
 
+fn sort_games_by_latest_streamed(games: &mut [Game]) {
+    games.sort_by(
+        |a, b| match (a.last_streamed.as_ref(), b.last_streamed.as_ref()) {
+            (Some(left), Some(right)) => right
+                .cmp(left)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        },
+    );
+}
+
+fn sort_games_by_first_streamed(games: &mut [Game]) {
+    games.sort_by(
+        |a, b| match (a.first_streamed.as_ref(), b.first_streamed.as_ref()) {
+            (Some(left), Some(right)) => left
+                .cmp(right)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        },
+    );
+}
+
 fn list_date_filter_is_active(params: &ListQuery) -> bool {
     normalized_filter_value(&params.from).is_some() || normalized_filter_value(&params.to).is_some()
+}
+
+pub(crate) fn archive_date_bounds(vods: &[Vod]) -> (String, String) {
+    let mut dates = vods
+        .iter()
+        .filter_map(|vod| vod_stream_time(vod).get(..10))
+        .filter(|date| parse_ymd_to_days(date).is_some());
+    let Some(first) = dates.next() else {
+        let today = current_utc_days();
+        let date = date_query_for_days(today);
+        return (date.clone(), date);
+    };
+
+    let mut min_date = first.to_string();
+    let mut max_date = first.to_string();
+    for date in dates {
+        if date < min_date.as_str() {
+            min_date = date.to_string();
+        }
+        if date > max_date.as_str() {
+            max_date = date.to_string();
+        }
+    }
+    (min_date, max_date)
+}
+
+pub(crate) fn date_preset_state(
+    from: &Option<String>,
+    to: &Option<String>,
+    archive_min_date: &str,
+    archive_max_date: &str,
+) -> DatePresetState {
+    let from = normalized_filter_value(from);
+    let to = normalized_filter_value(to);
+    if from.is_none() && to.is_none() {
+        return DatePresetState {
+            active: "all",
+            show_custom: false,
+        };
+    }
+
+    let today = bounded_preset_today(archive_min_date, archive_max_date);
+    for preset in ["30", "90", "year"] {
+        let (preset_from, preset_to) =
+            preset_date_range(preset, today, archive_min_date, archive_max_date);
+        if from.as_deref() == Some(preset_from.as_str())
+            && to.as_deref() == Some(preset_to.as_str())
+        {
+            return DatePresetState {
+                active: preset,
+                show_custom: false,
+            };
+        }
+    }
+
+    DatePresetState {
+        active: "custom",
+        show_custom: true,
+    }
+}
+
+fn bounded_preset_today(archive_min_date: &str, archive_max_date: &str) -> i64 {
+    let today = current_utc_days();
+    let min_days = parse_ymd_to_days(archive_min_date).unwrap_or(today);
+    let max_days = parse_ymd_to_days(archive_max_date).unwrap_or(today);
+    today.clamp(min_days, max_days)
+}
+
+fn preset_date_range(
+    preset: &str,
+    today: i64,
+    archive_min_date: &str,
+    archive_max_date: &str,
+) -> (String, String) {
+    let min_days = parse_ymd_to_days(archive_min_date).unwrap_or(today);
+    let max_days = parse_ymd_to_days(archive_max_date).unwrap_or(today);
+    let start = match preset {
+        "30" => today - 30,
+        "90" => today - 90,
+        "year" => {
+            let (year, _, _) = days_to_civil(today);
+            parse_ymd_to_days(&format!("{year:04}-01-01")).unwrap_or(today)
+        }
+        _ => today,
+    }
+    .clamp(min_days, max_days);
+    let end = today.clamp(min_days, max_days);
+    (date_query_for_days(start), date_query_for_days(end))
+}
+
+fn current_utc_days() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        .div_euclid(86_400) as i64
+}
+
+fn date_query_for_days(days: i64) -> String {
+    let (year, month, day) = days_to_civil(days);
+    format!("{year:04}-{month:02}-{day:02}")
 }
 
 fn vod_matches_date_filter(vod: &Vod, params: &ListQuery) -> bool {
@@ -808,17 +962,11 @@ pub(crate) fn get_chapter_segments(vod: &Vod, total_duration_secs: i64) -> Vec<C
         }
         let len = end - start;
         let width_pct = (len as f64 / total_duration_secs as f64) * 100.0;
-        let mut h: u32 = 5381;
-        for b in name.as_bytes() {
-            h = h
-                .wrapping_mul(33)
-                .wrapping_add(b.to_ascii_lowercase() as u32);
-        }
         out.push(ChapterSegment {
             name: name.to_string(),
             width_pct,
             watch_url: build_watch_url(&vod.id, Some(start), None),
-            color_idx: (h % 8) as u8,
+            color_idx: crate::vods::chapter_color_idx(name),
             start_label: format_chapter_start(start),
             start_secs: start,
             duration_secs: len,
@@ -1082,11 +1230,21 @@ mod tests {
                 name: "Elden Ring".into(),
                 image: Some("elden.jpg".into()),
                 vod_count: 2,
+                dominant_stream_count: 0,
+                first_streamed: None,
+                last_streamed: None,
+                first_streamed_label: None,
+                last_streamed_label: None,
             },
             Game {
                 name: "Dark Souls".into(),
                 image: None,
                 vod_count: 1,
+                dominant_stream_count: 0,
+                first_streamed: None,
+                last_streamed: None,
+                first_streamed_label: None,
+                last_streamed_label: None,
             },
         ];
         assert_eq!(
@@ -1431,6 +1589,79 @@ mod tests {
     }
 
     #[test]
+    fn games_default_sort_uses_latest_dominant_stream() {
+        let vods = vec![
+            make_vod("old-popular-1", "2026-05-01T10:00:00Z", &["Old Popular"]),
+            make_vod("old-popular-2", "2026-05-02T10:00:00Z", &["Old Popular"]),
+            make_vod("fresh", "2026-05-20T10:00:00Z", &["Fresh Game"]),
+        ];
+        let all_games = crate::vods::build_games(&vods);
+        let params = ListQuery::default();
+
+        let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games");
+
+        assert_eq!(
+            filtered
+                .games
+                .iter()
+                .map(|game| game.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Fresh Game", "Old Popular"]
+        );
+    }
+
+    #[test]
+    fn games_date_filter_ignores_short_cameos() {
+        let vods = vec![
+            make_vod_with_chapters(
+                "dominant-main",
+                "2026-05-20T10:00:00Z",
+                4 * 3600 + 300,
+                &[
+                    ("Main Game", 0.0, 4.0 * 3600.0),
+                    ("Cameo Game", 4.0 * 3600.0, 300.0),
+                ],
+            ),
+            make_vod("cameo-old", "2026-05-01T10:00:00Z", &["Cameo Game"]),
+        ];
+        let all_games = crate::vods::build_games(&vods);
+        let params = ListQuery {
+            search: None,
+            sort: Some("recent".into()),
+            from: Some("2026-05-20".into()),
+            to: Some("2026-05-20".into()),
+            page: None,
+        };
+
+        let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games");
+
+        assert_eq!(
+            filtered
+                .games
+                .iter()
+                .map(|game| game.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Main Game"]
+        );
+    }
+
+    #[test]
+    fn chapter_color_indices_use_handoff_hash() {
+        fn handoff_color_idx(name: &str) -> u8 {
+            let mut h: u32 = 0;
+            for b in name.bytes() {
+                h = h.wrapping_mul(31).wrapping_add(u32::from(b));
+            }
+            (h % 8) as u8
+        }
+
+        let vod = make_vod("color", "2026-05-20T10:00:00Z", &["Elden Ring"]);
+        let segments = get_chapter_segments(&vod, 3600);
+
+        assert_eq!(segments[0].color_idx, handoff_color_idx("Elden Ring"));
+    }
+
+    #[test]
     fn test_assign_period_headers_skips_when_single_cluster() {
         let mut displays = vec![
             make_display("1", "2024-03-10T00:00:00Z"),
@@ -1622,6 +1853,40 @@ mod tests {
                         start: Some(0.0),
                         duration: None,
                         end: None,
+                    })
+                    .collect(),
+            ),
+            youtube: None,
+            is_live: false,
+        }
+    }
+
+    fn make_vod_with_chapters(
+        id: &str,
+        created_at: &str,
+        duration_secs: i64,
+        chapters: &[(&str, f64, f64)],
+    ) -> Vod {
+        Vod {
+            id: id.into(),
+            platform: None,
+            platform_vod_id: None,
+            platform_stream_id: None,
+            title: Some(format!("vod {id}")),
+            created_at: created_at.into(),
+            started_at: None,
+            updated_at: None,
+            duration: Some(crate::vods::VodDuration::from_seconds(duration_secs)),
+            thumbnail_url: None,
+            chapters: Some(
+                chapters
+                    .iter()
+                    .map(|(name, start, duration)| crate::vods::Chapter {
+                        name: Some((*name).into()),
+                        image: None,
+                        start: Some(*start),
+                        duration: Some(*duration),
+                        end: Some(start + duration),
                     })
                     .collect(),
             ),

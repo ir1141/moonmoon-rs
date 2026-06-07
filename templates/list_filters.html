@@ -18,28 +18,63 @@
            hx-select="#{{ filter.results_id }}" hx-target="#{{ filter.results_id }}" hx-swap="outerHTML"
            hx-push-url="true" hx-include="#{{ filter.form_id }}" hx-indicator="#{{ filter.loading_id }}"
            {% if let Some(s) = search %}value="{{ s }}"{% endif %}>
-    <select name="sort" class="toolbar-select"
-            aria-label="{{ filter.sort_label }}"
-            hx-get="{{ filter.hx_get }}" hx-trigger="change"
-            hx-select="#{{ filter.results_id }}" hx-target="#{{ filter.results_id }}" hx-swap="outerHTML"
-            hx-push-url="true" hx-include="#{{ filter.form_id }}" hx-indicator="#{{ filter.loading_id }}">
-      {% for option in filter.sort_options %}
-      <option value="{{ option.value }}" {% if option.selected %}selected{% endif %}>{{ option.label }}</option>
-      {% endfor %}
-    </select>
+    <div class="toolbar-sort-wrap" data-sort-control>
+      <input type="hidden" name="sort" class="toolbar-sort-value" value="{{ filter.selected_sort_value }}"
+             hx-get="{{ filter.hx_get }}" hx-trigger="change"
+             hx-select="#{{ filter.results_id }}" hx-target="#{{ filter.results_id }}" hx-swap="outerHTML"
+             hx-push-url="true" hx-include="#{{ filter.form_id }}" hx-indicator="#{{ filter.loading_id }}">
+      <button type="button" class="toolbar-sort" aria-haspopup="listbox" aria-expanded="false" aria-label="{{ filter.sort_label }}">
+        <svg class="sort-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 6h13"></path><path d="M3 12h9"></path><path d="M3 18h5"></path>
+        </svg>
+        <span class="sort-label" data-sort-label><b>Sort:</b> {{ filter.selected_sort_label }}</span>
+        <svg class="sort-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 9l6 6 6-6"></path>
+        </svg>
+      </button>
+      <div class="sort-menu" role="listbox" aria-label="{{ filter.sort_label }}" hidden>
+        {% for option in filter.sort_options %}
+        {% if option.separator_before %}
+        <div class="sort-sep"></div>
+        {% endif %}
+        <button type="button" role="option" class="sort-item{% if option.selected %} is-active{% endif %}" data-value="{{ option.value }}" data-label="{{ option.label }}" aria-selected="{% if option.selected %}true{% else %}false{% endif %}">
+          <span>{{ option.label }}</span>
+          <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 6 9 17l-5-5"></path>
+          </svg>
+        </button>
+        {% endfor %}
+      </div>
+    </div>
     <div class="toolbar-dates">
-      <span class="toolbar-label">From</span>
+      <span class="toolbar-label">Aired</span>
+      <div class="date-presets" role="group" aria-label="Filter by air date">
+        <button type="button" class="date-chip{% if filter.date_preset == "all" %} is-active{% endif %}" data-preset="all">All time</button>
+        <button type="button" class="date-chip{% if filter.date_preset == "30" %} is-active{% endif %}" data-preset="30">30 days</button>
+        <button type="button" class="date-chip{% if filter.date_preset == "90" %} is-active{% endif %}" data-preset="90">90 days</button>
+        <button type="button" class="date-chip{% if filter.date_preset == "year" %} is-active{% endif %}" data-preset="year">This year</button>
+        <button type="button" class="date-chip date-chip-custom{% if filter.date_preset == "custom" %} is-active{% endif %}" data-preset="custom">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path>
+          </svg>
+          Custom
+        </button>
+      </div>
+      <div class="date-custom" {% if !filter.show_custom_dates %}hidden{% endif %}>
       <input type="date" name="from" class="toolbar-date" aria-label="Filter from date"
+             min="{{ filter.archive_min_date }}" max="{{ filter.archive_max_date }}"
              hx-get="{{ filter.hx_get }}" hx-trigger="change"
              hx-select="#{{ filter.results_id }}" hx-target="#{{ filter.results_id }}" hx-swap="outerHTML"
              hx-push-url="true" hx-include="#{{ filter.form_id }}" hx-indicator="#{{ filter.loading_id }}"
              {% if let Some(f) = from %}value="{{ f }}"{% endif %}>
-      <span class="toolbar-label">To</span>
+      <span class="date-sep">→</span>
       <input type="date" name="to" class="toolbar-date" aria-label="Filter to date"
+             min="{{ filter.archive_min_date }}" max="{{ filter.archive_max_date }}"
              hx-get="{{ filter.hx_get }}" hx-trigger="change"
              hx-select="#{{ filter.results_id }}" hx-target="#{{ filter.results_id }}" hx-swap="outerHTML"
              hx-push-url="true" hx-include="#{{ filter.form_id }}" hx-indicator="#{{ filter.loading_id }}"
              {% if let Some(t) = to %}value="{{ t }}"{% endif %}>
+      </div>
     </div>
   </div>
 </form>
