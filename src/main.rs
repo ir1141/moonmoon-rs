@@ -14,6 +14,13 @@ mod sync_store;
 mod vods;
 
 pub struct AppState {
+    // Lock discipline for the three catalog RwLocks below: readers must clone the
+    // inner `Arc` and drop the guard immediately — NEVER hold two of these guards
+    // open at once. The refresh writer (see `vods::refresh_in_place`) holds all
+    // three write guards together in the order vods → games → snapshot; readers
+    // acquire them in the opposite order (e.g. games → vods in `prepare_games`).
+    // That's deadlock-free only because no reader ever holds two simultaneously.
+    // Holding two read guards open together would reintroduce a circular wait.
     pub vods: RwLock<Arc<Vec<vods::Vod>>>,
     pub games: RwLock<Arc<Vec<vods::Game>>>,
     pub(crate) catalog_snapshot: RwLock<vods::CatalogSnapshot>,

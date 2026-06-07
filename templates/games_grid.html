@@ -2,7 +2,7 @@
 <a href="/game/{{ game.name|urlencode }}" class="game-card">
   <div class="art-wrap">
     {% if let Some(image) = game.image %}
-    <img class="art" src="{{ image }}" alt="{{ game.name }}" loading="lazy" onerror="this.style.display='none'">
+    <img class="art" src="{{ image }}" alt="{{ game.name }}" loading="lazy">
     {% endif %}
     <div class="stream-badge">{{ game.vod_count }} VODs</div>
   </div>
