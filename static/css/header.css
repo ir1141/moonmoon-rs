@@ -151,52 +151,9 @@
   gap: 14px;
 }
 
-.btn-random {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid color-mix(in oklab, var(--accent) 40%, transparent);
-  border-radius: 999px;
-  padding: 7px 13px;
-  font-family: var(--font-display);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 1.4px;
-  line-height: 1;
-  text-transform: uppercase;
-  color: var(--accent-soft);
-  transition:
-    background 0.2s,
-    border-color 0.2s,
-    color 0.2s,
-    transform 0.08s ease;
-}
-
-.btn-random svg {
-  width: 14px;
-  height: 14px;
-}
-
-.btn-random:hover {
-  background: color-mix(in oklab, var(--accent) 12%, transparent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-[data-theme="light"] .btn-random:hover {
-  background: var(--accent);
-  color: #fff;
-}
-
-.btn-random:active {
-  transform: scale(0.97);
-}
-
-.btn-random:focus-visible {
-  outline: 2px solid var(--accent-soft);
-  outline-offset: 2px;
-}
-
+/* Random and History are matching quiet text utilities: icon + uppercase
+   label, --text-dim, hover → --text. Random is NOT an outlined accent pill. */
+.btn-random,
 .nav-util {
   display: inline-flex;
   align-items: center;
@@ -210,11 +167,13 @@
   transition: color 0.2s;
 }
 
+.btn-random svg,
 .nav-util svg {
   width: 15px;
   height: 15px;
 }
 
+.btn-random:hover,
 .nav-util:hover,
 .nav-util.active {
   color: var(--text);
@@ -224,6 +183,7 @@
   color: var(--accent-soft);
 }
 
+.btn-random:focus-visible,
 .nav-util:focus-visible {
   outline: 2px solid var(--accent-soft);
   outline-offset: 4px;
