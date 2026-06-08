@@ -420,78 +420,6 @@ body.lp-page::before {
   border-color: var(--border-hover);
 }
 
-/* ─── footer ─── */
-.lp-footer {
-  border-top: 1px solid var(--border);
-  margin-top: 40px;
-  padding: 30px 32px 34px;
-}
-.lp-footer-inner {
-  max-width: 760px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 14px;
-}
-.lp-footer .f-logo {
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 2.5px;
-  text-transform: uppercase;
-  color: var(--text);
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-.lp-footer .f-logo svg {
-  width: 20px;
-  height: 20px;
-  color: var(--text);
-}
-.lp-footer .f-links {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  font-size: 13px;
-  color: var(--text-dim);
-}
-.lp-footer .f-links a {
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: color 0.2s;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-.lp-footer .f-links a:hover {
-  color: var(--accent-soft);
-}
-.lp-footer .f-links > span,
-.lp-footer .f-links > a {
-  white-space: nowrap;
-}
-.lp-footer .f-gh svg {
-  width: 15px;
-  height: 15px;
-}
-.lp-footer .f-sep {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  flex: 0 0 auto;
-}
-.lp-footer .f-disclaimer {
-  font-size: 11px;
-  color: var(--text-muted);
-  letter-spacing: 0.2px;
-}
-
 /* ─── responsive ─── */
 @media (max-width: 768px) {
   .lp-body {
@@ -507,9 +435,6 @@ body.lp-page::before {
   }
   .lp-searchbox .kbd {
     display: none;
-  }
-  .lp-footer-inner {
-    gap: 28px;
   }
 }
 

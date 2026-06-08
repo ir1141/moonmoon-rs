@@ -25,6 +25,7 @@
   <link rel="stylesheet" href="/static/css/sync.css">
   <link rel="stylesheet" href="/static/css/landing.css">
   <link rel="stylesheet" href="/static/css/browse.css">
+  <link rel="stylesheet" href="/static/css/footer.css">
   <script type="module" src="/static/list-filters.js" nonce="{{ nonce }}"></script>
   <script type="module" src="/static/list-feedback.js" nonce="{{ nonce }}"></script>
   <script type="module" src="/static/vod-cards.js" nonce="{{ nonce }}"></script>
@@ -92,6 +93,7 @@
   <div class="content">
     {% block content %}{% endblock %}
   </div>
+  {% include "_footer.html" %}
 <script nonce="{{ nonce }}">
 (function () {
   var btn = document.getElementById('theme-btn');
