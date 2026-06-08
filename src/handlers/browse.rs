@@ -194,7 +194,7 @@ async fn prepare_browse(
 /// Sort spec slice for a lens, plus the lens's default sort key.
 fn sort_context(is_games: bool) -> (&'static [(&'static str, &'static str, bool)], &'static str) {
     if is_games {
-        (&GAME_SORTS, "recent")
+        (&GAME_SORTS, "most")
     } else {
         (&STREAM_SORTS, "newest")
     }
@@ -203,7 +203,7 @@ fn sort_context(is_games: bool) -> (&'static [(&'static str, &'static str, bool)
 pub async fn browse_page(
     State(state): State<SharedState>,
     Extension(nonce): Extension<CspNonce>,
-    Query(params): Query<ListQuery>,
+    Query(mut params): Query<ListQuery>,
 ) -> impl IntoResponse {
     let game = params.game.clone().filter(|s| !s.is_empty());
     let lens = resolve_lens(params.lens.as_deref(), game.as_deref());
@@ -214,6 +214,10 @@ pub async fn browse_page(
         .sort
         .clone()
         .unwrap_or_else(|| default_sort.to_string());
+    // Pin the resolved sort onto params: the list helpers otherwise default the
+    // games lens to "recent", so without this the grid would order by recency
+    // even though the toolbar (and pagination URLs) say "most".
+    params.sort = Some(sort.clone());
     let (selected_sort_value, selected_sort_label) = selected_sort_option(&sort, sort_specs);
 
     let prepared = prepare_browse(&state, lens, game.as_deref(), &params, &sort).await;
@@ -292,7 +296,7 @@ pub async fn browse_page(
 
 pub async fn browse_grid(
     State(state): State<SharedState>,
-    Query(params): Query<ListQuery>,
+    Query(mut params): Query<ListQuery>,
 ) -> Response {
     let game = params.game.clone().filter(|s| !s.is_empty());
     let lens = resolve_lens(params.lens.as_deref(), game.as_deref());
@@ -302,6 +306,9 @@ pub async fn browse_grid(
         .sort
         .clone()
         .unwrap_or_else(|| default_sort.to_string());
+    // Pin the resolved sort so a sort-less grid request (e.g. /browse/grid?lens=games)
+    // orders by the lens default ("most" for games) rather than the helper's "recent".
+    params.sort = Some(sort.clone());
     let prepared = prepare_browse(&state, lens, game.as_deref(), &params, &sort).await;
 
     if is_games {
@@ -358,6 +365,14 @@ pub async fn game_redirect(Path(name): Path<String>, RawQuery(query): RawQuery) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn games_lens_defaults_to_most_streams() {
+        let (_, games_default) = sort_context(true);
+        assert_eq!(games_default, "most");
+        let (_, streams_default) = sort_context(false);
+        assert_eq!(streams_default, "newest");
+    }
 
     #[test]
     fn resolve_lens_defaults_to_games() {
