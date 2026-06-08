@@ -86,7 +86,10 @@ pub async fn home_page(
         .map(|game| HomeChip {
             label: game.name.clone(),
             count_label: game.vod_count.to_string(),
-            href: format!("/game/{}", urlencoding::encode(&game.name)),
+            href: format!(
+                "/browse?lens=streams&game={}",
+                urlencoding::encode(&game.name)
+            ),
             is_game: true,
             color_idx: chapter_color_idx(&game.name),
         })
@@ -94,7 +97,7 @@ pub async fn home_page(
     chips.push(HomeChip {
         label: "This week".to_string(),
         count_label: new_this_week.to_string(),
-        href: format!("/streams?from={week_from}"),
+        href: format!("/browse?lens=streams&from={week_from}"),
         is_game: false,
         color_idx: 0,
     });

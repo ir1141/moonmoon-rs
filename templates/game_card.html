@@ -1,4 +1,4 @@
-<a href="/game/{{ game.name|urlencode }}" class="game-card">
+<a href="/browse?lens=streams&game={{ game.name|urlencode }}" class="game-card">
   <div class="art-wrap">
     {% if let Some(image) = game.image %}
     <img class="art" src="{{ image }}" alt="{{ game.name }}" loading="lazy">
