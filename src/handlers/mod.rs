@@ -1,4 +1,5 @@
 mod api;
+mod browse;
 mod calendar;
 mod games;
 mod history;
@@ -8,6 +9,7 @@ mod vods;
 mod watch;
 
 pub use api::chat_proxy;
+pub use browse::{browse_grid, browse_page};
 pub use calendar::calendar_page;
 pub use games::{games_grid, games_page};
 pub use history::{continue_resume, history_page, history_vods_grid};
@@ -31,6 +33,7 @@ pub(crate) enum Section {
     Home,
     Games,
     Streams,
+    Browse,
     History,
     Calendar,
 }
@@ -42,6 +45,7 @@ impl Section {
             Section::Home => "home",
             Section::Games => "games",
             Section::Streams => "streams",
+            Section::Browse => "browse",
             Section::History => "history",
             Section::Calendar => "calendar",
         }

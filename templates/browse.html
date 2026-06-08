@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Browse{% endblock %}
+
+{% block search %}{% endblock %}
+
+{% block content %}
+<div class="browse-view">
+  <div id="browse-main">
+    <div class="browse-head">
+      <h1 class="browse-title">Browse</h1>
+      <div class="lens-toggle" role="tablist" aria-label="Browse lens">
+        <a class="lens-btn{% if is_games_lens %} active{% endif %}" role="tab"
+           aria-selected="{% if is_games_lens %}true{% else %}false{% endif %}"
+           href="{{ lens_games_url }}"
+           hx-get="{{ lens_games_url }}" hx-select="#browse-main" hx-target="#browse-main"
+           hx-swap="outerHTML" hx-push-url="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Games
+        </a>
+        <a class="lens-btn{% if !is_games_lens %} active{% endif %}" role="tab"
+           aria-selected="{% if !is_games_lens %}true{% else %}false{% endif %}"
+           href="{{ lens_streams_url }}"
+           hx-get="{{ lens_streams_url }}" hx-select="#browse-main" hx-target="#browse-main"
+           hx-swap="outerHTML" hx-push-url="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="15" width="18" height="5" rx="1.5"/></svg>
+          Streams
+        </a>
+      </div>
+    </div>
+
+    {% include "list_filters.html" %}
+
+    <section id="browse-results" class="browse-results" data-list-region aria-busy="false">
+      <div class="list-summary" aria-live="polite" data-filtered-count="{{ metadata.filtered_count }}">
+        <div class="stats list-count">
+          {{ metadata.result_label }}
+          {% if metadata.is_filtered %}
+          <span class="list-count-total">of {{ metadata.unfiltered_count }} archived</span>
+          {% else %}
+          <span class="list-count-total">archived</span>
+          {% endif %}
+        </div>
+        {% if is_filtered %}
+        <div class="active-filters" aria-label="Active filters">
+          {% if let Some(g) = game %}
+          <span class="filter-chip filter-chip-game">
+            <span class="chapter-dot color-{{ game_color_idx }}" aria-hidden="true"></span>
+            {{ g }}
+            <a class="filter-chip-x" href="{{ metadata.clear_url }}" aria-label="Clear game filter">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+            </a>
+          </span>
+          {% endif %}
+          {% for f in metadata.active_filters %}
+          <span class="filter-chip">{{ f.label }}</span>
+          {% endfor %}
+          <a class="filter-clear" href="{{ metadata.clear_url }}">Clear filters</a>
+        </div>
+        {% endif %}
+      </div>
+      <div id="browse-loading" class="list-loading" role="status" aria-live="polite">Loading...</div>
+      <div id="browse-grid" class="{% if is_games_lens %}games-grid{% else %}vod-grid{% endif %}">
+        {% if is_games_lens %}
+        {% include "games_grid.html" %}
+        {% else %}
+        {% include "vods_grid.html" %}
+        {% endif %}
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

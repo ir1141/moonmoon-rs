@@ -137,6 +137,8 @@ async fn main() {
         .route("/game/{name}/vods", get(handlers::game_vods_grid))
         .route("/streams", get(handlers::all_streams_page))
         .route("/streams/vods", get(handlers::all_streams_grid))
+        .route("/browse", get(handlers::browse_page))
+        .route("/browse/grid", get(handlers::browse_grid))
         .route("/watch/{vod_id}", get(handlers::watch_page))
         .route("/calendar", get(handlers::calendar_page))
         .route("/history", get(handlers::history_page))
