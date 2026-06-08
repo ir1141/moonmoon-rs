@@ -38,6 +38,7 @@ struct HomePageTemplate {
     show_game_tags: bool,
     show_recency: bool,
     show_oldest_recency: bool,
+    show_subtitle: bool,
     active_section: Section,
     nonce: String,
 }
@@ -142,6 +143,7 @@ pub async fn home_page(
         show_game_tags: true,
         show_recency: false,
         show_oldest_recency: false,
+        show_subtitle: false,
         active_section: Section::Home,
         nonce: nonce.0,
     })

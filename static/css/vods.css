@@ -536,6 +536,16 @@
   transition: color 0.2s;
 }
 
+.vod-card .vod-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+.vod-card .vod-sub b {
+  color: var(--accent-soft);
+  font-weight: 600;
+}
+
 .vod-match-label {
   color: var(--text-muted);
   font-size: 12px;

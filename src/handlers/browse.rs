@@ -86,6 +86,7 @@ struct BrowsePageTemplate {
     show_recency: bool,
     show_oldest_recency: bool,
     show_game_tags: bool,
+    show_subtitle: bool,
     is_filtered: bool,
     active_section: Section,
     nonce: String,
@@ -109,6 +110,7 @@ struct VodsGridTemplate {
     has_more: bool,
     next_url: String,
     show_game_tags: bool,
+    show_subtitle: bool,
     is_filtered: bool,
 }
 
@@ -123,6 +125,7 @@ struct PreparedBrowse {
     show_recency: bool,
     show_oldest_recency: bool,
     show_game_tags: bool,
+    show_subtitle: bool,
 }
 
 async fn prepare_browse(
@@ -158,6 +161,7 @@ async fn prepare_browse(
                 show_recency: matches!(sort, "recent" | "oldest"),
                 show_oldest_recency: sort == "oldest",
                 show_game_tags: false,
+                show_subtitle: false,
             }
         }
         Lens::Streams => {
@@ -172,7 +176,11 @@ async fn prepare_browse(
             let filtered =
                 filter_vod_displays_with_metadata(displays, params, "/browse?lens=streams");
             let mut displays = filtered.vods;
-            assign_period_headers(&mut displays, sort);
+            // Month grouping only makes sense for the unfiltered, chronological
+            // streams view; a game filter renders a flat grid (no headers).
+            if game.is_none() {
+                assign_period_headers(&mut displays, sort);
+            }
             let (paged, has_more, next_url) =
                 paginate_with_nav(displays, "/browse/grid", VOD_BATCH_SIZE, params);
             PreparedBrowse {
@@ -186,6 +194,7 @@ async fn prepare_browse(
                 show_recency: false,
                 show_oldest_recency: false,
                 show_game_tags: game.is_none(),
+                show_subtitle: game.is_none(),
             }
         }
     }
@@ -288,6 +297,7 @@ pub async fn browse_page(
         show_recency: prepared.show_recency,
         show_oldest_recency: prepared.show_oldest_recency,
         show_game_tags: prepared.show_game_tags,
+        show_subtitle: prepared.show_subtitle,
         is_filtered,
         active_section: Section::Browse,
         nonce: nonce.0,
@@ -326,6 +336,7 @@ pub async fn browse_grid(
             has_more: prepared.has_more,
             next_url: prepared.next_url,
             show_game_tags: prepared.show_game_tags,
+            show_subtitle: prepared.show_subtitle,
             is_filtered: prepared.metadata.is_filtered,
         })
     }

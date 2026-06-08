@@ -168,6 +168,9 @@ pub(crate) struct VodDisplay {
     pub id: String,
     pub display_title: String,
     pub formatted_date: String,
+    /// Year-less short date for the streams-lens subtitle (e.g. "Mar 14"); the
+    /// year is carried by the month-group header above the card.
+    pub formatted_date_short: String,
     pub duration: Option<String>,
     pub thumbnail_url: Option<String>,
     pub chapter_segments: Vec<ChapterSegment>,
@@ -202,6 +205,7 @@ impl VodDisplay {
             .unwrap_or_else(|| "Untitled Stream".to_string());
         let stream_time = vod_stream_time(vod);
         let formatted_date = format_date(stream_time);
+        let formatted_date_short = format_date_short(stream_time);
         let duration_seconds = vod
             .duration
             .as_ref()
@@ -214,6 +218,7 @@ impl VodDisplay {
             id: vod.id.clone(),
             display_title,
             formatted_date,
+            formatted_date_short,
             duration: vod
                 .duration
                 .as_ref()
@@ -686,46 +691,21 @@ fn build_clear_url(base_url: &str, params: &ListQuery) -> String {
     format!("{base_url}{sep}sort={}", urlencoding::encode(&sort))
 }
 
+/// Insert a calendar-month header (e.g. "March 2026") before the first card of
+/// each new month. Only meaningful when the list is in date order, so it no-ops
+/// unless `sort` is "newest"/"oldest"; callers also skip it when a game filter
+/// is active. The `.vod-period-header` CSS uppercases the label for display.
 pub(crate) fn assign_period_headers(displays: &mut [VodDisplay], sort: &str) {
-    if displays.len() < 2 {
-        return;
-    }
     if sort != "newest" && sort != "oldest" {
         return;
     }
-
-    let days: Vec<Option<i64>> = displays
-        .iter()
-        .map(|d| parse_ymd_to_days(&d.created_at))
-        .collect();
-
-    let mut cluster_starts: Vec<usize> = vec![0];
-    for i in 1..displays.len() {
-        if let (Some(a), Some(b)) = (days[i - 1], days[i])
-            && (a - b).abs() > PERIOD_GAP_DAYS
-        {
-            cluster_starts.push(i);
+    let mut current: Option<String> = None;
+    for display in displays.iter_mut() {
+        let label = month_year_long(&display.created_at);
+        if current.as_deref() != Some(label.as_str()) {
+            display.period_header = Some(label.clone());
+            current = Some(label);
         }
-    }
-
-    if cluster_starts.len() < 2 {
-        return;
-    }
-
-    for (ci, &start) in cluster_starts.iter().enumerate() {
-        let end = cluster_starts
-            .get(ci + 1)
-            .copied()
-            .unwrap_or(displays.len());
-        let count = end - start;
-        let first_date = displays[start].created_at.clone();
-        let last_date = displays[end - 1].created_at.clone();
-        let (newest, oldest) = if sort == "newest" {
-            (first_date.as_str(), last_date.as_str())
-        } else {
-            (last_date.as_str(), first_date.as_str())
-        };
-        displays[start].period_header = Some(build_period_label(oldest, newest, count));
     }
 }
 
@@ -774,19 +754,7 @@ pub(crate) fn resolve_watched_chapter(vod: &Vod, time_secs: Option<i64>) -> Opti
     pick.map(|(n, s)| (n.to_string(), s))
 }
 
-fn build_period_label(oldest: &str, newest: &str, count: usize) -> String {
-    let old_my = month_year(oldest);
-    let new_my = month_year(newest);
-    let range = if old_my == new_my {
-        old_my
-    } else {
-        format!("{old_my} – {new_my}")
-    };
-    let noun = if count == 1 { "stream" } else { "streams" };
-    format!("{range} · {count} {noun}")
-}
-
-fn month_year(created_at: &str) -> String {
+fn month_year_long(created_at: &str) -> String {
     let Some(date_part) = created_at.get(..10) else {
         return created_at.to_string();
     };
@@ -794,7 +762,25 @@ fn month_year(created_at: &str) -> String {
     if parts.len() != 3 {
         return date_part.to_string();
     }
-    format!("{} {}", month_abbr(parts[1]), parts[0])
+    format!("{} {}", month_long(parts[1]), parts[0])
+}
+
+fn month_long(month_part: &str) -> &str {
+    match month_part {
+        "01" => "January",
+        "02" => "February",
+        "03" => "March",
+        "04" => "April",
+        "05" => "May",
+        "06" => "June",
+        "07" => "July",
+        "08" => "August",
+        "09" => "September",
+        "10" => "October",
+        "11" => "November",
+        "12" => "December",
+        other => other,
+    }
 }
 
 fn month_abbr(month_part: &str) -> &str {
@@ -1015,6 +1001,23 @@ pub(crate) fn format_date(created_at: &str) -> String {
     format!("{} {day}, {}", month_abbr(parts[1]), parts[0])
 }
 
+/// Year-less date for the streams subtitle, e.g. "Mar 14". Falls back to the
+/// full input if it isn't a parseable `YYYY-MM-DD…` string.
+pub(crate) fn format_date_short(created_at: &str) -> String {
+    let Some(date_part) = created_at.get(..10) else {
+        return created_at.to_string();
+    };
+    if !date_part.is_ascii() {
+        return created_at.to_string();
+    }
+    let parts: Vec<&str> = date_part.split('-').collect();
+    if parts.len() != 3 {
+        return date_part.to_string();
+    }
+    let day = parts[2].trim_start_matches('0');
+    format!("{} {day}", month_abbr(parts[1]))
+}
+
 pub(crate) fn paginate_with_nav<T>(
     items: Vec<T>,
     base_url: &str,
@@ -1112,6 +1115,13 @@ mod tests {
     fn test_format_date() {
         assert_eq!(format_date("2025-01-15T00:00:00Z"), "Jan 15, 2025");
         assert_eq!(format_date("2025-12-01T12:30:00Z"), "Dec 1, 2025");
+    }
+
+    #[test]
+    fn test_format_date_short_drops_year() {
+        assert_eq!(format_date_short("2025-01-15T00:00:00Z"), "Jan 15");
+        assert_eq!(format_date_short("2025-12-01T12:30:00Z"), "Dec 1");
+        assert_eq!(format_date_short("éééééé"), "éééééé");
     }
 
     #[test]
@@ -1246,6 +1256,7 @@ mod tests {
             id: id.into(),
             display_title: "t".into(),
             formatted_date: "".into(),
+            formatted_date_short: "".into(),
             duration: None,
             thumbnail_url: None,
             chapter_segments: vec![],
@@ -1299,7 +1310,7 @@ mod tests {
     }
 
     #[test]
-    fn test_assign_period_headers_splits_by_gap() {
+    fn test_assign_period_headers_groups_by_month() {
         let mut displays = vec![
             make_display("1", "2024-03-10T00:00:00Z"),
             make_display("2", "2024-03-05T00:00:00Z"),
@@ -1307,17 +1318,23 @@ mod tests {
             make_display("4", "2024-01-15T00:00:00Z"),
         ];
         assign_period_headers(&mut displays, "newest");
-        assert!(displays[0].period_header.is_some());
+        assert_eq!(displays[0].period_header.as_deref(), Some("March 2024"));
         assert!(displays[1].period_header.is_none());
-        assert!(displays[2].period_header.is_some());
+        assert_eq!(displays[2].period_header.as_deref(), Some("January 2024"));
         assert!(displays[3].period_header.is_none());
-        assert!(
-            displays[0]
-                .period_header
-                .as_ref()
-                .unwrap()
-                .contains("2 streams")
-        );
+    }
+
+    #[test]
+    fn test_assign_period_headers_splits_consecutive_months() {
+        // Adjacent days across a month boundary get separate headers, unlike
+        // the old gap-based clustering (which kept them in one cluster).
+        let mut displays = vec![
+            make_display("1", "2024-04-01T00:00:00Z"),
+            make_display("2", "2024-03-31T00:00:00Z"),
+        ];
+        assign_period_headers(&mut displays, "newest");
+        assert_eq!(displays[0].period_header.as_deref(), Some("April 2024"));
+        assert_eq!(displays[1].period_header.as_deref(), Some("March 2024"));
     }
 
     #[test]
@@ -1641,14 +1658,16 @@ mod tests {
     }
 
     #[test]
-    fn test_assign_period_headers_skips_when_single_cluster() {
+    fn test_assign_period_headers_single_month_one_header() {
         let mut displays = vec![
             make_display("1", "2024-03-10T00:00:00Z"),
             make_display("2", "2024-03-05T00:00:00Z"),
             make_display("3", "2024-03-01T00:00:00Z"),
         ];
         assign_period_headers(&mut displays, "newest");
-        assert!(displays.iter().all(|d| d.period_header.is_none()));
+        assert_eq!(displays[0].period_header.as_deref(), Some("March 2024"));
+        assert!(displays[1].period_header.is_none());
+        assert!(displays[2].period_header.is_none());
     }
 
     fn display_with_games(id: &str, games: &[&str]) -> VodDisplay {
