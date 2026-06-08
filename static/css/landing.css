@@ -18,6 +18,15 @@ body.lp-page::before {
   z-index: 1;
 }
 
+/* The continue-watching hero sits between the launcher and the rails. The
+   landing zeroes the shared .content gutter, so give the hero its own gutter
+   (matching .lp-body) instead of letting it bleed edge-to-edge. */
+body.lp-page .continue-hero {
+  max-width: 1400px;
+  margin: 0 auto 30px;
+  padding: 0 32px;
+}
+
 /* ─── hero: compact search launcher ─── */
 .lp-launch {
   position: relative;
@@ -424,6 +433,9 @@ body.lp-page::before {
 @media (max-width: 768px) {
   .lp-body {
     padding: 12px 18px 32px;
+  }
+  body.lp-page .continue-hero {
+    padding: 0 18px;
   }
   .rail {
     margin: 0 -18px;

@@ -153,6 +153,32 @@ pub(crate) struct FilteredGames {
     pub metadata: ListMetadata,
 }
 
+/// Grid-only partial for the streams/history lists. Rendered standalone for
+/// htmx "load more" swaps and `{% include %}`d by the full-page templates.
+/// Shared by `browse` and `history` so the field set stays in lockstep.
+#[derive(Template)]
+#[template(path = "vods_grid.html")]
+pub(crate) struct VodsGridTemplate {
+    pub vods: Vec<VodDisplay>,
+    pub has_more: bool,
+    pub next_url: String,
+    pub show_game_tags: bool,
+    pub show_subtitle: bool,
+    pub is_filtered: bool,
+}
+
+/// Grid-only partial for the games lens (counterpart to [`VodsGridTemplate`]).
+#[derive(Template)]
+#[template(path = "games_grid.html")]
+pub(crate) struct GamesGridTemplate {
+    pub games: Vec<Game>,
+    pub has_more: bool,
+    pub next_url: String,
+    pub show_recency: bool,
+    pub show_oldest_recency: bool,
+    pub is_filtered: bool,
+}
+
 pub(crate) struct ChapterSegment {
     pub name: String,
     pub width_pct: f64,
@@ -462,7 +488,7 @@ pub(crate) fn current_utc_days() -> i64 {
         .div_euclid(86_400) as i64
 }
 
-fn date_query_for_days(days: i64) -> String {
+pub(crate) fn date_query_for_days(days: i64) -> String {
     let (year, month, day) = days_to_civil(days);
     format!("{year:04}-{month:02}-{day:02}")
 }

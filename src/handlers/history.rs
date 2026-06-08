@@ -1,6 +1,6 @@
 use super::{
-    Section, VodDisplay, assign_series_headers, build_watch_url, find_vod_by_id, render_template,
-    resolve_watched_chapter,
+    Section, VodDisplay, VodsGridTemplate, assign_series_headers, build_watch_url, find_vod_by_id,
+    render_template, resolve_watched_chapter,
 };
 use crate::SharedState;
 use crate::middleware::CspNonce;
@@ -34,17 +34,6 @@ pub struct HistoryVodsQuery {
     pub sort: Option<String>,
     pub resume_links: Option<bool>,
     pub headers: Option<bool>,
-}
-
-#[derive(Template)]
-#[template(path = "vods_grid.html")]
-struct VodsGridTemplate {
-    vods: Vec<VodDisplay>,
-    has_more: bool,
-    next_url: String,
-    show_game_tags: bool,
-    show_subtitle: bool,
-    is_filtered: bool,
 }
 
 #[derive(Template)]

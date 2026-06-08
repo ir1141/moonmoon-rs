@@ -1,9 +1,9 @@
 use super::{
-    GAME_BATCH_SIZE, ListFilterConfig, ListMetadata, ListQuery, Section, VOD_BATCH_SIZE,
-    VodDisplay, archive_date_bounds, assign_period_headers, date_preset_state,
-    filter_games_with_metadata, filter_vod_displays_with_metadata, get_chapter_start,
-    list_sort_options_grouped, paginate_with_nav, render_template, selected_sort_option,
-    vod_has_game,
+    GAME_BATCH_SIZE, GamesGridTemplate, ListFilterConfig, ListMetadata, ListQuery, Section,
+    VOD_BATCH_SIZE, VodDisplay, VodsGridTemplate, archive_date_bounds, assign_period_headers,
+    date_preset_state, filter_games_with_metadata, filter_vod_displays_with_metadata,
+    get_chapter_start, list_sort_options_grouped, paginate_with_nav, render_template,
+    selected_sort_option, vod_has_game,
 };
 use crate::SharedState;
 use crate::middleware::CspNonce;
@@ -83,6 +83,7 @@ struct BrowsePageTemplate {
     next_url: String,
     lens_games_url: String,
     lens_streams_url: String,
+    clear_game_url: String,
     show_recency: bool,
     show_oldest_recency: bool,
     show_game_tags: bool,
@@ -90,28 +91,6 @@ struct BrowsePageTemplate {
     is_filtered: bool,
     active_section: Section,
     nonce: String,
-}
-
-#[derive(Template)]
-#[template(path = "games_grid.html")]
-struct GamesGridTemplate {
-    games: Vec<Game>,
-    has_more: bool,
-    next_url: String,
-    show_recency: bool,
-    show_oldest_recency: bool,
-    is_filtered: bool,
-}
-
-#[derive(Template)]
-#[template(path = "vods_grid.html")]
-struct VodsGridTemplate {
-    vods: Vec<VodDisplay>,
-    has_more: bool,
-    next_url: String,
-    show_game_tags: bool,
-    show_subtitle: bool,
-    is_filtered: bool,
 }
 
 struct PreparedBrowse {
@@ -209,24 +188,31 @@ fn sort_context(is_games: bool) -> (&'static [(&'static str, &'static str, bool)
     }
 }
 
+/// Resolve the game drilldown, lens, `is_games`, and effective sort from the
+/// query, pinning the resolved sort back onto `params`. The pin matters because
+/// the shared list helpers otherwise default the games lens to "recent", so the
+/// grid would order by recency while the toolbar and pagination URLs say "most".
+/// Shared by `browse_page` and `browse_grid` so the two never disagree.
+fn resolve_browse_params(params: &mut ListQuery) -> (Option<String>, Lens, bool, String) {
+    let game = params.game.clone().filter(|s| !s.is_empty());
+    let lens = resolve_lens(params.lens.as_deref(), game.as_deref());
+    let is_games = lens == Lens::Games;
+    let (_, default_sort) = sort_context(is_games);
+    let sort = params
+        .sort
+        .clone()
+        .unwrap_or_else(|| default_sort.to_string());
+    params.sort = Some(sort.clone());
+    (game, lens, is_games, sort)
+}
+
 pub async fn browse_page(
     State(state): State<SharedState>,
     Extension(nonce): Extension<CspNonce>,
     Query(mut params): Query<ListQuery>,
 ) -> impl IntoResponse {
-    let game = params.game.clone().filter(|s| !s.is_empty());
-    let lens = resolve_lens(params.lens.as_deref(), game.as_deref());
-    let is_games = lens == Lens::Games;
-    let lens_value = if is_games { "games" } else { "streams" };
-    let (sort_specs, default_sort) = sort_context(is_games);
-    let sort = params
-        .sort
-        .clone()
-        .unwrap_or_else(|| default_sort.to_string());
-    // Pin the resolved sort onto params: the list helpers otherwise default the
-    // games lens to "recent", so without this the grid would order by recency
-    // even though the toolbar (and pagination URLs) say "most".
-    params.sort = Some(sort.clone());
+    let (game, lens, is_games, sort) = resolve_browse_params(&mut params);
+    let (sort_specs, _) = sort_context(is_games);
     let (selected_sort_value, selected_sort_label) = selected_sort_option(&sort, sort_specs);
 
     let prepared = prepare_browse(&state, lens, game.as_deref(), &params, &sort).await;
@@ -238,17 +224,20 @@ pub async fn browse_page(
         &prepared.archive_max_date,
     );
 
-    // Filter requests (search/sort/date) and the no-JS form action carry the
-    // lens (and game) in the URL so the server keeps rendering the right lens.
-    let game_param = match game.as_deref() {
-        Some(name) => format!("&game={}", urlencoding::encode(name)),
-        None => String::new(),
-    };
-    let hx_get = format!("/browse?lens={lens_value}{game_param}");
+    // The lens and the game drilldown ride in hidden form inputs (see
+    // list_filters.html), so both htmx filter requests and the no-JS form submit
+    // keep the right lens; the form target is just the bare page route.
+    let hx_get = "/browse".to_string();
 
     let carried = carry_filters(&params);
     let lens_games_url = format!("/browse?lens=games{carried}");
     let lens_streams_url = format!("/browse?lens=streams{carried}");
+    // The game chip's ✕ clears only the game, keeping the streams lens plus any
+    // search/sort/date filters (unlike "Clear filters", which drops everything).
+    let clear_game_url = format!(
+        "/browse?lens=streams&sort={}{carried}",
+        urlencoding::encode(&sort)
+    );
 
     let game_color_idx = game.as_deref().map(chapter_color_idx).unwrap_or(0);
     let is_filtered = game.is_some() || prepared.metadata.is_filtered;
@@ -294,6 +283,7 @@ pub async fn browse_page(
         next_url: prepared.next_url,
         lens_games_url,
         lens_streams_url,
+        clear_game_url,
         show_recency: prepared.show_recency,
         show_oldest_recency: prepared.show_oldest_recency,
         show_game_tags: prepared.show_game_tags,
@@ -308,17 +298,7 @@ pub async fn browse_grid(
     State(state): State<SharedState>,
     Query(mut params): Query<ListQuery>,
 ) -> Response {
-    let game = params.game.clone().filter(|s| !s.is_empty());
-    let lens = resolve_lens(params.lens.as_deref(), game.as_deref());
-    let is_games = lens == Lens::Games;
-    let (_, default_sort) = sort_context(is_games);
-    let sort = params
-        .sort
-        .clone()
-        .unwrap_or_else(|| default_sort.to_string());
-    // Pin the resolved sort so a sort-less grid request (e.g. /browse/grid?lens=games)
-    // orders by the lens default ("most" for games) rather than the helper's "recent".
-    params.sort = Some(sort.clone());
+    let (game, lens, is_games, sort) = resolve_browse_params(&mut params);
     let prepared = prepare_browse(&state, lens, game.as_deref(), &params, &sort).await;
 
     if is_games {

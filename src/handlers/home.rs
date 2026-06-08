@@ -1,6 +1,6 @@
 use super::{
-    Section, VodDisplay, current_utc_days, days_to_civil, format_date, parse_ymd_to_days,
-    render_template, vod_stream_time,
+    Section, VodDisplay, current_utc_days, date_query_for_days, days_to_civil, format_date,
+    parse_ymd_to_days, render_template, vod_stream_time,
 };
 use crate::SharedState;
 use crate::middleware::CspNonce;
@@ -75,7 +75,7 @@ pub async fn home_page(
 
     let today_days = current_utc_days();
     let (today_year, today_month, today_day) = days_to_civil(today_days);
-    let week_from = date_string(today_days - (WEEK_DAYS - 1));
+    let week_from = date_query_for_days(today_days - (WEEK_DAYS - 1));
 
     let new_this_week = count_streams_since(&vods, &week_from);
 
@@ -139,7 +139,7 @@ pub async fn home_page(
         top_games: games.iter().take(GAMES_RAIL_SIZE).cloned().collect(),
         chips,
         on_this_day,
-        today_label: format_date(&date_string(today_days)),
+        today_label: format_date(&date_query_for_days(today_days)),
         show_game_tags: true,
         show_recency: false,
         show_oldest_recency: false,
@@ -147,12 +147,6 @@ pub async fn home_page(
         active_section: Section::Home,
         nonce: nonce.0,
     })
-}
-
-/// `YYYY-MM-DD` for a day offset from the Unix epoch.
-fn date_string(days: i64) -> String {
-    let (year, month, day) = days_to_civil(days);
-    format!("{year:04}-{month:02}-{day:02}")
 }
 
 /// Group the integer's digits with thousands separators, e.g. `2841` → `"2,841"`.
