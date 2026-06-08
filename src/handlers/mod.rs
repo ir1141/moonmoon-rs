@@ -2,6 +2,7 @@ mod api;
 mod calendar;
 mod games;
 mod history;
+mod home;
 mod sync;
 mod vods;
 mod watch;
@@ -10,6 +11,7 @@ pub use api::chat_proxy;
 pub use calendar::calendar_page;
 pub use games::{games_grid, games_page};
 pub use history::{continue_resume, history_page, history_vods_grid};
+pub use home::home_page;
 pub use sync::{sync_get, sync_put};
 pub use vods::{all_streams_grid, all_streams_page, game_vods_grid, game_vods_page};
 pub use watch::{next_in_period, random_vod, vod_detail, watch_page};
@@ -26,6 +28,7 @@ pub(crate) const PERIOD_GAP_DAYS: i64 = 14;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Section {
     None,
+    Home,
     Games,
     Streams,
     History,
@@ -36,6 +39,7 @@ impl Section {
     pub(crate) fn slug(&self) -> &'static str {
         match self {
             Section::None => "",
+            Section::Home => "home",
             Section::Games => "games",
             Section::Streams => "streams",
             Section::History => "history",
@@ -447,7 +451,7 @@ fn preset_date_range(
     (date_query_for_days(start), date_query_for_days(end))
 }
 
-fn current_utc_days() -> i64 {
+pub(crate) fn current_utc_days() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()

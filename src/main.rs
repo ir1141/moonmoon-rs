@@ -130,7 +130,7 @@ async fn main() {
         .layer(GovernorLayer::new(api_governor));
 
     let app = Router::new()
-        .route("/", get(handlers::games_page))
+        .route("/", get(handlers::home_page))
         .route("/games", get(handlers::games_page))
         .route("/games/grid", get(handlers::games_grid))
         .route("/game/{name}", get(handlers::game_vods_page))

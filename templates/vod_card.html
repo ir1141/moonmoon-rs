@@ -1,0 +1,64 @@
+<div class="vod-card{% if show_game_tags && !vod.chapter_segments.is_empty() %} has-chapters{% endif %}" data-vod-id="{{ vod.id }}" data-duration-secs="{{ vod.duration_seconds }}"{% if let Some(history_state) = vod.history_state %} data-history-state="{{ history_state }}"{% endif %}{% if let Some(progress) = vod.progress_seconds %} data-progress-seconds="{{ progress }}"{% endif %}>
+  <div class="thumb-wrap">
+    <a href="{{ vod.watch_url }}" class="thumb-link" aria-label="{{ vod.display_title }}">
+      {% if let Some(thumb) = vod.thumbnail_url %}
+      <img src="{{ thumb }}" alt="" class="thumb" loading="lazy">
+      {% else %}
+      <div class="thumb" style="background:var(--bg-elevated)"></div>
+      {% endif %}
+      <div class="thumb-overlay"></div>
+      {% if let Some(dur) = vod.duration %}
+      <div class="duration-badge">{{ dur }}</div>
+      {% endif %}
+      {% if !(show_game_tags && !vod.chapter_segments.is_empty()) %}
+      <div class="date-badge">{{ vod.formatted_date }}</div>
+      {% endif %}
+      <div class="play-icon">
+        <svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>
+      </div>
+    </a>
+    {% if show_game_tags && !vod.chapter_segments.is_empty() %}
+    <button class="game-count-chip" type="button" aria-haspopup="true" aria-expanded="false">
+      {% for seg in vod.chapter_segments %}
+      {% if loop.first %}
+      <span class="chapter-dot color-{{ seg.color_idx }}" aria-hidden="true"></span>
+      {% endif %}
+      {% endfor %}
+      <span>{{ vod.chapter_segments.len() }} {% if vod.chapter_segments.len() == 1 %}game{% else %}games{% endif %}</span>
+    </button>
+    <div class="chapter-strip">
+      {% for seg in vod.chapter_segments %}
+      <a href="{{ seg.watch_url }}"
+         class="chapter-seg color-{{ seg.color_idx }}"
+         style="flex-basis: {{ seg.width_pct }}%"
+         tabindex="-1"
+         aria-label="Jump to {{ seg.name }}">
+        <span class="chapter-seg-tip">{{ seg.name }} · {{ seg.start_label }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="resume-bar"><div class="resume-bar-fill"></div></div>
+  </div>
+  <a href="{{ vod.watch_url }}" class="card-body">
+    <div class="vod-title">{{ vod.display_title }}</div>
+    {% if let Some(label) = vod.match_label %}
+    <div class="vod-match-label">{{ label }}</div>
+    {% endif %}
+    {% if let Some(label) = vod.status_label %}
+    <div class="vod-status-label">{{ label }}</div>
+    {% endif %}
+  </a>
+  {% if show_game_tags && !vod.chapter_segments.is_empty() %}
+  <div class="chapter-pop" hidden>
+    <div class="chapter-pop-head">Jump to a game</div>
+    {% for seg in vod.chapter_segments %}
+    <a href="{{ seg.watch_url }}" class="chapter-pop-link">
+      <span class="chapter-link-marker color-{{ seg.color_idx }}" aria-hidden="true"></span>
+      <span class="chapter-link-name">{{ seg.name }}</span>
+      <span class="chapter-link-time">{{ seg.start_label }}</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>

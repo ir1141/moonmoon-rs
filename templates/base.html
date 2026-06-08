@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="/static/css/player.css">
   <link rel="stylesheet" href="/static/css/calendar.css">
   <link rel="stylesheet" href="/static/css/sync.css">
+  <link rel="stylesheet" href="/static/css/landing.css">
   <script type="module" src="/static/list-filters.js" nonce="{{ nonce }}"></script>
   <script type="module" src="/static/list-feedback.js" nonce="{{ nonce }}"></script>
   <script type="module" src="/static/vod-cards.js" nonce="{{ nonce }}"></script>
@@ -33,7 +34,7 @@
           referrerpolicy="no-referrer"
           nonce="{{ nonce }}"></script>
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <div class="header">
     <a href="/" class="logo">
       <svg class="logo-mark" width="26" height="26" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
@@ -43,6 +44,7 @@
       Moonmoon
     </a>
     <nav class="header-nav nav-group" aria-label="Browse">
+      <a href="/"         class="nav-link{% if active_section.slug() == "home"     %} active{% endif %}"{% if active_section.slug() == "home"     %} aria-current="page"{% endif %}>Home</a>
       <a href="/games"    class="nav-link{% if active_section.slug() == "games"    %} active{% endif %}"{% if active_section.slug() == "games"    %} aria-current="page"{% endif %}>Games</a>
       <a href="/streams"  class="nav-link{% if active_section.slug() == "streams"  %} active{% endif %}"{% if active_section.slug() == "streams"  %} aria-current="page"{% endif %}>Streams</a>
       <a href="/calendar" class="nav-link{% if active_section.slug() == "calendar" %} active{% endif %}"{% if active_section.slug() == "calendar" %} aria-current="page"{% endif %}>Calendar</a>
