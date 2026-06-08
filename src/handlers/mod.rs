@@ -69,6 +69,8 @@ pub struct ListQuery {
     pub from: Option<String>,
     pub to: Option<String>,
     pub page: Option<usize>,
+    pub lens: Option<String>,
+    pub game: Option<String>,
 }
 
 // ─── Display types ───
@@ -684,7 +686,8 @@ fn build_clear_url(base_url: &str, params: &ListQuery) -> String {
     let Some(sort) = normalized_filter_value(&params.sort) else {
         return base_url.to_string();
     };
-    format!("{base_url}?sort={}", urlencoding::encode(&sort))
+    let sep = if base_url.contains('?') { '&' } else { '?' };
+    format!("{base_url}{sep}sort={}", urlencoding::encode(&sort))
 }
 
 pub(crate) fn assign_period_headers(displays: &mut [VodDisplay], sort: &str) {
@@ -1048,6 +1051,14 @@ pub(crate) fn paginate<T>(items: Vec<T>, page: usize, batch: usize) -> Vec<T> {
 
 pub(crate) fn build_next_url(base: &str, page: usize, params: &ListQuery) -> String {
     let mut parts = vec![format!("page={page}")];
+    if let Some(ref s) = params.lens {
+        parts.push(format!("lens={}", urlencoding::encode(s)));
+    }
+    if let Some(ref s) = params.game
+        && !s.is_empty()
+    {
+        parts.push(format!("game={}", urlencoding::encode(s)));
+    }
     if let Some(ref s) = params.search
         && !s.is_empty()
     {
@@ -1368,6 +1379,7 @@ mod tests {
             from: Some("2026-05-01".into()),
             to: Some("2026-05-10".into()),
             page: None,
+            ..Default::default()
         };
 
         filter_vod_displays(&mut displays, &params);
@@ -1395,6 +1407,7 @@ mod tests {
             from: None,
             to: None,
             page: None,
+            ..Default::default()
         };
 
         filter_vod_displays(&mut displays, &params);
@@ -1420,6 +1433,7 @@ mod tests {
             from: None,
             to: None,
             page: None,
+            ..Default::default()
         };
 
         filter_vod_displays(&mut displays, &params);
@@ -1441,6 +1455,7 @@ mod tests {
             from: Some("2026-05-19".into()),
             to: Some("2026-05-19".into()),
             page: None,
+            ..Default::default()
         };
 
         filter_vod_displays(&mut displays, &params);
@@ -1461,6 +1476,7 @@ mod tests {
             from: Some("".into()),
             to: Some("".into()),
             page: None,
+            ..Default::default()
         };
 
         filter_vod_displays(&mut displays, &params);
@@ -1486,6 +1502,7 @@ mod tests {
             from: None,
             to: None,
             page: None,
+            ..Default::default()
         };
 
         let filtered = filter_vod_displays_with_metadata(displays, &params, "/streams");
@@ -1515,6 +1532,7 @@ mod tests {
             from: Some("2026-05-20".into()),
             to: Some("2026-05-20".into()),
             page: None,
+            ..Default::default()
         };
 
         let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games");
@@ -1547,6 +1565,7 @@ mod tests {
             from: Some("2026-05-20".into()),
             to: Some("2026-05-20".into()),
             page: None,
+            ..Default::default()
         };
 
         let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games");
@@ -1577,6 +1596,7 @@ mod tests {
             from: Some("2026-05".into()),
             to: Some("2026-05".into()),
             page: None,
+            ..Default::default()
         };
 
         let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games");
@@ -1635,6 +1655,7 @@ mod tests {
             from: Some("2026-05-20".into()),
             to: Some("2026-05-20".into()),
             page: None,
+            ..Default::default()
         };
 
         let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games");
@@ -2048,11 +2069,44 @@ mod tests {
             from: None,
             to: None,
             page: None,
+            ..Default::default()
         };
         let url = build_next_url("/games", 1, &params);
         assert!(url.starts_with("/games?"));
         assert!(url.contains("page=1"));
         assert!(url.contains("search=test"));
         assert!(url.contains("sort=most"));
+    }
+
+    #[test]
+    fn test_build_next_url_includes_lens_and_game() {
+        let params = ListQuery {
+            sort: Some("newest".into()),
+            lens: Some("streams".into()),
+            game: Some("Elden Ring".into()),
+            ..Default::default()
+        };
+        let url = build_next_url("/browse/grid", 2, &params);
+        assert!(url.contains("page=2"));
+        assert!(url.contains("lens=streams"));
+        assert!(url.contains("game=Elden%20Ring"));
+    }
+
+    #[test]
+    fn test_build_clear_url_appends_with_ampersand_when_base_has_query() {
+        let params = ListQuery {
+            sort: Some("newest".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            build_clear_url("/browse?lens=streams", &params),
+            "/browse?lens=streams&sort=newest"
+        );
+        let none = ListQuery::default();
+        assert_eq!(
+            build_clear_url("/browse?lens=games", &none),
+            "/browse?lens=games"
+        );
+        assert_eq!(build_clear_url("/games", &none), "/games");
     }
 }
