@@ -1,21 +1,17 @@
 mod api;
 mod browse;
 mod calendar;
-mod games;
 mod history;
 mod home;
 mod sync;
-mod vods;
 mod watch;
 
 pub use api::chat_proxy;
-pub use browse::{browse_grid, browse_page};
+pub use browse::{browse_grid, browse_page, game_redirect, games_redirect, streams_redirect};
 pub use calendar::calendar_page;
-pub use games::{games_grid, games_page};
 pub use history::{continue_resume, history_page, history_vods_grid};
 pub use home::home_page;
 pub use sync::{sync_get, sync_put};
-pub use vods::{all_streams_grid, all_streams_page, game_vods_grid, game_vods_page};
 pub use watch::{next_in_period, random_vod, vod_detail, watch_page};
 
 use crate::vods::{Game, Vod};
@@ -31,8 +27,6 @@ pub(crate) const PERIOD_GAP_DAYS: i64 = 14;
 pub(crate) enum Section {
     None,
     Home,
-    Games,
-    Streams,
     Browse,
     History,
     Calendar,
@@ -43,8 +37,6 @@ impl Section {
         match self {
             Section::None => "",
             Section::Home => "home",
-            Section::Games => "games",
-            Section::Streams => "streams",
             Section::Browse => "browse",
             Section::History => "history",
             Section::Calendar => "calendar",
@@ -931,13 +923,6 @@ pub(crate) fn vod_has_game(vod: &Vod, game_name: &str) -> bool {
     }
 }
 
-pub(crate) fn find_game_image(games: &[Game], game_name: &str) -> Option<String> {
-    games
-        .iter()
-        .find(|g| g.name.eq_ignore_ascii_case(game_name))
-        .and_then(|g| g.image.clone())
-}
-
 pub(crate) fn get_chapter_segments(vod: &Vod, total_duration_secs: i64) -> Vec<ChapterSegment> {
     let Some(chapters) = vod.chapters.as_ref() else {
         return Vec::new();
@@ -1240,41 +1225,6 @@ mod tests {
         assert!(vod_has_game(&vod, "elden ring"));
         assert!(vod_has_game(&vod, "ELDEN RING"));
         assert!(!vod_has_game(&vod, "Dark Souls"));
-    }
-
-    #[test]
-    fn test_find_game_image_is_case_insensitive() {
-        let games = vec![
-            Game {
-                name: "Elden Ring".into(),
-                image: Some("elden.jpg".into()),
-                vod_count: 2,
-                dominant_stream_count: 0,
-                first_streamed: None,
-                last_streamed: None,
-                first_streamed_label: None,
-                last_streamed_label: None,
-            },
-            Game {
-                name: "Dark Souls".into(),
-                image: None,
-                vod_count: 1,
-                dominant_stream_count: 0,
-                first_streamed: None,
-                last_streamed: None,
-                first_streamed_label: None,
-                last_streamed_label: None,
-            },
-        ];
-        assert_eq!(
-            find_game_image(&games, "elden ring").as_deref(),
-            Some("elden.jpg")
-        );
-        assert_eq!(
-            find_game_image(&games, "ELDEN RING").as_deref(),
-            Some("elden.jpg")
-        );
-        assert_eq!(find_game_image(&games, "Sekiro"), None);
     }
 
     #[test]

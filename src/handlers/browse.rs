@@ -9,8 +9,8 @@ use crate::SharedState;
 use crate::middleware::CspNonce;
 use crate::vods::{Game, chapter_color_idx};
 use askama::Template;
-use axum::extract::{Extension, Query, State};
-use axum::response::{IntoResponse, Response};
+use axum::extract::{Extension, Path, Query, RawQuery, State};
+use axum::response::{IntoResponse, Redirect, Response};
 use std::sync::Arc;
 
 const GAME_SORTS: [(&str, &str, bool); 6] = [
@@ -324,6 +324,37 @@ pub async fn browse_grid(
     }
 }
 
+/// Build the `/browse` URL an old route redirects to, preserving its original
+/// query string verbatim.
+fn browse_redirect_target(lens: &str, game: Option<&str>, raw_query: Option<&str>) -> String {
+    let mut url = format!("/browse?lens={lens}");
+    if let Some(g) = game {
+        url.push_str("&game=");
+        url.push_str(&urlencoding::encode(g));
+    }
+    if let Some(q) = raw_query.filter(|q| !q.is_empty()) {
+        url.push('&');
+        url.push_str(q);
+    }
+    url
+}
+
+pub async fn games_redirect(RawQuery(query): RawQuery) -> Redirect {
+    Redirect::temporary(&browse_redirect_target("games", None, query.as_deref()))
+}
+
+pub async fn streams_redirect(RawQuery(query): RawQuery) -> Redirect {
+    Redirect::temporary(&browse_redirect_target("streams", None, query.as_deref()))
+}
+
+pub async fn game_redirect(Path(name): Path<String>, RawQuery(query): RawQuery) -> Redirect {
+    Redirect::temporary(&browse_redirect_target(
+        "streams",
+        Some(&name),
+        query.as_deref(),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -359,5 +390,25 @@ mod tests {
         assert!(out.contains("&search=dark%20souls"));
         assert!(out.contains("&from=2026-01-01"));
         assert!(!out.contains("to="));
+    }
+
+    #[test]
+    fn browse_redirect_target_builds_expected_urls() {
+        assert_eq!(
+            browse_redirect_target("games", None, None),
+            "/browse?lens=games"
+        );
+        assert_eq!(
+            browse_redirect_target("streams", None, Some("from=2026-06-01")),
+            "/browse?lens=streams&from=2026-06-01"
+        );
+        assert_eq!(
+            browse_redirect_target("streams", Some("Elden Ring"), Some("sort=oldest")),
+            "/browse?lens=streams&game=Elden%20Ring&sort=oldest"
+        );
+        assert_eq!(
+            browse_redirect_target("streams", Some("C++"), None),
+            "/browse?lens=streams&game=C%2B%2B"
+        );
     }
 }
