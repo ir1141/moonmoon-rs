@@ -19,12 +19,27 @@ function showMessage(grid, text) {
 function initHistoryPage() {
   const stats = document.getElementById("history-stats");
   const grid = document.getElementById("history-grid");
-  const sortSel = /** @type {HTMLSelectElement | null} */ (
+  const sortInput = /** @type {HTMLInputElement | null} */ (
     document.getElementById("history-sort")
   );
-  if (!stats || !grid || !sortSel) return;
+  if (!stats || !grid || !sortInput) return;
 
-  sortSel.value = readHistorySort();
+  function applySortToControl(value) {
+    sortInput.value = value;
+    const control = sortInput.closest("[data-sort-control]");
+    const item = control && control.querySelector(`.sort-item[data-value="${value}"]`);
+    const label = control && control.querySelector("[data-sort-label]");
+    if (item instanceof HTMLElement && label instanceof HTMLElement) {
+      label.innerHTML = `<b>Sort:</b> ${item.dataset.label}`;
+      control.querySelectorAll(".sort-item").forEach((opt) => {
+        const active = opt === item;
+        opt.classList.toggle("is-active", active);
+        opt.setAttribute("aria-selected", active ? "true" : "false");
+      });
+    }
+  }
+
+  applySortToControl(readHistorySort());
 
   const entries = buildHistoryEntries(
     readJsonStore(localStorage, RESUME_KEY),
@@ -41,7 +56,7 @@ function initHistoryPage() {
     entries.length === 1 ? "1 history entry" : `${entries.length} history entries`;
 
   function load() {
-    const params = serializeHistoryRequest(entries, sortSel.value);
+    const params = serializeHistoryRequest(entries, sortInput.value);
 
     fetch(`/history/vods?${params.toString()}`)
       .then((response) => {
@@ -66,8 +81,8 @@ function initHistoryPage() {
       });
   }
 
-  sortSel.addEventListener("change", () => {
-    sortSel.value = writeHistorySort(localStorage, sortSel.value);
+  sortInput.addEventListener("change", () => {
+    writeHistorySort(localStorage, sortInput.value);
     load();
   });
   load();
