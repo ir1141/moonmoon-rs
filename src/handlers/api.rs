@@ -13,6 +13,10 @@ pub struct ChatQuery {
     pub cursor: Option<String>,
 }
 
+/// Upstream cursors are short opaque strings; anything huge is garbage and
+/// just burns an upstream connection on a guaranteed-failing URL.
+const MAX_CURSOR_LEN: usize = 2048;
+
 fn canonical_chat_vod_id(vods: &Arc<Vec<Vod>>, requested_id: &str) -> Option<String> {
     find_vod_by_id(vods.as_ref().as_slice(), requested_id).map(|vod| vod.id.clone())
 }
@@ -46,6 +50,9 @@ pub async fn chat_proxy(
         qparts.push(format!("content_offset_seconds={offset}"));
     }
     if let Some(ref cursor) = params.cursor {
+        if cursor.len() > MAX_CURSOR_LEN {
+            return (axum::http::StatusCode::BAD_REQUEST, "cursor too long").into_response();
+        }
         let encoded = urlencoding::encode(cursor);
         qparts.push(format!("cursor={encoded}"));
     }
