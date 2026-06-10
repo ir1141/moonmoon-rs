@@ -129,6 +129,8 @@ async fn main() {
             get(handlers::sync_get).put(handlers::sync_put),
         )
         .route("/api/refresh", post(handlers::refresh_catalog))
+        .route("/history/resume", get(handlers::continue_resume))
+        .route("/history/vods", get(handlers::history_vods_grid))
         .layer(GovernorLayer::new(api_governor));
 
     let app = Router::new()
@@ -141,8 +143,6 @@ async fn main() {
         .route("/watch/{vod_id}", get(handlers::watch_page))
         .route("/calendar", get(handlers::calendar_page))
         .route("/history", get(handlers::history_page))
-        .route("/history/resume", get(handlers::continue_resume))
-        .route("/history/vods", get(handlers::history_vods_grid))
         .route("/random", get(handlers::random_vod))
         .merge(api_routes)
         .nest_service("/static", ServeDir::new("static"))

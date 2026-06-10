@@ -95,6 +95,10 @@ struct HistoryRequestedVod {
     state: HistoryEntryState,
 }
 
+/// Clients legitimately send at most MAX_RESUME_ENTRIES + MAX_WATCHED_ENTRIES
+/// (500 + 500) ids; anything beyond that is garbage or abuse.
+const MAX_HISTORY_IDS: usize = 1000;
+
 fn parse_history_requests(
     ids: &str,
     times: &str,
@@ -104,9 +108,12 @@ fn parse_history_requests(
     let state_values: Vec<&str> = states.unwrap_or("").split(',').collect();
 
     ids.split(',')
-        .filter(|id| !id.is_empty())
         .enumerate()
+        .filter(|(_, id)| !id.is_empty())
+        .take(MAX_HISTORY_IDS)
         .map(|(idx, id)| {
+            // idx indexes the original CSV position, so times/states stay
+            // aligned even when an id slot is empty.
             let resume_time = time_values
                 .get(idx)
                 .and_then(|time| time.parse::<i64>().ok())
@@ -131,13 +138,24 @@ fn build_history_displays(
     sort: Option<&str>,
     options: HistoryDisplayOptions,
 ) -> Vec<VodDisplay> {
+    use std::collections::HashMap;
+    // One pass over the catalog instead of a linear scan per requested id.
+    // First-insert-wins matches find_vod_by_id's first-match semantics.
+    let mut index: HashMap<&str, &Vod> = HashMap::with_capacity(vods.len() * 2);
+    for vod in vods {
+        index.entry(vod.id.as_str()).or_insert(vod);
+        if let Some(pid) = vod.platform_vod_id.as_deref() {
+            index.entry(pid).or_insert(vod);
+        }
+    }
+
     // Build displays in the order of requested IDs (most recently watched first).
     // For each one, resolve the chapter the user was actually in at resume time
     // so multi-game streams group by the watched game, not the first chapter.
     let mut displays = Vec::new();
     let mut keys: Vec<Option<String>> = Vec::new();
     for requested in requested_vods {
-        if let Some(vod) = find_vod_by_id(vods, &requested.id) {
+        if let Some(&vod) = index.get(requested.id.as_str()) {
             let (name_opt, start_opt) = resolve_watched_chapter(vod, requested.resume_time).unzip();
             let mut display = match requested.state {
                 HistoryEntryState::InProgress => {
@@ -433,6 +451,24 @@ mod tests {
             resume_time,
             state,
         }
+    }
+
+    #[test]
+    fn parse_history_requests_keeps_times_aligned_past_empty_ids() {
+        let parsed = parse_history_requests("a,,b", "10,20,30", Some("in_progress,,watched"));
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].id, "a");
+        assert_eq!(parsed[0].resume_time, Some(10));
+        assert_eq!(parsed[1].id, "b");
+        assert_eq!(parsed[1].resume_time, Some(30));
+        assert!(matches!(parsed[1].state, HistoryEntryState::Watched));
+    }
+
+    #[test]
+    fn parse_history_requests_caps_requested_ids() {
+        let ids = vec!["x"; MAX_HISTORY_IDS + 50].join(",");
+        let parsed = parse_history_requests(&ids, "", None);
+        assert_eq!(parsed.len(), MAX_HISTORY_IDS);
     }
 
     #[test]
