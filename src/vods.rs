@@ -257,8 +257,29 @@ struct ApiMeta {
 
 #[derive(Deserialize)]
 struct ApiResponse {
+    #[serde(deserialize_with = "deserialize_lossy_vods")]
     pub data: Vec<Vod>,
     pub meta: ApiMeta,
+}
+
+/// The upstream API is inconsistent; a single malformed row must not fail the
+/// entire page (and with it the whole catalog fetch). Parse rows individually
+/// and skip the broken ones with a warning.
+fn deserialize_lossy_vods<'de, D>(deserializer: D) -> Result<Vec<Vod>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let values = Vec::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(values
+        .into_iter()
+        .filter_map(|value| match serde_json::from_value::<Vod>(value) {
+            Ok(vod) => Some(vod),
+            Err(e) => {
+                tracing::warn!("skipping malformed vod row: {e}");
+                None
+            }
+        })
+        .collect())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -880,6 +901,17 @@ mod tests {
             youtube: Some(uploads),
             is_live: false,
         }
+    }
+
+    #[test]
+    fn test_api_response_skips_malformed_rows() {
+        let json = r#"{"meta":{"total":2},"data":[
+            {"id":1,"title":"good","created_at":"2026-01-01T00:00:00Z"},
+            {"title":"missing id and created_at"}
+        ]}"#;
+        let resp: ApiResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.data.len(), 1);
+        assert_eq!(resp.data[0].id, "1");
     }
 
     #[test]
