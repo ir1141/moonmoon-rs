@@ -619,8 +619,21 @@ function clearChatContainer() {
   }
 }
 
+var pendingSeekListener = null;
+
+function clearPendingSeekListener() {
+  if (!pendingSeekListener) return;
+  try {
+    player.removeEventListener("onStateChange", pendingSeekListener);
+  } catch (e) {
+    /* ignore — the expectedPart guard below defuses it anyway */
+  }
+  pendingSeekListener = null;
+}
+
 function switchPart(index, seekTime) {
   if (index < 0 || index >= YOUTUBE_IDS.length) return;
+  clearPendingSeekListener();
   chatGeneration += 1;
   currentPart = index;
   lastTickTime = -1;
@@ -634,14 +647,24 @@ function switchPart(index, seekTime) {
   player.loadVideoById(YOUTUBE_IDS[index]);
   if (typeof seekTime === "number" && seekTime > 0) {
     var seeked = false;
+    var expectedPart = index;
     var waitForPlay = function (e) {
       if (seeked) return;
+      if (currentPart !== expectedPart) {
+        // a later switchPart superseded this seek
+        seeked = true;
+        player.removeEventListener("onStateChange", waitForPlay);
+        if (pendingSeekListener === waitForPlay) pendingSeekListener = null;
+        return;
+      }
       if (e.data === YT.PlayerState.PLAYING) {
         seeked = true;
         player.seekTo(seekTime, true);
         player.removeEventListener("onStateChange", waitForPlay);
+        if (pendingSeekListener === waitForPlay) pendingSeekListener = null;
       }
     };
+    pendingSeekListener = waitForPlay;
     player.addEventListener("onStateChange", waitForPlay);
   }
   updatePartSelector();
