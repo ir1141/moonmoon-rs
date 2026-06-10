@@ -848,19 +848,22 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
 
     let new_vods = std::sync::Arc::new(catalog.vods);
     let new_games = std::sync::Arc::new(build_games(&new_vods));
+    let new_bounds = crate::handlers::archive_date_bounds(&new_vods);
     let count = new_vods.len();
 
     {
-        // Acquire all three write guards together (vods → games → snapshot) so the
-        // swap is atomic from a reader's perspective. Safe against deadlock only
-        // because readers clone-and-release each guard and never hold two at once
-        // — see the lock-discipline note on `AppState`.
+        // Acquire all four write guards together (vods → games → snapshot →
+        // date_bounds) so the swap is atomic from a reader's perspective. Safe
+        // against deadlock only because readers clone-and-release each guard and
+        // never hold two at once — see the lock-discipline note on `AppState`.
         let mut vods_w = state.vods.write().await;
         let mut games_w = state.games.write().await;
         let mut snapshot_w = state.catalog_snapshot.write().await;
+        let mut bounds_w = state.date_bounds.write().await;
         *vods_w = new_vods;
         *games_w = new_games;
         *snapshot_w = catalog.snapshot;
+        *bounds_w = new_bounds;
     }
 
     tracing::info!("refresh: complete ({count} vods)");

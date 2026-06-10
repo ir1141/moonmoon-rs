@@ -17,16 +17,20 @@ mod sync_store;
 mod vods;
 
 pub struct AppState {
-    // Lock discipline for the three catalog RwLocks below: readers must clone the
-    // inner `Arc` and drop the guard immediately — NEVER hold two of these guards
+    // Lock discipline for the four catalog RwLocks below: readers must clone the
+    // inner value and drop the guard immediately — NEVER hold two of these guards
     // open at once. The refresh writer (see `vods::refresh_in_place`) holds all
-    // three write guards together in the order vods → games → snapshot; readers
-    // acquire them in the opposite order (e.g. games → vods in `prepare_games`).
-    // That's deadlock-free only because no reader ever holds two simultaneously.
-    // Holding two read guards open together would reintroduce a circular wait.
+    // four write guards together in the order vods → games → snapshot →
+    // date_bounds; readers acquire them in the opposite order (e.g. games → vods
+    // in `prepare_games`). That's deadlock-free only because no reader ever holds
+    // two simultaneously. Holding two read guards open together would
+    // reintroduce a circular wait.
     pub vods: RwLock<Arc<Vec<vods::Vod>>>,
     pub games: RwLock<Arc<Vec<vods::Game>>>,
     pub(crate) catalog_snapshot: RwLock<vods::CatalogSnapshot>,
+    /// (min, max) `YYYY-MM-DD` stream dates across the catalog; only changes on
+    /// refresh, so it's computed once per catalog swap instead of per request.
+    pub date_bounds: RwLock<(String, String)>,
     pub http_client: reqwest::Client,
     pub refresh_lock: tokio::sync::Mutex<()>,
     pub sync_store: Arc<sync_store::SyncStore>,
@@ -71,10 +75,13 @@ async fn main() {
         .into();
     let sync_store = Arc::new(sync_store::SyncStore::load(sync_store_path).await);
 
+    let date_bounds = handlers::archive_date_bounds(&all_vods);
+
     let state = Arc::new(AppState {
         vods: RwLock::new(Arc::new(all_vods)),
         games: RwLock::new(Arc::new(games)),
         catalog_snapshot: RwLock::new(catalog.snapshot),
+        date_bounds: RwLock::new(date_bounds),
         http_client,
         refresh_lock: tokio::sync::Mutex::new(()),
         sync_store,

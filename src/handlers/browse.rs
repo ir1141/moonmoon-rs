@@ -1,9 +1,9 @@
 use super::{
     GAME_BATCH_SIZE, GamesGridTemplate, ListFilterConfig, ListMetadata, ListQuery, Section,
-    VOD_BATCH_SIZE, VodDisplay, VodsGridTemplate, archive_date_bounds, assign_period_headers,
-    date_preset_state, filter_games_with_metadata, filter_vod_displays_with_metadata,
-    get_chapter_start, list_sort_options_grouped, paginate_with_nav, render_template,
-    selected_sort_option, vod_has_game,
+    VOD_BATCH_SIZE, VodDisplay, VodsGridTemplate, assign_period_headers, date_preset_state,
+    filter_games_with_metadata, filter_vod_displays_with_metadata, get_chapter_start,
+    list_sort_options_grouped, paginate_with_nav, render_template, selected_sort_option,
+    vod_has_game,
 };
 use crate::SharedState;
 use crate::middleware::CspNonce;
@@ -116,7 +116,7 @@ async fn prepare_browse(
         let guard = state.vods.read().await;
         Arc::clone(&*guard)
     };
-    let (archive_min_date, archive_max_date) = archive_date_bounds(&vods);
+    let (archive_min_date, archive_max_date) = state.date_bounds.read().await.clone();
 
     match lens {
         Lens::Games => {
