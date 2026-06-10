@@ -34,15 +34,13 @@ enum Lens {
     Streams,
 }
 
-/// Resolve the active lens. A non-empty `game` drilldown forces the streams
-/// lens; otherwise `lens=streams` selects streams and everything else (missing,
-/// unknown, or `games`) defaults to the games overview.
+/// Resolve the active lens. An explicit `lens` always wins; a non-empty `game`
+/// drilldown only forces the streams lens when no explicit lens was given.
 fn resolve_lens(lens: Option<&str>, game: Option<&str>) -> Lens {
-    if game.is_some_and(|g| !g.is_empty()) {
-        return Lens::Streams;
-    }
     match lens {
         Some("streams") => Lens::Streams,
+        Some("games") => Lens::Games,
+        _ if game.is_some_and(|g| !g.is_empty()) => Lens::Streams,
         _ => Lens::Games,
     }
 }
@@ -196,6 +194,10 @@ fn sort_context(is_games: bool) -> (&'static [(&'static str, &'static str, bool)
 fn resolve_browse_params(params: &mut ListQuery) -> (Option<String>, Lens, bool, String) {
     let game = params.game.clone().filter(|s| !s.is_empty());
     let lens = resolve_lens(params.lens.as_deref(), game.as_deref());
+    // A stray game param on the games lens would otherwise leak into the
+    // drilldown chip and clear-game URLs (every real drilldown URL carries
+    // lens=streams, so this only drops junk).
+    let game = if lens == Lens::Streams { game } else { None };
     let is_games = lens == Lens::Games;
     let (_, default_sort) = sort_context(is_games);
     let sort = params
@@ -375,13 +377,35 @@ mod tests {
     #[test]
     fn resolve_lens_streams_explicit_or_via_game() {
         assert!(matches!(resolve_lens(Some("streams"), None), Lens::Streams));
-        assert!(matches!(
-            resolve_lens(Some("games"), Some("Elden Ring")),
-            Lens::Streams
-        ));
         assert!(matches!(resolve_lens(None, Some("Sekiro")), Lens::Streams));
         // empty game does not force streams
         assert!(matches!(resolve_lens(None, Some("")), Lens::Games));
+    }
+
+    #[test]
+    fn resolve_lens_explicit_games_wins_over_game_param() {
+        assert!(matches!(
+            resolve_lens(Some("games"), Some("Elden Ring")),
+            Lens::Games
+        ));
+        assert!(matches!(
+            resolve_lens(Some("streams"), Some("Sekiro")),
+            Lens::Streams
+        ));
+        assert!(matches!(resolve_lens(None, Some("Sekiro")), Lens::Streams));
+    }
+
+    #[test]
+    fn resolve_browse_params_drops_game_for_games_lens() {
+        let mut params = ListQuery {
+            lens: Some("games".into()),
+            game: Some("Elden Ring".into()),
+            ..Default::default()
+        };
+        let (game, lens, is_games, _) = resolve_browse_params(&mut params);
+        assert!(game.is_none());
+        assert!(matches!(lens, Lens::Games));
+        assert!(is_games);
     }
 
     #[test]
