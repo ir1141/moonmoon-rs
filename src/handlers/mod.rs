@@ -306,15 +306,12 @@ pub(crate) fn render_template(tmpl: &impl Template) -> axum::response::Response 
 
 // ─── Helpers ───
 
-pub(crate) fn filter_games(games: &[Game], params: &ListQuery) -> Vec<Game> {
-    filter_and_sort_games(games.to_vec(), params)
-}
-
 pub(crate) fn filter_games_with_metadata(
     games: &[Game],
     vods: &[Vod],
     params: &ListQuery,
     clear_base_url: &str,
+    sort: &str,
 ) -> FilteredGames {
     let unfiltered_count = games.len();
     let filtered = if list_date_filter_is_active(params) {
@@ -323,9 +320,13 @@ pub(crate) fn filter_games_with_metadata(
             .filter(|vod| vod_matches_date_filter(vod, params))
             .cloned()
             .collect();
-        filter_and_sort_games(crate::vods::build_dominant_games(&matching_vods), params)
+        filter_and_sort_games(
+            crate::vods::build_dominant_games(&matching_vods),
+            &params.search,
+            sort,
+        )
     } else {
-        filter_games(games, params)
+        filter_and_sort_games(games.to_vec(), &params.search, sort)
     };
 
     let filtered_count = filtered.len();
@@ -344,13 +345,16 @@ pub(crate) fn filter_games_with_metadata(
     }
 }
 
-fn filter_and_sort_games(mut filtered: Vec<Game>, params: &ListQuery) -> Vec<Game> {
-    if let Some(search) = normalized_filter_value(&params.search) {
+fn filter_and_sort_games(
+    mut filtered: Vec<Game>,
+    search: &Option<String>,
+    sort: &str,
+) -> Vec<Game> {
+    if let Some(search) = normalized_filter_value(search) {
         let search_lower = search.to_lowercase();
         filtered.retain(|g| g.name.to_lowercase().contains(&search_lower));
     }
 
-    let sort = params.sort.as_deref().unwrap_or("recent");
     match sort {
         "fewest" | "streams_asc" => filtered.sort_by_key(|a| a.vod_count),
         "most" | "streams_desc" => filtered.sort_by_key(|a| std::cmp::Reverse(a.vod_count)),
@@ -1528,7 +1532,7 @@ mod tests {
             ..Default::default()
         };
 
-        let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games");
+        let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games", "most");
 
         assert_eq!(filtered.metadata.unfiltered_count, 3);
         assert_eq!(filtered.metadata.filtered_count, 2);
@@ -1561,7 +1565,7 @@ mod tests {
             ..Default::default()
         };
 
-        let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games");
+        let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games", "fewest");
 
         assert_eq!(filtered.metadata.unfiltered_count, 4);
         assert_eq!(filtered.metadata.filtered_count, 2);
@@ -1592,7 +1596,7 @@ mod tests {
             ..Default::default()
         };
 
-        let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games");
+        let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games", "most");
 
         assert_eq!(
             filtered
@@ -1615,7 +1619,7 @@ mod tests {
         let all_games = crate::vods::build_games(&vods);
         let params = ListQuery::default();
 
-        let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games");
+        let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games", "recent");
 
         assert_eq!(
             filtered
@@ -1651,7 +1655,7 @@ mod tests {
             ..Default::default()
         };
 
-        let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games");
+        let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games", "recent");
 
         assert_eq!(
             filtered

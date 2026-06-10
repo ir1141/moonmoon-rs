@@ -124,7 +124,8 @@ async fn prepare_browse(
                 let guard = state.games.read().await;
                 Arc::clone(&*guard)
             };
-            let filtered = filter_games_with_metadata(&games, &vods, params, "/browse?lens=games");
+            let filtered =
+                filter_games_with_metadata(&games, &vods, params, "/browse?lens=games", sort);
             let (paged, has_more, next_url) =
                 paginate_with_nav(filtered.games, "/browse/grid", GAME_BATCH_SIZE, params);
             PreparedBrowse {
