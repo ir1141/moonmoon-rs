@@ -55,7 +55,10 @@ function initHistoryPage() {
   stats.textContent =
     entries.length === 1 ? "1 history entry" : `${entries.length} history entries`;
 
+  let loadGeneration = 0;
+
   function load() {
+    const generation = ++loadGeneration;
     const params = serializeHistoryRequest(entries, sortInput.value);
 
     fetch(`/history/vods?${params.toString()}`)
@@ -64,6 +67,7 @@ function initHistoryPage() {
         return response.text();
       })
       .then((html) => {
+        if (generation !== loadGeneration) return; // a newer load superseded this one
         grid.replaceChildren();
         const temp = document.createElement("template");
         temp.innerHTML = html;
@@ -77,6 +81,7 @@ function initHistoryPage() {
         }
       })
       .catch(() => {
+        if (generation !== loadGeneration) return;
         showMessage(grid, "Failed to load history");
       });
   }
