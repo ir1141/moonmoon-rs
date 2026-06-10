@@ -144,11 +144,6 @@ pub(crate) struct DatePresetState {
     pub show_custom: bool,
 }
 
-pub(crate) struct FilteredVodDisplays {
-    pub vods: Vec<VodDisplay>,
-    pub metadata: ListMetadata,
-}
-
 pub(crate) struct FilteredGames {
     pub games: Vec<Game>,
     pub metadata: ListMetadata,
@@ -207,9 +202,8 @@ pub(crate) struct VodDisplay {
     pub progress_seconds: Option<i64>,
     pub history_state: Option<&'static str>,
     pub chapter_names: Vec<String>,
-    pub duration_minutes: i64,
     pub duration_seconds: i64,
-    /// Set by exactly one of [`assign_period_headers`] (for chronological views)
+    /// Set by exactly one of [`assign_period_headers_seeded`] (for chronological views)
     /// or [`assign_series_headers`] (for game-grouped views). Do not call both
     /// on the same display list — the later call overwrites the earlier.
     pub period_header: Option<String>,
@@ -237,7 +231,6 @@ impl VodDisplay {
             .duration
             .as_ref()
             .map_or(0, |duration| duration.seconds());
-        let duration_minutes = duration_seconds / 60;
         let watch_url = build_watch_url(&vod.id, chapter_start, game_name_hint);
         let chapter_segments = get_chapter_segments(vod, duration_seconds);
         let chapter_names = get_game_tags(vod);
@@ -258,7 +251,6 @@ impl VodDisplay {
             progress_seconds: None,
             history_state: None,
             chapter_names,
-            duration_minutes,
             duration_seconds,
             period_header: None,
             watch_url,
@@ -517,87 +509,78 @@ fn vod_matches_date_filter(vod: &Vod, params: &ListQuery) -> bool {
     true
 }
 
-pub(crate) fn filter_vod_displays_with_metadata(
-    mut displays: Vec<VodDisplay>,
+/// A catalog VOD that survived filtering, plus its search-match label.
+/// Replaces the old build-every-VodDisplay-then-filter flow: displays (chapter
+/// segments, tags, formatted labels) are only built for the paginated slice.
+pub(crate) struct VodRefMatch<'a> {
+    pub vod: &'a Vod,
+    pub match_label: Option<String>,
+}
+
+pub(crate) fn filter_vods_with_metadata<'a>(
+    vods: impl Iterator<Item = &'a Vod>,
     params: &ListQuery,
     clear_base_url: &str,
-) -> FilteredVodDisplays {
-    let unfiltered_count = displays.len();
+) -> (Vec<VodRefMatch<'a>>, ListMetadata) {
+    let mut refs: Vec<VodRefMatch<'a>> = vods
+        .map(|vod| VodRefMatch {
+            vod,
+            match_label: None,
+        })
+        .collect();
+    let unfiltered_count = refs.len();
 
     if let Some(search) = normalized_filter_value(&params.search) {
         let search_lower = search.to_lowercase();
-        displays = displays
-            .into_iter()
-            .filter_map(|mut display| {
-                display.match_label = None;
-                let title_matches = display.display_title.to_lowercase().contains(&search_lower);
-                if title_matches {
-                    return Some(display);
+        refs.retain_mut(|r| {
+            let title = r.vod.title.as_deref().unwrap_or("Untitled Stream");
+            if title.to_lowercase().contains(&search_lower) {
+                return true;
+            }
+            match vod_matching_chapter_name(r.vod, &search_lower) {
+                Some(name) => {
+                    r.match_label = Some(format!("Matched chapter: {name}"));
+                    true
                 }
-                let chapter_match = matching_chapter_name(&display, &search_lower);
-                if let Some(name) = chapter_match {
-                    display.match_label = Some(format!("Matched chapter: {name}"));
-                    Some(display)
-                } else {
-                    None
-                }
-            })
-            .collect();
-    } else {
-        displays.iter_mut().for_each(|display| {
-            display.match_label = None;
+                None => false,
+            }
         });
     }
 
     if let Some(from) = date_filter_lower_bound(&params.from) {
-        displays.retain(|v| vod_display_date(v) >= from.as_str());
+        refs.retain(|r| vod_date(r.vod) >= from.as_str());
     }
-
     if let Some(to) = date_filter_upper_bound(&params.to) {
-        displays.retain(|v| vod_display_date(v) <= to.as_str());
+        refs.retain(|r| vod_date(r.vod) <= to.as_str());
     }
 
     let sort = params.sort.as_deref().unwrap_or("newest");
     match sort {
-        "oldest" => displays.sort_by(|a, b| a.created_at.cmp(&b.created_at)),
-        "longest" => displays.sort_by_key(|a| std::cmp::Reverse(a.duration_minutes)),
-        "shortest" => displays.sort_by_key(|a| a.duration_minutes),
-        _ => displays.sort_by(|a, b| b.created_at.cmp(&a.created_at)),
+        "oldest" => refs.sort_by(|a, b| vod_stream_time(a.vod).cmp(vod_stream_time(b.vod))),
+        "longest" => refs.sort_by_key(|r| std::cmp::Reverse(vod_duration_minutes(r.vod))),
+        "shortest" => refs.sort_by_key(|r| vod_duration_minutes(r.vod)),
+        _ => refs.sort_by(|a, b| vod_stream_time(b.vod).cmp(vod_stream_time(a.vod))),
     }
 
-    let filtered_count = displays.len();
-    let metadata = build_list_metadata(unfiltered_count, filtered_count, params, clear_base_url);
-    FilteredVodDisplays {
-        vods: displays,
-        metadata,
-    }
+    let metadata = build_list_metadata(unfiltered_count, refs.len(), params, clear_base_url);
+    (refs, metadata)
 }
 
-#[cfg(test)]
-pub(crate) fn filter_vod_displays(displays: &mut Vec<VodDisplay>, params: &ListQuery) {
-    let filtered = filter_vod_displays_with_metadata(std::mem::take(displays), params, "");
-    *displays = filtered.vods;
+fn vod_date(vod: &Vod) -> &str {
+    let t = vod_stream_time(vod);
+    t.get(..10).unwrap_or(t)
 }
 
-fn matching_chapter_name<'a>(display: &'a VodDisplay, search_lower: &str) -> Option<&'a str> {
-    display
-        .chapter_names
+fn vod_duration_minutes(vod: &Vod) -> i64 {
+    vod.duration.as_ref().map_or(0, |d| d.seconds()) / 60
+}
+
+fn vod_matching_chapter_name<'a>(vod: &'a Vod, search_lower: &str) -> Option<&'a str> {
+    vod.chapters
+        .as_ref()?
         .iter()
-        .map(String::as_str)
-        .chain(
-            display
-                .chapter_segments
-                .iter()
-                .map(|segment| segment.name.as_str()),
-        )
-        .find(|name| name.to_lowercase().contains(search_lower))
-}
-
-fn vod_display_date(display: &VodDisplay) -> &str {
-    display
-        .created_at
-        .get(..10)
-        .unwrap_or(display.created_at.as_str())
+        .filter_map(|ch| ch.name.as_deref())
+        .find(|name| !name.is_empty() && name.to_lowercase().contains(search_lower))
 }
 
 fn normalized_filter_value(value: &Option<String>) -> Option<String> {
@@ -726,11 +709,18 @@ fn build_clear_url(base_url: &str, params: &ListQuery) -> String {
 /// each new month. Only meaningful when the list is in date order, so it no-ops
 /// unless `sort` is "newest"/"oldest"; callers also skip it when a game filter
 /// is active. The `.vod-period-header` CSS uppercases the label for display.
-pub(crate) fn assign_period_headers(displays: &mut [VodDisplay], sort: &str) {
+/// `prev_stream_time` is the stream time of the card immediately BEFORE this
+/// slice (i.e. the last card of the previous page), so a page that starts
+/// mid-month doesn't repeat the month header.
+pub(crate) fn assign_period_headers_seeded(
+    displays: &mut [VodDisplay],
+    sort: &str,
+    prev_stream_time: Option<&str>,
+) {
     if sort != "newest" && sort != "oldest" {
         return;
     }
-    let mut current: Option<String> = None;
+    let mut current: Option<String> = prev_stream_time.map(month_year_long);
     for display in displays.iter_mut() {
         let label = month_year_long(&display.created_at);
         if current.as_deref() != Some(label.as_str()) {
@@ -1292,11 +1282,88 @@ mod tests {
             progress_seconds: None,
             history_state: None,
             chapter_names: vec![],
-            duration_minutes: 0,
             duration_seconds: 0,
             period_header: None,
             watch_url: format!("/watch/{id}"),
         }
+    }
+
+    #[test]
+    fn filter_vods_with_metadata_matches_title_and_chapters() {
+        let mut titled = make_vod("title", "2026-05-20T00:00:00Z", &[]);
+        titled.title = Some("Late night HITMAN".into());
+        let vods = [
+            titled,
+            make_vod("chapter", "2026-05-19T00:00:00Z", &["HITMAN"]),
+            make_vod("neither", "2026-05-18T00:00:00Z", &["Terraria"]),
+        ];
+        let params = ListQuery {
+            search: Some("hitman".into()),
+            ..Default::default()
+        };
+        let (refs, metadata) =
+            filter_vods_with_metadata(vods.iter(), &params, "/browse?lens=streams");
+        assert_eq!(refs.len(), 2);
+        assert_eq!(refs[0].vod.id, "title");
+        assert!(refs[0].match_label.is_none());
+        assert_eq!(refs[1].vod.id, "chapter");
+        assert_eq!(
+            refs[1].match_label.as_deref(),
+            Some("Matched chapter: HITMAN")
+        );
+        assert_eq!(metadata.unfiltered_count, 3);
+        assert_eq!(metadata.filtered_count, 2);
+    }
+
+    #[test]
+    fn filter_vods_with_metadata_filters_dates_inclusive_and_sorts() {
+        let vods = [
+            make_vod("after", "2026-05-20T00:00:00Z", &["A"]),
+            make_vod("same-day", "2026-05-19T23:59:59Z", &["A"]),
+            make_vod("before", "2026-05-18T23:59:59Z", &["A"]),
+        ];
+        let params = ListQuery {
+            sort: Some("oldest".into()),
+            from: Some("2026-05-19".into()),
+            to: Some("2026-05-19".into()),
+            ..Default::default()
+        };
+        let (refs, _) = filter_vods_with_metadata(vods.iter(), &params, "/x");
+        assert_eq!(
+            refs.iter().map(|r| r.vod.id.as_str()).collect::<Vec<_>>(),
+            vec!["same-day"]
+        );
+    }
+
+    #[test]
+    fn filter_vods_with_metadata_ignores_blank_filters() {
+        let vods = [
+            make_vod("newer", "2026-05-20T00:00:00Z", &["A"]),
+            make_vod("older", "2026-05-19T00:00:00Z", &["A"]),
+        ];
+        let params = ListQuery {
+            search: Some("   ".into()),
+            from: Some("".into()),
+            to: Some("".into()),
+            ..Default::default()
+        };
+        let (refs, metadata) = filter_vods_with_metadata(vods.iter(), &params, "/x");
+        assert_eq!(
+            refs.iter().map(|r| r.vod.id.as_str()).collect::<Vec<_>>(),
+            vec!["newer", "older"]
+        );
+        assert!(!metadata.is_filtered);
+    }
+
+    #[test]
+    fn assign_period_headers_seeded_suppresses_repeat_month() {
+        let mut same_month = vec![make_display("1", "2024-03-10T00:00:00Z")];
+        assign_period_headers_seeded(&mut same_month, "newest", Some("2024-03-31T00:00:00Z"));
+        assert!(same_month[0].period_header.is_none());
+
+        let mut new_month = vec![make_display("2", "2024-03-10T00:00:00Z")];
+        assign_period_headers_seeded(&mut new_month, "newest", Some("2024-04-01T00:00:00Z"));
+        assert_eq!(new_month[0].period_header.as_deref(), Some("March 2024"));
     }
 
     #[test]
@@ -1343,7 +1410,7 @@ mod tests {
             make_display("3", "2024-01-20T00:00:00Z"),
             make_display("4", "2024-01-15T00:00:00Z"),
         ];
-        assign_period_headers(&mut displays, "newest");
+        assign_period_headers_seeded(&mut displays, "newest", None);
         assert_eq!(displays[0].period_header.as_deref(), Some("March 2024"));
         assert!(displays[1].period_header.is_none());
         assert_eq!(displays[2].period_header.as_deref(), Some("January 2024"));
@@ -1358,158 +1425,9 @@ mod tests {
             make_display("1", "2024-04-01T00:00:00Z"),
             make_display("2", "2024-03-31T00:00:00Z"),
         ];
-        assign_period_headers(&mut displays, "newest");
+        assign_period_headers_seeded(&mut displays, "newest", None);
         assert_eq!(displays[0].period_header.as_deref(), Some("April 2024"));
         assert_eq!(displays[1].period_header.as_deref(), Some("March 2024"));
-    }
-
-    #[test]
-    fn test_filter_vod_displays_filters_and_sorts_by_stream_date() {
-        let mut displays = vec![
-            make_display("created-late", "2026-05-12T00:00:00Z"),
-            make_display("started-window", "2026-05-09T22:35:39.000Z"),
-            make_display("old", "2026-04-01T00:00:00Z"),
-        ];
-        let params = ListQuery {
-            search: None,
-            sort: Some("oldest".into()),
-            from: Some("2026-05-01".into()),
-            to: Some("2026-05-10".into()),
-            page: None,
-            ..Default::default()
-        };
-
-        filter_vod_displays(&mut displays, &params);
-
-        assert_eq!(
-            displays.iter().map(|d| d.id.as_str()).collect::<Vec<_>>(),
-            vec!["started-window"]
-        );
-    }
-
-    #[test]
-    fn vod_search_matches_title_without_chapter_context() {
-        let mut displays = vec![
-            {
-                let mut d = make_display("title", "2026-05-20T00:00:00Z");
-                d.display_title = "Late night HITMAN".into();
-                d
-            },
-            display_with_games("chapter", &["Terraria"]),
-        ];
-        displays[1].display_title = "Chapter-only stream".into();
-        let params = ListQuery {
-            search: Some("hitman".into()),
-            sort: Some("newest".into()),
-            from: None,
-            to: None,
-            page: None,
-            ..Default::default()
-        };
-
-        filter_vod_displays(&mut displays, &params);
-
-        assert_eq!(displays.len(), 1);
-        assert_eq!(displays[0].id, "title");
-    }
-
-    #[test]
-    fn vod_search_matches_chapter_name_when_title_does_not_match() {
-        let mut displays = vec![
-            {
-                let mut d = make_display("title", "2026-05-20T00:00:00Z");
-                d.display_title = "Ordinary stream".into();
-                d
-            },
-            display_with_games("chapter", &["HITMAN"]),
-        ];
-        displays[1].display_title = "Late night variety".into();
-        let params = ListQuery {
-            search: Some("hitman".into()),
-            sort: Some("newest".into()),
-            from: None,
-            to: None,
-            page: None,
-            ..Default::default()
-        };
-
-        filter_vod_displays(&mut displays, &params);
-
-        assert_eq!(displays.len(), 1);
-        assert_eq!(displays[0].id, "chapter");
-    }
-
-    #[test]
-    fn vod_date_filter_includes_exact_calendar_day() {
-        let mut displays = vec![
-            make_display("before", "2026-05-18T23:59:59Z"),
-            make_display("same-day", "2026-05-19T23:59:59Z"),
-            make_display("after", "2026-05-20T00:00:00Z"),
-        ];
-        let params = ListQuery {
-            search: None,
-            sort: Some("newest".into()),
-            from: Some("2026-05-19".into()),
-            to: Some("2026-05-19".into()),
-            page: None,
-            ..Default::default()
-        };
-
-        filter_vod_displays(&mut displays, &params);
-
-        assert_eq!(displays.len(), 1);
-        assert_eq!(displays[0].id, "same-day");
-    }
-
-    #[test]
-    fn empty_vod_filters_are_ignored() {
-        let mut displays = vec![
-            make_display("newer", "2026-05-20T00:00:00Z"),
-            make_display("older", "2026-05-19T00:00:00Z"),
-        ];
-        let params = ListQuery {
-            search: Some("   ".into()),
-            sort: Some("newest".into()),
-            from: Some("".into()),
-            to: Some("".into()),
-            page: None,
-            ..Default::default()
-        };
-
-        filter_vod_displays(&mut displays, &params);
-
-        assert_eq!(
-            displays.iter().map(|d| d.id.as_str()).collect::<Vec<_>>(),
-            vec!["newer", "older"]
-        );
-    }
-
-    #[test]
-    fn vod_filter_count_is_before_pagination() {
-        let displays: Vec<VodDisplay> = (0..40)
-            .map(|idx| {
-                let mut d = make_display(&format!("match-{idx}"), "2026-05-20T00:00:00Z");
-                d.display_title = format!("Match stream {idx}");
-                d
-            })
-            .collect();
-        let params = ListQuery {
-            search: Some("match".into()),
-            sort: Some("newest".into()),
-            from: None,
-            to: None,
-            page: None,
-            ..Default::default()
-        };
-
-        let filtered = filter_vod_displays_with_metadata(displays, &params, "/streams");
-        let filtered_count = filtered.metadata.filtered_count;
-        let (paged, has_more, _) =
-            paginate_with_nav(filtered.vods, "/streams/vods", VOD_BATCH_SIZE, &params);
-
-        assert_eq!(filtered_count, 40);
-        assert_eq!(paged.len(), VOD_BATCH_SIZE);
-        assert!(has_more);
     }
 
     #[test]
@@ -1690,7 +1608,7 @@ mod tests {
             make_display("2", "2024-03-05T00:00:00Z"),
             make_display("3", "2024-03-01T00:00:00Z"),
         ];
-        assign_period_headers(&mut displays, "newest");
+        assign_period_headers_seeded(&mut displays, "newest", None);
         assert_eq!(displays[0].period_header.as_deref(), Some("March 2024"));
         assert!(displays[1].period_header.is_none());
         assert!(displays[2].period_header.is_none());
@@ -1852,7 +1770,7 @@ mod tests {
             make_display("1", "2024-03-10T00:00:00Z"),
             make_display("2", "2024-01-01T00:00:00Z"),
         ];
-        assign_period_headers(&mut displays, "longest");
+        assign_period_headers_seeded(&mut displays, "longest", None);
         assert!(displays.iter().all(|d| d.period_header.is_none()));
     }
 
