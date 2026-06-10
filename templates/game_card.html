@@ -9,11 +9,11 @@
     <div class="name" title="{{ game.name }}">{{ game.name }}</div>
     {% if show_recency %}
     {% if show_oldest_recency %}
-    {% if let Some(label) = game.first_streamed_label %}
+    {% if let Some(label) = game.first_streamed_label() %}
     <div class="last">Streamed {{ label }}</div>
     {% endif %}
     {% else %}
-    {% if let Some(label) = game.last_streamed_label %}
+    {% if let Some(label) = game.last_streamed_label() %}
     <div class="last">Streamed {{ label }}</div>
     {% endif %}
     {% endif %}

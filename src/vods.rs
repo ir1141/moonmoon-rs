@@ -235,8 +235,16 @@ pub struct Game {
     pub dominant_stream_count: usize,
     pub first_streamed: Option<String>,
     pub last_streamed: Option<String>,
-    pub first_streamed_label: Option<String>,
-    pub last_streamed_label: Option<String>,
+}
+
+impl Game {
+    pub fn first_streamed_label(&self) -> Option<String> {
+        self.first_streamed.as_deref().map(format_stream_date)
+    }
+
+    pub fn last_streamed_label(&self) -> Option<String> {
+        self.last_streamed.as_deref().map(format_stream_date)
+    }
 }
 
 #[must_use]
@@ -603,8 +611,6 @@ pub fn build_games(vods: &[Vod]) -> Vec<Game> {
                         dominant_stream_count: 0,
                         first_streamed: None,
                         last_streamed: None,
-                        first_streamed_label: None,
-                        last_streamed_label: None,
                     });
                     entry.vod_count += 1;
                     if entry.image.is_none() {
@@ -622,8 +628,6 @@ pub fn build_games(vods: &[Vod]) -> Vec<Game> {
                 dominant_stream_count: 0,
                 first_streamed: None,
                 last_streamed: None,
-                first_streamed_label: None,
-                last_streamed_label: None,
             });
             if entry.image.is_none() {
                 entry.image = dominant.image;
@@ -652,8 +656,6 @@ pub fn build_dominant_games(vods: &[Vod]) -> Vec<Game> {
             dominant_stream_count: 0,
             first_streamed: None,
             last_streamed: None,
-            first_streamed_label: None,
-            last_streamed_label: None,
         });
         entry.vod_count += 1;
         if entry.image.is_none() {
@@ -757,7 +759,6 @@ fn update_dominant_stream_stats(game: &mut Game, stream_time: &str) {
         .is_none_or(|first| stream_time < first)
     {
         game.first_streamed = Some(stream_time.to_string());
-        game.first_streamed_label = Some(format_stream_date(stream_time));
     }
     if game
         .last_streamed
@@ -765,7 +766,6 @@ fn update_dominant_stream_stats(game: &mut Game, stream_time: &str) {
         .is_none_or(|last| stream_time > last)
     {
         game.last_streamed = Some(stream_time.to_string());
-        game.last_streamed_label = Some(format_stream_date(stream_time));
     }
 }
 
@@ -773,7 +773,7 @@ fn stream_time_for_vod(vod: &Vod) -> &str {
     vod.started_at.as_deref().unwrap_or(&vod.created_at)
 }
 
-fn format_stream_date(timestamp: &str) -> String {
+pub(crate) fn format_stream_date(timestamp: &str) -> String {
     let Some(date_part) = timestamp.get(..10) else {
         return timestamp.to_string();
     };
