@@ -85,6 +85,9 @@ var chatUserScrollIntentUntil = 0;
 var chatAutoScrollFrame = null;
 var chatScrollGeneration = 0;
 var lastTickTime = -1;
+// Bumped whenever chat state is reset (seek, part switch). In-flight fetches
+// capture the value at start and drop their response if it has moved on.
+var chatGeneration = 0;
 
 // Reply threading: track most recent message per username
 var recentMessageByUser = {};
@@ -618,6 +621,7 @@ function clearChatContainer() {
 
 function switchPart(index, seekTime) {
   if (index < 0 || index >= YOUTUBE_IDS.length) return;
+  chatGeneration += 1;
   currentPart = index;
   lastTickTime = -1;
   chatMessages = [];
@@ -819,6 +823,7 @@ function finalizeCurrentVod() {
 function loadChat(fromOffset) {
   if (chatLoading) return;
   chatLoading = true;
+  var gen = chatGeneration;
   chatRetryOffset = fromOffset;
   setChatRetryVisible(false);
   setChatStatus(chatLoadStatusText());
@@ -838,6 +843,7 @@ function loadChat(fromOffset) {
       return res.json();
     })
     .then(function (data) {
+      if (gen !== chatGeneration) return; // stale: chat state was reset mid-flight
       if (data.comments && data.comments.length > 0) {
         chatMessages = chatMessages.concat(data.comments);
       }
@@ -850,6 +856,7 @@ function loadChat(fromOffset) {
       }
     })
     .catch(function (err) {
+      if (gen !== chatGeneration) return;
       console.warn("[Chat] Failed to load:", err);
       chatLoading = false;
       setChatStatus(chatErrorStatusText());
@@ -1144,6 +1151,7 @@ chatContainer.addEventListener("click", function (e) {
 // ─── Seek detection + chat reset ───
 
 function resetChat(fromOffset) {
+  chatGeneration += 1;
   chatMessages = [];
   chatIndex = 0;
   chatCursor = null;
@@ -1173,7 +1181,7 @@ function tick() {
   // UNSTARTED (which the tick guard skips), so we never observed the jump.
   var jumped = lastTickTime >= 0 && Math.abs(globalTime - lastTickTime) > 3;
   var firstTickAtOffset =
-    lastTickTime < 0 && globalTime > 10 && chatMessages.length === 0;
+    lastTickTime < 0 && globalTime > 10 && chatMessages.length === 0 && !chatLoading;
   if (jumped || firstTickAtOffset) {
     resetChat(globalTime);
   }
