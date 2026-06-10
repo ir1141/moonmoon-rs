@@ -5,6 +5,7 @@ use super::{
 use crate::SharedState;
 use crate::middleware::CspNonce;
 use crate::vods::Vod;
+use crate::vods::month_abbr_num;
 use askama::Template;
 use axum::extract::{Extension, Query, State};
 use axum::response::IntoResponse;
@@ -101,24 +102,6 @@ fn month_name(m: u32) -> &'static str {
     }
 }
 
-fn short_month_name(m: u32) -> &'static str {
-    match m {
-        1 => "Jan",
-        2 => "Feb",
-        3 => "Mar",
-        4 => "Apr",
-        5 => "May",
-        6 => "Jun",
-        7 => "Jul",
-        8 => "Aug",
-        9 => "Sep",
-        10 => "Oct",
-        11 => "Nov",
-        12 => "Dec",
-        _ => "???",
-    }
-}
-
 // Tomohiko Sakamoto's algorithm: day of week for any date (0=Sun..6=Sat)
 fn day_of_week(year: i32, month: u32, day: u32) -> u32 {
     let t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
@@ -145,7 +128,7 @@ fn date_query(days: i64) -> String {
 
 fn date_label(days: i64) -> String {
     let (_, month, day) = days_to_civil(days);
-    format!("{} {day}", short_month_name(month))
+    format!("{} {day}", month_abbr_num(month))
 }
 
 fn weekday_label(days: i64) -> &'static str {

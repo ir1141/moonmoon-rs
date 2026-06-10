@@ -14,6 +14,7 @@ pub use home::home_page;
 pub use sync::{sync_get, sync_put};
 pub use watch::{next_in_period, random_vod, vod_detail, watch_page};
 
+use crate::vods::month_abbr;
 use crate::vods::{Game, Vod};
 use askama::Template;
 use axum::response::{Html, IntoResponse};
@@ -805,24 +806,6 @@ fn month_long(month_part: &str) -> &str {
         "10" => "October",
         "11" => "November",
         "12" => "December",
-        other => other,
-    }
-}
-
-fn month_abbr(month_part: &str) -> &str {
-    match month_part {
-        "01" => "Jan",
-        "02" => "Feb",
-        "03" => "Mar",
-        "04" => "Apr",
-        "05" => "May",
-        "06" => "Jun",
-        "07" => "Jul",
-        "08" => "Aug",
-        "09" => "Sep",
-        "10" => "Oct",
-        "11" => "Nov",
-        "12" => "Dec",
         other => other,
     }
 }

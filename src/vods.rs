@@ -787,21 +787,28 @@ fn format_stream_date(timestamp: &str) -> String {
     format!("{} {day}, {}", month_abbr(parts[1]), parts[0])
 }
 
-fn month_abbr(month_part: &str) -> &str {
-    match month_part {
-        "01" => "Jan",
-        "02" => "Feb",
-        "03" => "Mar",
-        "04" => "Apr",
-        "05" => "May",
-        "06" => "Jun",
-        "07" => "Jul",
-        "08" => "Aug",
-        "09" => "Sep",
-        "10" => "Oct",
-        "11" => "Nov",
-        "12" => "Dec",
-        other => other,
+pub(crate) fn month_abbr_num(month: u32) -> &'static str {
+    match month {
+        1 => "Jan",
+        2 => "Feb",
+        3 => "Mar",
+        4 => "Apr",
+        5 => "May",
+        6 => "Jun",
+        7 => "Jul",
+        8 => "Aug",
+        9 => "Sep",
+        10 => "Oct",
+        11 => "Nov",
+        12 => "Dec",
+        _ => "???",
+    }
+}
+
+pub(crate) fn month_abbr(month_part: &str) -> &str {
+    match month_part.parse::<u32>() {
+        Ok(m @ 1..=12) => month_abbr_num(m),
+        _ => month_part,
     }
 }
 
@@ -901,6 +908,13 @@ mod tests {
             youtube: Some(uploads),
             is_live: false,
         }
+    }
+
+    #[test]
+    fn test_month_abbr_num() {
+        assert_eq!(month_abbr_num(1), "Jan");
+        assert_eq!(month_abbr_num(12), "Dec");
+        assert_eq!(month_abbr_num(13), "???");
     }
 
     #[test]
