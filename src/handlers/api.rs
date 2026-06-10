@@ -92,6 +92,26 @@ pub async fn chat_proxy(
     }
 }
 
+// ─── Manual refresh ───
+
+pub async fn refresh_catalog(State(state): State<SharedState>) -> impl IntoResponse {
+    use crate::vods::RefreshOutcome;
+    match crate::vods::refresh_in_place(&state).await {
+        RefreshOutcome::Refreshed(n) => {
+            (axum::http::StatusCode::OK, format!("refreshed {n} vods")).into_response()
+        }
+        RefreshOutcome::Unchanged(n) => {
+            (axum::http::StatusCode::OK, format!("unchanged ({n} vods)")).into_response()
+        }
+        RefreshOutcome::Busy => (
+            axum::http::StatusCode::ACCEPTED,
+            "refresh already in progress".to_string(),
+        )
+            .into_response(),
+        RefreshOutcome::Error(e) => (axum::http::StatusCode::BAD_GATEWAY, e).into_response(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,4 +1,7 @@
-use axum::{Router, routing::get};
+use axum::{
+    Router,
+    routing::{get, post},
+};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -45,7 +48,7 @@ async fn main() {
         .build()
         .expect("failed to build HTTP client");
 
-    const BOOT_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+    const BOOT_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
     let catalog =
         match tokio::time::timeout(BOOT_FETCH_TIMEOUT, vods::load_catalog(&http_client)).await {
             Ok(catalog) => catalog,
@@ -77,13 +80,11 @@ async fn main() {
         sync_store,
     });
 
-    const REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
     let refresh_state = Arc::clone(&state);
     tokio::spawn(async move {
-        let mut tick = tokio::time::interval(REFRESH_INTERVAL);
-        tick.tick().await; // swallow the immediate first tick — boot just fetched
         loop {
-            tick.tick().await;
+            let count = refresh_state.vods.read().await.len();
+            tokio::time::sleep(vods::next_refresh_delay(count)).await;
             match vods::refresh_in_place(&refresh_state).await {
                 vods::RefreshOutcome::Refreshed(n) => {
                     tracing::info!("tick refresh: refreshed {n} vods")
@@ -127,6 +128,7 @@ async fn main() {
             "/api/sync/{token}",
             get(handlers::sync_get).put(handlers::sync_put),
         )
+        .route("/api/refresh", post(handlers::refresh_catalog))
         .layer(GovernorLayer::new(api_governor));
 
     let app = Router::new()

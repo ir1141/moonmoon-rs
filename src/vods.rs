@@ -320,6 +320,19 @@ pub fn upscale_chapter_image(url: &str) -> String {
         .replace("40x53", "285x380")
 }
 
+pub(crate) const REFRESH_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+/// While the catalog is empty (failed/timed-out boot fetch) retry much faster
+/// so a bad boot doesn't leave the site empty for six hours.
+pub(crate) const EMPTY_RETRY_INTERVAL: Duration = Duration::from_secs(60);
+
+pub(crate) fn next_refresh_delay(vod_count: usize) -> Duration {
+    if vod_count == 0 {
+        EMPTY_RETRY_INTERVAL
+    } else {
+        REFRESH_INTERVAL
+    }
+}
+
 const API: &str = "https://archive.overpowered.tv/api/v1/moonmoon/vods";
 const PAGE_SIZE: usize = 50;
 const MAX_429_RETRIES: usize = 6;
@@ -1501,5 +1514,11 @@ mod tests {
         );
         assert_eq!(catalog.vods.len(), 1);
         assert_eq!(catalog.vods[0].id, "1430");
+    }
+
+    #[test]
+    fn test_next_refresh_delay_retries_fast_when_empty() {
+        assert_eq!(next_refresh_delay(0), EMPTY_RETRY_INTERVAL);
+        assert_eq!(next_refresh_delay(1500), REFRESH_INTERVAL);
     }
 }

@@ -6,7 +6,7 @@ mod home;
 mod sync;
 mod watch;
 
-pub use api::chat_proxy;
+pub use api::{chat_proxy, refresh_catalog};
 pub use browse::{browse_grid, browse_page, game_redirect, games_redirect, streams_redirect};
 pub use calendar::calendar_page;
 pub use history::{continue_resume, history_page, history_vods_grid};
