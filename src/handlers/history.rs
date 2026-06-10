@@ -1,6 +1,6 @@
 use super::{
     Section, VodDisplay, VodsGridTemplate, assign_series_headers, build_watch_url, find_vod_by_id,
-    render_template, resolve_watched_chapter,
+    format_chapter_start, render_template, resolve_watched_chapter,
 };
 use crate::SharedState;
 use crate::middleware::CspNonce;
@@ -168,7 +168,7 @@ fn build_history_displays(
                         VodDisplay::from_vod_with(vod, link_start, name_opt.as_deref());
                     if let Some(time) = requested.resume_time {
                         display.status_label =
-                            Some(format!("In progress · {}", format_history_time(time)));
+                            Some(format!("In progress · {}", format_chapter_start(time)));
                         display.progress_seconds = Some(time);
                     } else {
                         display.status_label = Some("In progress".to_string());
@@ -209,18 +209,6 @@ fn build_history_displays(
     displays
 }
 
-fn format_history_time(seconds: i64) -> String {
-    let seconds = seconds.max(0);
-    let hours = seconds / 3600;
-    let minutes = (seconds % 3600) / 60;
-    let secs = seconds % 60;
-    if hours > 0 {
-        format!("{hours}:{minutes:02}:{secs:02}")
-    } else {
-        format!("{minutes}:{secs:02}")
-    }
-}
-
 fn format_continue_remaining(position: i64, duration: i64) -> Option<String> {
     if duration <= 0 {
         return None;
@@ -258,7 +246,7 @@ fn build_continue_resume_view(
     } else {
         0.0
     };
-    let resume_at = format!("resumes at {}", format_history_time(resume_time));
+    let resume_at = format!("resumes at {}", format_chapter_start(resume_time));
     let subline = match format_continue_remaining(resume_time, display.duration_seconds) {
         Some(remaining) => format!("{remaining} · {resume_at}"),
         None => resume_at,

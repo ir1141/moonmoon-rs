@@ -983,7 +983,7 @@ pub(crate) fn get_chapter_segments(vod: &Vod, total_duration_secs: i64) -> Vec<C
     out
 }
 
-fn format_chapter_start(seconds: i64) -> String {
+pub(crate) fn format_chapter_start(seconds: i64) -> String {
     let seconds = seconds.max(0);
     let hours = seconds / 3600;
     let minutes = (seconds % 3600) / 60;
