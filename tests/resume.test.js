@@ -43,4 +43,21 @@ describe("mergeResume", () => {
     expect(local).toEqual(localSnap);
     expect(remote).toEqual(remoteSnap);
   });
+
+  test("junk local entry with no remote entry is dropped, not set to undefined", () => {
+    const { merged, changed } = mergeResume({ a: null }, {});
+    expect("a" in merged).toBe(false);
+    expect(changed).toBe(true);
+  });
+
+  test("junk remote entry does not clobber or flag anything", () => {
+    const { merged, changed } = mergeResume({}, { a: null });
+    expect("a" in merged).toBe(false);
+    expect(changed).toBe(false);
+  });
+
+  test("merged never contains undefined values", () => {
+    const { merged } = mergeResume({ a: null, b: 0 }, { c: false });
+    expect(Object.values(merged).every((v) => v !== undefined)).toBe(true);
+  });
 });
