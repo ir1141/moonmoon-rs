@@ -1053,17 +1053,17 @@ pub(crate) fn paginate_with_nav<T>(
     let page = params.page.unwrap_or(0);
     let total = items.len();
     let paged = paginate(items, page, batch);
-    let has_more = (page + 1) * batch < total;
-    let next_url = build_next_url(base_url, page + 1, params);
+    let has_more = page.saturating_add(1).saturating_mul(batch) < total;
+    let next_url = build_next_url(base_url, page.saturating_add(1), params);
     (paged, has_more, next_url)
 }
 
 pub(crate) fn paginate<T>(items: Vec<T>, page: usize, batch: usize) -> Vec<T> {
-    let start = page * batch;
+    let start = page.saturating_mul(batch);
     if start >= items.len() {
         return vec![];
     }
-    let end = (start + batch).min(items.len());
+    let end = start.saturating_add(batch).min(items.len());
     items.into_iter().skip(start).take(end - start).collect()
 }
 
@@ -1275,6 +1275,19 @@ mod tests {
 
         let page3 = paginate(items, 3, 36);
         assert!(page3.is_empty());
+    }
+
+    #[test]
+    fn test_paginate_handles_huge_page_without_overflow() {
+        let items: Vec<i32> = (0..10).collect();
+        assert!(paginate(items.clone(), usize::MAX, 36).is_empty());
+        let params = ListQuery {
+            page: Some(usize::MAX),
+            ..Default::default()
+        };
+        let (paged, has_more, _) = paginate_with_nav(items, "/x", 36, &params);
+        assert!(paged.is_empty());
+        assert!(!has_more);
     }
 
     fn make_display(id: &str, created_at: &str) -> VodDisplay {
