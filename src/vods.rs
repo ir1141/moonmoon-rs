@@ -62,37 +62,35 @@ pub struct YoutubeVideo {
     pub created_at: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum IdValue {
+    Int(i64),
+    Str(String),
+}
+
+impl IdValue {
+    fn into_string(self) -> String {
+        match self {
+            IdValue::Int(n) => n.to_string(),
+            IdValue::Str(s) => s,
+        }
+    }
+}
+
 fn deserialize_id_string<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum IdValue {
-        Int(i64),
-        Str(String),
-    }
-    Ok(match IdValue::deserialize(deserializer)? {
-        IdValue::Int(n) => n.to_string(),
-        IdValue::Str(s) => s,
-    })
+    Ok(IdValue::deserialize(deserializer)?.into_string())
 }
 
 fn deserialize_optional_id_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum IdValue {
-        Int(i64),
-        Str(String),
-    }
     let value: Option<IdValue> = Option::deserialize(deserializer)?;
-    Ok(value.map(|v| match v {
-        IdValue::Int(n) => n.to_string(),
-        IdValue::Str(s) => s,
-    }))
+    Ok(value.map(IdValue::into_string))
 }
 
 fn format_duration_hm(secs: i64) -> String {
