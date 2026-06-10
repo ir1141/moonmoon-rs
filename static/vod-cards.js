@@ -1,4 +1,5 @@
 import { nextChapterPopoverOpen } from "./lib/chapter-popover.js";
+import { resumePercent } from "./lib/continue-watching.js";
 import {
   RESUME_KEY,
   WATCHED_KEY,
@@ -43,7 +44,7 @@ function applyResumeState(card, resumeStore) {
     Number.isFinite(duration) &&
     duration > 0
   ) {
-    const percent = Math.max(0, Math.min((time / duration) * 100, 100));
+    const percent = resumePercent(time, duration);
     card.classList.add("has-resume");
     if (fill) fill.style.width = `${percent}%`;
     return;
@@ -142,10 +143,18 @@ export function applyVodCardState(root = document) {
   });
 }
 
-function applyFromEvent(event) {
-  const root = (event.detail && event.detail.target) || document;
+/**
+ * Re-apply card state and wire popovers for freshly inserted cards. Pages that
+ * swap grid HTML manually (without htmx) call this directly.
+ * @param {Document | Element} [root]
+ */
+export function initVodCards(root = document) {
   applyVodCardState(root);
   initChapterPopovers(root);
+}
+
+function applyFromEvent(event) {
+  initVodCards((event.detail && event.detail.target) || document);
 }
 
 applyVodCardState();

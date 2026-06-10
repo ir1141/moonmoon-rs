@@ -6,6 +6,7 @@ import {
   serializeHistoryRequest,
 } from "./lib/history-state.js";
 import { readHistorySort, writeHistorySort } from "./lib/history-sort.js";
+import { initVodCards } from "./vod-cards.js";
 
 function showMessage(grid, text) {
   grid.replaceChildren();
@@ -71,10 +72,7 @@ function initHistoryPage() {
         const temp = document.createElement("template");
         temp.innerHTML = html;
         grid.appendChild(temp.content);
-        const event = new CustomEvent("htmx:afterSwap", {
-          detail: { target: grid },
-        });
-        document.body.dispatchEvent(event);
+        initVodCards(grid);
         if (!grid.querySelector(".vod-card")) {
           showMessage(grid, "No matching archived streams found");
         }
