@@ -1,6 +1,7 @@
 use super::{
-    Section, VodDisplay, VodsGridTemplate, assign_series_headers, build_watch_url, find_vod_by_id,
-    format_chapter_start, render_template, resolve_watched_chapter,
+    Section, SortOption, VodDisplay, VodsGridTemplate, assign_series_headers, build_watch_url,
+    find_vod_by_id, format_chapter_start, list_sort_options_grouped, render_template,
+    resolve_watched_chapter,
 };
 use crate::SharedState;
 use crate::middleware::CspNonce;
@@ -12,17 +13,28 @@ use axum::response::IntoResponse;
 use serde::Deserialize;
 use std::sync::Arc;
 
+const HISTORY_SORTS: [(&str, &str, bool); 2] = [
+    ("recent", "Most recently watched", false),
+    ("game", "By game", false),
+];
+
 #[derive(Template)]
 #[template(path = "history.html")]
 struct HistoryTemplate {
     active_section: Section,
     nonce: String,
+    sort_options: Vec<SortOption>,
+    selected_sort_label: &'static str,
+    sort_aria_label: &'static str,
 }
 
 pub async fn history_page(Extension(nonce): Extension<CspNonce>) -> impl IntoResponse {
     render_template(&HistoryTemplate {
         active_section: Section::History,
         nonce: nonce.0,
+        sort_options: list_sort_options_grouped("recent", &HISTORY_SORTS),
+        selected_sort_label: "Most recently watched",
+        sort_aria_label: "Sort history",
     })
 }
 

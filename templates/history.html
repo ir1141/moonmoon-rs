@@ -11,25 +11,7 @@
     <form id="history-filters" class="games-filters" data-list-filters>
       <div class="toolbar-sort-wrap" data-sort-control>
         <input type="hidden" name="sort" class="toolbar-sort-value" id="history-sort" value="recent">
-        <button type="button" class="toolbar-sort" aria-haspopup="listbox" aria-expanded="false" aria-label="Sort history">
-          <svg class="sort-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M3 6h13"></path><path d="M3 12h9"></path><path d="M3 18h5"></path>
-          </svg>
-          <span class="sort-label" data-sort-label><b>Sort:</b> Most recently watched</span>
-          <svg class="sort-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M6 9l6 6 6-6"></path>
-          </svg>
-        </button>
-        <div class="sort-menu" role="listbox" aria-label="Sort history" hidden>
-          <button type="button" role="option" class="sort-item is-active" data-value="recent" data-label="Most recently watched" aria-selected="true">
-            <span>Most recently watched</span>
-            <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
-          </button>
-          <button type="button" role="option" class="sort-item" data-value="game" data-label="By game" aria-selected="false">
-            <span>By game</span>
-            <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
-          </button>
-        </div>
+        {% include "_sort_control.html" %}
       </div>
     </form>
   </div>
