@@ -772,13 +772,27 @@ function savePartDuration(index, duration) {
 
 // ─── Resume (localStorage) ───
 
+// In-memory cache of the parsed resume store. savePosition runs at 1 Hz; a
+// fresh JSON.parse of up to 500 entries every tick is measurable jank.
+// Invalidated when another writer (sync.js merge, another tab) touches the key.
+var resumeStoreCache = null;
+
 function getResumeStore() {
+  if (resumeStoreCache) return resumeStoreCache;
   try {
-    return JSON.parse(storageGet(STORAGE_KEY)) || {};
+    resumeStoreCache = JSON.parse(storageGet(STORAGE_KEY)) || {};
   } catch (e) {
-    return {};
+    resumeStoreCache = {};
   }
+  return resumeStoreCache;
 }
+
+window.addEventListener("storage", function (e) {
+  if (e.key === STORAGE_KEY) resumeStoreCache = null;
+});
+window.addEventListener("moonmoon:resumeChanged", function () {
+  resumeStoreCache = null;
+});
 
 function savePosition() {
   if (!shouldSaveResume({ completed: watchCompleted })) return;
