@@ -640,7 +640,10 @@ pub fn build_games(vods: &[Vod]) -> Vec<Game> {
     games
 }
 
-pub fn build_dominant_games(vods: &[Vod]) -> Vec<Game> {
+pub fn build_dominant_games<'a, I>(vods: I) -> Vec<Game>
+where
+    I: IntoIterator<Item = &'a Vod>,
+{
     use std::collections::HashMap;
     let mut games: HashMap<String, Game> = HashMap::new();
 

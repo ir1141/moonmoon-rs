@@ -307,13 +307,11 @@ pub(crate) fn filter_games_with_metadata(
 ) -> FilteredGames {
     let unfiltered_count = games.len();
     let filtered = if list_date_filter_is_active(params) {
-        let matching_vods: Vec<Vod> = vods
-            .iter()
-            .filter(|vod| vod_matches_date_filter(vod, params))
-            .cloned()
-            .collect();
         filter_and_sort_games(
-            crate::vods::build_dominant_games(&matching_vods),
+            crate::vods::build_dominant_games(
+                vods.iter()
+                    .filter(|vod| vod_matches_date_filter(vod, params)),
+            ),
             &params.search,
             sort,
         )
