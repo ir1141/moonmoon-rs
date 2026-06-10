@@ -881,11 +881,17 @@ pub(crate) fn next_vod_in_period(
     current_id: &str,
     game_name: &str,
 ) -> Option<NextVod> {
-    let mut matches: Vec<&Vod> = vods.iter().filter(|v| vod_has_game(v, game_name)).collect();
-    matches.sort_by(|a, b| vod_stream_time(a).cmp(vod_stream_time(b)));
-    let idx = matches.iter().position(|v| v.id == current_id)?;
-    let next = matches.get(idx + 1)?;
-    let curr_days = parse_ymd_to_days(vod_stream_time(matches[idx]))?;
+    let current = vods
+        .iter()
+        .find(|v| v.id == current_id && vod_has_game(v, game_name))?;
+    let current_time = vod_stream_time(current);
+    // Earliest stream of the same game strictly after the current one.
+    let next = vods
+        .iter()
+        .filter(|v| v.id != current_id && vod_has_game(v, game_name))
+        .filter(|v| vod_stream_time(v) > current_time)
+        .min_by(|a, b| vod_stream_time(a).cmp(vod_stream_time(b)))?;
+    let curr_days = parse_ymd_to_days(current_time)?;
     let next_days = parse_ymd_to_days(vod_stream_time(next))?;
     if (next_days - curr_days).abs() <= PERIOD_GAP_DAYS {
         Some(NextVod {
