@@ -1,12 +1,11 @@
 import {
+  RESUME_KEY,
+  WATCHED_KEY,
   buildHistoryEntries,
   readJsonStore,
   serializeHistoryRequest,
 } from "./lib/history-state.js";
 import { readHistorySort, writeHistorySort } from "./lib/history-sort.js";
-
-const RESUME_KEY = "moonmoon_resume";
-const WATCHED_KEY = "moonmoon_watched";
 
 function showMessage(grid, text) {
   grid.replaceChildren();

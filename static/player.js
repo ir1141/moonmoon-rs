@@ -33,6 +33,10 @@ import {
   parseSearchResponse,
   PROVIDERS,
 } from "./lib/emote-providers.js";
+import {
+  RESUME_KEY as STORAGE_KEY,
+  WATCHED_KEY,
+} from "./lib/history-state.js";
 import { markWatchedVod } from "./lib/watched.js";
 
 var dataEl = document.getElementById("vod-data");
@@ -67,8 +71,6 @@ var YOUTUBE_PARTS = parseYoutubePartsDataset(
 var YOUTUBE_IDS = YOUTUBE_PARTS.map(function (part) {
   return part.id;
 });
-var STORAGE_KEY = "moonmoon_resume";
-var WATCHED_KEY = "moonmoon_watched";
 var MAX_RESUME_ENTRIES = 500;
 var MAX_WATCHED_ENTRIES = 500;
 var PART_DURATIONS_KEY = "moonmoon_part_durations";

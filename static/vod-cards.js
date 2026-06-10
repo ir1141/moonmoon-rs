@@ -1,16 +1,10 @@
 import { nextChapterPopoverOpen } from "./lib/chapter-popover.js";
+import {
+  RESUME_KEY,
+  WATCHED_KEY,
+  readJsonStore,
+} from "./lib/history-state.js";
 import { hasWatchedVod } from "./lib/watched.js";
-
-const RESUME_KEY = "moonmoon_resume";
-const WATCHED_KEY = "moonmoon_watched";
-
-function readStore(key) {
-  try {
-    return JSON.parse(localStorage.getItem(key)) || {};
-  } catch (error) {
-    return {};
-  }
-}
 
 function buildWatchedBadge() {
   const badge = document.createElement("div");
@@ -135,8 +129,8 @@ function initChapterPopovers(root = document) {
  * @param {Document | Element} [root]
  */
 export function applyVodCardState(root = document) {
-  const resumeStore = readStore(RESUME_KEY);
-  const watchedStore = readStore(WATCHED_KEY);
+  const resumeStore = readJsonStore(localStorage, RESUME_KEY);
+  const watchedStore = readJsonStore(localStorage, WATCHED_KEY);
   const cards =
     root instanceof Element && root.matches(".vod-card[data-vod-id]")
       ? [root]

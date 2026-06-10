@@ -1,3 +1,4 @@
+import { RESUME_KEY, WATCHED_KEY } from "./lib/history-state.js";
 import { mergeResume as mergeResumePure } from "./lib/resume.js";
 import {
   isValidToken,
@@ -6,8 +7,6 @@ import {
 import { mergeWatched as mergeWatchedPure } from "./lib/watched.js";
 
 var TOKEN_KEY = "moonmoon_sync_token";
-var RESUME_KEY = "moonmoon_resume";
-var WATCHED_KEY = "moonmoon_watched";
 var META_KEY = "moonmoon_sync_meta";
 
 // localStorage access throws SecurityError in storage-blocking browsers; a

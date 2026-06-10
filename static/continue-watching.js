@@ -2,23 +2,16 @@ import {
   buildContinueResumeUrl,
   selectContinueWatchingEntries,
 } from "./lib/continue-watching.js";
-
-const RESUME_KEY = "moonmoon_resume";
-
-function readResumeStore() {
-  try {
-    return JSON.parse(localStorage.getItem(RESUME_KEY)) || {};
-  } catch (error) {
-    return {};
-  }
-}
+import { RESUME_KEY, readJsonStore } from "./lib/history-state.js";
 
 async function initContinueWatching() {
   const shelf = document.getElementById("continue-watching");
   const hero = document.getElementById("continue-hero");
   if (!shelf || !hero) return;
 
-  const [entry] = selectContinueWatchingEntries(readResumeStore());
+  const [entry] = selectContinueWatchingEntries(
+    readJsonStore(localStorage, RESUME_KEY),
+  );
   if (!entry) return;
 
   try {

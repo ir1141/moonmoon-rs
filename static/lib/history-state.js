@@ -1,3 +1,6 @@
+export const RESUME_KEY = "moonmoon_resume";
+export const WATCHED_KEY = "moonmoon_watched";
+
 function storageGet(storage, key) {
   if (!storage) return null;
   if (typeof storage.getItem === "function") return storage.getItem(key);
