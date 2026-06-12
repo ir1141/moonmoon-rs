@@ -23,8 +23,13 @@ body.lp-page::before {
    (matching .lp-body) instead of letting it bleed edge-to-edge. */
 body.lp-page .continue-hero {
   max-width: 1400px;
-  margin: 0 auto 30px;
+  margin: 10px auto 30px;
   padding: 0 32px;
+}
+
+/* the card replaces the divider when continue-watching is present */
+.lp-launch:has(+ .continue-hero:not([hidden])) {
+  border-bottom-color: transparent;
 }
 
 /* ─── hero: compact search launcher ─── */
@@ -154,7 +159,8 @@ body.lp-page .continue-hero {
   gap: 9px;
   flex-wrap: wrap;
   margin: 22px auto 0;
-  max-width: 660px;
+  /* let the standard 5 chips fit one row (they need ~723px; cap was 660px) */
+  max-width: 880px;
 }
 .lp-chip {
   display: inline-flex;
