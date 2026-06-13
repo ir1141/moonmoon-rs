@@ -324,7 +324,7 @@ pub async fn history_vods_grid(
         has_more: false,
         next_url: String::new(),
         show_game_tags: true,
-        show_subtitle: false,
+        show_subtitle: true,
         is_filtered: false,
     })
 }

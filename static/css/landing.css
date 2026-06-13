@@ -338,6 +338,18 @@ body.lp-page .continue-hero {
   width: 330px;
 }
 
+.rail-vods {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  overflow: visible;
+  margin: 0;
+  padding: 4px 0 18px;
+  scroll-snap-type: none;
+}
+.rail-vods > * {
+  width: auto;
+}
+
 /* "on this day" calendar hook */
 .lp-calhook {
   margin-top: 46px;
@@ -446,6 +458,11 @@ body.lp-page .continue-hero {
   .rail {
     margin: 0 -18px;
     padding: 4px 18px 18px;
+  }
+  .rail-vods {
+    grid-template-columns: repeat(2, 1fr);
+    margin: 0;
+    padding: 4px 0 18px;
   }
   .lp-searchbox input {
     font-size: 15px;
