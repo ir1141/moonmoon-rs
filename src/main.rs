@@ -16,21 +16,39 @@ mod middleware;
 mod sync_store;
 mod vods;
 
+/// One immutable catalog generation: the vods plus everything derived from
+/// them. Swapped atomically behind `AppState::catalog`, so a reader can never
+/// observe vods from one refresh paired with games or date bounds from
+/// another, and there is no lock-ordering discipline to uphold.
+pub struct Catalog {
+    pub vods: Vec<vods::Vod>,
+    pub games: Vec<vods::Game>,
+    pub(crate) snapshot: vods::CatalogSnapshot,
+    /// (min, max) `YYYY-MM-DD` stream dates across the catalog; only changes
+    /// on refresh, so it's computed once per catalog swap instead of per
+    /// request.
+    pub date_bounds: (String, String),
+}
+
+impl Catalog {
+    /// The only way to make a `Catalog` — keeps `games` and `date_bounds`
+    /// derived from the same `vods` they're stored with.
+    pub(crate) fn build(load: vods::CatalogLoad) -> Self {
+        let games = vods::build_games(&load.vods);
+        let date_bounds = handlers::archive_date_bounds(&load.vods);
+        Self {
+            vods: load.vods,
+            games,
+            snapshot: load.snapshot,
+            date_bounds,
+        }
+    }
+}
+
 pub struct AppState {
-    // Lock discipline for the four catalog RwLocks below: readers must clone the
-    // inner value and drop the guard immediately — NEVER hold two of these guards
-    // open at once. The refresh writer (see `vods::refresh_in_place`) holds all
-    // four write guards together in the order vods → games → snapshot →
-    // date_bounds; readers acquire them in the opposite order (e.g. games → vods
-    // in `prepare_games`). That's deadlock-free only because no reader ever holds
-    // two simultaneously. Holding two read guards open together would
-    // reintroduce a circular wait.
-    pub vods: RwLock<Arc<Vec<vods::Vod>>>,
-    pub games: RwLock<Arc<Vec<vods::Game>>>,
-    pub(crate) catalog_snapshot: RwLock<vods::CatalogSnapshot>,
-    /// (min, max) `YYYY-MM-DD` stream dates across the catalog; only changes on
-    /// refresh, so it's computed once per catalog swap instead of per request.
-    pub date_bounds: RwLock<(String, String)>,
+    /// Readers `Arc::clone` the current generation and drop the guard; the
+    /// only writer is `vods::refresh_in_place`, which swaps the pointer.
+    pub catalog: RwLock<Arc<Catalog>>,
     pub http_client: reqwest::Client,
     pub refresh_lock: tokio::sync::Mutex<()>,
     pub sync_store: Arc<sync_store::SyncStore>,
@@ -64,24 +82,17 @@ async fn main() {
                 vods::CatalogLoad::empty()
             }
         };
-    let all_vods = catalog.vods;
-    tracing::info!("ready with {} vods", all_vods.len());
-
-    let games = vods::build_games(&all_vods);
-    tracing::info!("found {} games", games.len());
+    let catalog = Catalog::build(catalog);
+    tracing::info!("ready with {} vods", catalog.vods.len());
+    tracing::info!("found {} games", catalog.games.len());
 
     let sync_store_path: std::path::PathBuf = std::env::var("SYNC_STORE_PATH")
         .unwrap_or_else(|_| "sync.json".to_string())
         .into();
     let sync_store = Arc::new(sync_store::SyncStore::load(sync_store_path).await);
 
-    let date_bounds = handlers::archive_date_bounds(&all_vods);
-
     let state = Arc::new(AppState {
-        vods: RwLock::new(Arc::new(all_vods)),
-        games: RwLock::new(Arc::new(games)),
-        catalog_snapshot: RwLock::new(catalog.snapshot),
-        date_bounds: RwLock::new(date_bounds),
+        catalog: RwLock::new(Arc::new(catalog)),
         http_client,
         refresh_lock: tokio::sync::Mutex::new(()),
         sync_store,
@@ -90,7 +101,7 @@ async fn main() {
     let refresh_state = Arc::clone(&state);
     tokio::spawn(async move {
         loop {
-            let count = refresh_state.vods.read().await.len();
+            let count = refresh_state.catalog.read().await.vods.len();
             tokio::time::sleep(vods::next_refresh_delay(count)).await;
             match vods::refresh_in_place(&refresh_state).await {
                 vods::RefreshOutcome::Refreshed(n) => {

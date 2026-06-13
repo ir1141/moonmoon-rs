@@ -22,8 +22,8 @@ pub struct SyncBlob {
     pub(crate) stored_at: i64,
 }
 
-/// Hard cap on distinct sync tokens. ~10k × 256 KiB bounds worst-case memory
-/// and on-disk size; real usage is a handful of tokens.
+/// Hard cap on distinct sync tokens. MAX_SYNC_ENTRIES × MAX_BLOB_BYTES bounds
+/// worst-case memory and on-disk size; real usage is a handful of tokens.
 pub(crate) const MAX_SYNC_ENTRIES: usize = 10_000;
 
 fn token_to_evict(map: &HashMap<String, SyncBlob>, incoming: &str, cap: usize) -> Option<String> {
@@ -91,7 +91,15 @@ impl SyncStore {
     /// mutex across the file I/O so concurrent PUTs serialize and can't
     /// produce an interleaved on-disk snapshot. Throughput isn't a concern
     /// — the route is rate-limited and writes are small.
-    pub async fn put(&self, token: String, blob: SyncBlob) -> std::io::Result<()> {
+    ///
+    /// `stored_at` is stamped here, not by callers: it's the eviction key,
+    /// and the store owning it is what keeps a client-supplied value (e.g.
+    /// `i64::MAX`) from gaming eviction order.
+    pub async fn put(&self, token: String, mut blob: SyncBlob) -> std::io::Result<()> {
+        blob.stored_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
         let mut g = self.inner.lock().await;
         if let Some(evict) = token_to_evict(&g, &token, MAX_SYNC_ENTRIES) {
             tracing::warn!("sync store at capacity ({MAX_SYNC_ENTRIES}); evicting oldest token");
@@ -246,6 +254,20 @@ mod tests {
         tokio::fs::write(&path, b"not valid json").await.unwrap();
         let s = SyncStore::load(path).await;
         assert_eq!(s.len().await, 0);
+    }
+
+    #[tokio::test]
+    async fn put_stamps_stored_at_ignoring_caller_value() {
+        // `stored_at` is the eviction key; a client sending i64::MAX in the
+        // PUT body must not be able to pin its blob against eviction.
+        let dir = TempDir::new();
+        let s = SyncStore::new_in_memory(dir.join("sync.json"));
+        s.put("TOKEN".into(), blob_with_stored("x", 1, i64::MAX))
+            .await
+            .unwrap();
+        let got = s.get("TOKEN").await.unwrap();
+        assert_ne!(got.stored_at, i64::MAX);
+        assert!(got.stored_at > 0);
     }
 
     #[tokio::test]

@@ -63,20 +63,15 @@ pub async fn home_page(
     State(state): State<SharedState>,
     Extension(nonce): Extension<CspNonce>,
 ) -> impl IntoResponse {
-    let vods = {
-        let guard = state.vods.read().await;
-        Arc::clone(&*guard)
-    };
-    let games = {
-        let guard = state.games.read().await;
-        Arc::clone(&*guard)
-    };
+    let catalog = Arc::clone(&*state.catalog.read().await);
+    let vods = &catalog.vods;
+    let games = &catalog.games;
 
     let today_days = current_utc_days();
     let (today_year, today_month, today_day) = days_to_civil(today_days);
     let week_from = date_query_for_days(today_days - (WEEK_DAYS - 1));
 
-    let new_this_week = count_streams_since(&vods, &week_from);
+    let new_this_week = count_streams_since(vods, &week_from);
 
     // `games` is pre-sorted by VOD count (desc), so the most-streamed rail and the
     // chips are just prefixes — no re-sorting needed.
@@ -103,7 +98,7 @@ pub async fn home_page(
     });
 
     let on_this_day =
-        find_on_this_day(&vods, today_year, today_month, today_day).map(|(idx, matched_year)| {
+        find_on_this_day(vods, today_year, today_month, today_day).map(|(idx, matched_year)| {
             let display = VodDisplay::from_vod(&vods[idx]);
             let years_ago = (today_year - matched_year).max(1);
             OnThisDayView {
@@ -128,7 +123,7 @@ pub async fn home_page(
         total_vods_label: format_thousands(vods.len()),
         total_games: games.len(),
         new_this_week,
-        archive_since: archive_start_year(&vods),
+        archive_since: archive_start_year(vods),
         recent_vods: vods
             .iter()
             .take(RECENT_RAIL_SIZE)
@@ -162,8 +157,9 @@ fn format_thousands(n: usize) -> String {
 }
 
 /// Count streams whose stream date is on or after `from_date` (`YYYY-MM-DD`).
-/// Uses the same stream-time field and inclusive lower bound as the `/streams`
-/// `?from=` filter, so the "This week" chip count matches its destination.
+/// Uses the same stream-time field and inclusive lower bound as the browse
+/// streams lens's `?from=` filter (see `filter_vods_with_metadata`), so the
+/// "This week" chip count matches its destination.
 fn count_streams_since(vods: &[Vod], from_date: &str) -> usize {
     vods.iter()
         .filter(|vod| {

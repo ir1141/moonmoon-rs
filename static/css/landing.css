@@ -1,4 +1,4 @@
-/* landing.css — Direction C "launcher → rails" home page (GET /).
+/* landing.css — "launcher → rails" home page (GET /).
    Builds on base.css / header.css / vods.css / games.css: it reuses their tokens,
    the shared .vod-card / .game-card / .chapter-dot components, and the existing
    header + continue-watching hero. Only landing-specific chrome lives here. */
@@ -159,7 +159,7 @@ body.lp-page .continue-hero {
   gap: 9px;
   flex-wrap: wrap;
   margin: 22px auto 0;
-  /* let the standard 5 chips fit one row (they need ~723px; cap was 660px) */
+  /* wide enough for the standard 5 chips (4 game chips + This week) on one row */
   max-width: 880px;
 }
 .lp-chip {

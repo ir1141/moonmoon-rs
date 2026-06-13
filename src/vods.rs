@@ -271,12 +271,18 @@ struct ApiResponse {
 /// The upstream API is inconsistent; a single malformed row must not fail the
 /// entire page (and with it the whole catalog fetch). Parse rows individually
 /// and skip the broken ones with a warning.
+///
+/// Every row failing is different: that's schema drift, and returning Ok with
+/// an empty page would let a refresh swap a healthy in-memory catalog for
+/// nothing (and the snapshot comparison would then report Unchanged forever,
+/// pinning the site empty). Fail the page so the caller keeps what it has.
 fn deserialize_lossy_vods<'de, D>(deserializer: D) -> Result<Vec<Vod>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
     let values = Vec::<serde_json::Value>::deserialize(deserializer)?;
-    Ok(values
+    let total = values.len();
+    let vods: Vec<Vod> = values
         .into_iter()
         .filter_map(|value| match serde_json::from_value::<Vod>(value) {
             Ok(vod) => Some(vod),
@@ -285,7 +291,13 @@ where
                 None
             }
         })
-        .collect())
+        .collect();
+    if vods.is_empty() && total > 0 {
+        return Err(serde::de::Error::custom(format!(
+            "all {total} vod rows failed to parse — refusing lossy result"
+        )));
+    }
+    Ok(vods)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -822,7 +834,7 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
         }
     };
 
-    let cached_snapshot = state.catalog_snapshot.read().await.clone();
+    let cached_snapshot = state.catalog.read().await.snapshot.clone();
 
     let remote_snapshot = match fetch_catalog_snapshot(&state.http_client).await {
         Ok(snapshot) => snapshot,
@@ -834,7 +846,7 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
 
     if remote_snapshot == cached_snapshot {
         tracing::info!("refresh: catalog unchanged ({cached_snapshot:?})");
-        let count = state.vods.read().await.len();
+        let count = state.catalog.read().await.vods.len();
         return RefreshOutcome::Unchanged(count);
     }
 
@@ -849,25 +861,9 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
         }
     };
 
-    let new_vods = std::sync::Arc::new(catalog.vods);
-    let new_games = std::sync::Arc::new(build_games(&new_vods));
-    let new_bounds = crate::handlers::archive_date_bounds(&new_vods);
-    let count = new_vods.len();
-
-    {
-        // Acquire all four write guards together (vods → games → snapshot →
-        // date_bounds) so the swap is atomic from a reader's perspective. Safe
-        // against deadlock only because readers clone-and-release each guard and
-        // never hold two at once — see the lock-discipline note on `AppState`.
-        let mut vods_w = state.vods.write().await;
-        let mut games_w = state.games.write().await;
-        let mut snapshot_w = state.catalog_snapshot.write().await;
-        let mut bounds_w = state.date_bounds.write().await;
-        *vods_w = new_vods;
-        *games_w = new_games;
-        *snapshot_w = catalog.snapshot;
-        *bounds_w = new_bounds;
-    }
+    let new_catalog = std::sync::Arc::new(crate::Catalog::build(catalog));
+    let count = new_catalog.vods.len();
+    *state.catalog.write().await = new_catalog;
 
     tracing::info!("refresh: complete ({count} vods)");
     RefreshOutcome::Refreshed(count)
@@ -930,6 +926,25 @@ mod tests {
         let resp: ApiResponse = serde_json::from_str(json).unwrap();
         assert_eq!(resp.data.len(), 1);
         assert_eq!(resp.data[0].id, "1");
+    }
+
+    #[test]
+    fn test_api_response_rejects_page_where_every_row_is_malformed() {
+        // Every row failing to parse means upstream schema drift, not a few
+        // bad rows — treating it as a successful empty page would let a
+        // refresh wipe a healthy catalog.
+        let json = r#"{"meta":{"total":2},"data":[
+            {"title":"missing id and created_at"},
+            {"title":"also malformed"}
+        ]}"#;
+        assert!(serde_json::from_str::<ApiResponse>(json).is_err());
+    }
+
+    #[test]
+    fn test_api_response_accepts_genuinely_empty_page() {
+        let json = r#"{"meta":{"total":0},"data":[]}"#;
+        let resp: ApiResponse = serde_json::from_str(json).unwrap();
+        assert!(resp.data.is_empty());
     }
 
     #[test]

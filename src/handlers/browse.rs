@@ -34,8 +34,8 @@ enum Lens {
     Streams,
 }
 
-/// Resolve the active lens. An explicit `lens` always wins; a non-empty `game`
-/// drilldown only forces the streams lens when no explicit lens was given.
+/// Resolve the active lens. An explicit, recognized `lens` always wins;
+/// otherwise a non-empty `game` drilldown forces the streams lens.
 fn resolve_lens(lens: Option<&str>, game: Option<&str>) -> Lens {
     match lens {
         Some("streams") => Lens::Streams,
@@ -112,20 +112,19 @@ async fn prepare_browse(
     params: &ListQuery,
     sort: &str,
 ) -> PreparedBrowse {
-    let vods = {
-        let guard = state.vods.read().await;
-        Arc::clone(&*guard)
-    };
-    let (archive_min_date, archive_max_date) = state.date_bounds.read().await.clone();
+    let catalog = Arc::clone(&*state.catalog.read().await);
+    let vods = &catalog.vods;
+    let (archive_min_date, archive_max_date) = catalog.date_bounds.clone();
 
     match lens {
         Lens::Games => {
-            let games = {
-                let guard = state.games.read().await;
-                Arc::clone(&*guard)
-            };
-            let filtered =
-                filter_games_with_metadata(&games, &vods, params, "/browse?lens=games", sort);
+            let filtered = filter_games_with_metadata(
+                &catalog.games,
+                vods,
+                params,
+                "/browse?lens=games",
+                sort,
+            );
             let (paged, has_more, next_url) =
                 paginate_with_nav(filtered.games, "/browse/grid", GAME_BATCH_SIZE, params);
             PreparedBrowse {
@@ -219,8 +218,9 @@ fn sort_context(is_games: bool) -> (&'static [(&'static str, &'static str, bool)
 
 /// Resolve the game drilldown, lens, `is_games`, and effective sort from the
 /// query, pinning the resolved sort back onto `params`. The pin matters because
-/// the shared list helpers otherwise default the games lens to "recent", so the
-/// grid would order by recency while the toolbar and pagination URLs say "most".
+/// `filter_vods_with_metadata` and `build_next_url` read `params.sort` directly,
+/// so without it the grid order and pagination URLs wouldn't see the lens
+/// default that the toolbar displays.
 /// Shared by `browse_page` and `browse_grid` so the two never disagree.
 fn resolve_browse_params(params: &mut ListQuery) -> (Option<String>, Lens, bool, String) {
     let game = params.game.clone().filter(|s| !s.is_empty());
@@ -266,7 +266,8 @@ pub async fn browse_page(
     let lens_games_url = format!("/browse?lens=games{carried}");
     let lens_streams_url = format!("/browse?lens=streams{carried}");
     // The game chip's ✕ clears only the game, keeping the streams lens plus any
-    // search/sort/date filters (unlike "Clear filters", which drops everything).
+    // search/sort/date filters ("Clear filters" drops search and dates too,
+    // keeping only lens and sort).
     let clear_game_url = format!(
         "/browse?lens=streams&sort={}{carried}",
         urlencoding::encode(&sort)

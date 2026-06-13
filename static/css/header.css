@@ -152,7 +152,8 @@
 }
 
 /* Random and History are matching quiet text utilities: icon + uppercase
-   label, --text-dim, hover → --text. Random is NOT an outlined accent pill. */
+   label, --text-dim, hover → --text — intentionally as quiet as the other
+   nav utilities. */
 .btn-random,
 .nav-util {
   display: inline-flex;
