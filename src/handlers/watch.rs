@@ -38,11 +38,9 @@ pub async fn watch_page(
     Path(vod_id): Path<String>,
     Query(params): Query<GameQuery>,
 ) -> impl IntoResponse {
-    let vods = {
-        let guard = state.vods.read().await;
-        Arc::clone(&*guard)
-    };
-    match find_vod_by_id(&vods, &vod_id) {
+    let catalog = Arc::clone(&*state.catalog.read().await);
+    let vods = &catalog.vods;
+    match find_vod_by_id(vods, &vod_id) {
         Some(v) => render_template(&WatchTemplate {
             vod_id: v.id.clone(),
             vod_title: v.title.clone().unwrap_or_else(|| "Untitled".into()),
@@ -70,11 +68,9 @@ pub async fn vod_detail(
     State(state): State<SharedState>,
     Path(vod_id): Path<String>,
 ) -> impl IntoResponse {
-    let vods = {
-        let guard = state.vods.read().await;
-        Arc::clone(&*guard)
-    };
-    if let Some(vod) = find_vod_by_id(&vods, &vod_id) {
+    let catalog = Arc::clone(&*state.catalog.read().await);
+    let vods = &catalog.vods;
+    if let Some(vod) = find_vod_by_id(vods, &vod_id) {
         axum::Json(vod.clone()).into_response()
     } else {
         (StatusCode::NOT_FOUND, "vod not found").into_response()
@@ -86,12 +82,10 @@ pub async fn next_in_period(
     Path(vod_id): Path<String>,
     Query(params): Query<GameQuery>,
 ) -> impl IntoResponse {
-    let vods = {
-        let guard = state.vods.read().await;
-        Arc::clone(&*guard)
-    };
+    let catalog = Arc::clone(&*state.catalog.read().await);
+    let vods = &catalog.vods;
 
-    let Some(current) = find_vod_by_id(&vods, &vod_id) else {
+    let Some(current) = find_vod_by_id(vods, &vod_id) else {
         return StatusCode::NOT_FOUND.into_response();
     };
 
@@ -108,7 +102,7 @@ pub async fn next_in_period(
         }
     };
 
-    match next_vod_in_period(&vods, &current.id, &game) {
+    match next_vod_in_period(vods, &current.id, &game) {
         Some(next) => axum::Json(serde_json::json!({
             "next_id": next.id,
             "next_title": next.title,
@@ -120,10 +114,8 @@ pub async fn next_in_period(
 }
 
 pub async fn random_vod(State(state): State<SharedState>) -> Redirect {
-    let vods = {
-        let guard = state.vods.read().await;
-        Arc::clone(&*guard)
-    };
+    let catalog = Arc::clone(&*state.catalog.read().await);
+    let vods = &catalog.vods;
     if let Some(pick) = vods.choose(&mut rand::rng()) {
         Redirect::temporary(&format!("/watch/{}", pick.id))
     } else {

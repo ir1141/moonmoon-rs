@@ -108,7 +108,8 @@ struct HistoryRequestedVod {
 }
 
 /// Clients legitimately send at most MAX_RESUME_ENTRIES + MAX_WATCHED_ENTRIES
-/// (500 + 500) ids; anything beyond that is garbage or abuse.
+/// (500 + 500 — see static/player.js) ids; anything beyond that is garbage
+/// or abuse.
 const MAX_HISTORY_IDS: usize = 1000;
 
 fn parse_history_requests(
@@ -285,12 +286,10 @@ pub async fn continue_resume(
         return StatusCode::NO_CONTENT.into_response();
     };
 
-    let vods = {
-        let guard = state.vods.read().await;
-        Arc::clone(&*guard)
-    };
+    let catalog = Arc::clone(&*state.catalog.read().await);
+    let vods = &catalog.vods;
 
-    match build_continue_resume_view(&vods, id, params.time) {
+    match build_continue_resume_view(vods, id, params.time) {
         Some(resume) => render_template(&ContinueResumeTemplate { resume }),
         None => StatusCode::NO_CONTENT.into_response(),
     }
@@ -304,13 +303,11 @@ pub async fn history_vods_grid(
     let times_str = params.times.unwrap_or_default();
     let requested_vods = parse_history_requests(&ids_str, &times_str, params.states.as_deref());
 
-    let vods = {
-        let guard = state.vods.read().await;
-        Arc::clone(&*guard)
-    };
+    let catalog = Arc::clone(&*state.catalog.read().await);
+    let vods = &catalog.vods;
 
     let displays = build_history_displays(
-        &vods,
+        vods,
         &requested_vods,
         params.sort.as_deref(),
         HistoryDisplayOptions {

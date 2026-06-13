@@ -822,7 +822,7 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
         }
     };
 
-    let cached_snapshot = state.catalog_snapshot.read().await.clone();
+    let cached_snapshot = state.catalog.read().await.snapshot.clone();
 
     let remote_snapshot = match fetch_catalog_snapshot(&state.http_client).await {
         Ok(snapshot) => snapshot,
@@ -834,7 +834,7 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
 
     if remote_snapshot == cached_snapshot {
         tracing::info!("refresh: catalog unchanged ({cached_snapshot:?})");
-        let count = state.vods.read().await.len();
+        let count = state.catalog.read().await.vods.len();
         return RefreshOutcome::Unchanged(count);
     }
 
@@ -849,25 +849,9 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
         }
     };
 
-    let new_vods = std::sync::Arc::new(catalog.vods);
-    let new_games = std::sync::Arc::new(build_games(&new_vods));
-    let new_bounds = crate::handlers::archive_date_bounds(&new_vods);
-    let count = new_vods.len();
-
-    {
-        // Acquire all four write guards together (vods → games → snapshot →
-        // date_bounds) so the swap is atomic from a reader's perspective. Safe
-        // against deadlock only because readers clone-and-release each guard and
-        // never hold two at once — see the lock-discipline note on `AppState`.
-        let mut vods_w = state.vods.write().await;
-        let mut games_w = state.games.write().await;
-        let mut snapshot_w = state.catalog_snapshot.write().await;
-        let mut bounds_w = state.date_bounds.write().await;
-        *vods_w = new_vods;
-        *games_w = new_games;
-        *snapshot_w = catalog.snapshot;
-        *bounds_w = new_bounds;
-    }
+    let new_catalog = std::sync::Arc::new(crate::Catalog::build(catalog));
+    let count = new_catalog.vods.len();
+    *state.catalog.write().await = new_catalog;
 
     tracing::info!("refresh: complete ({count} vods)");
     RefreshOutcome::Refreshed(count)

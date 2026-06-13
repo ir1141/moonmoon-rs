@@ -3,7 +3,6 @@ use crate::{SharedState, vods::Vod};
 use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
 use serde::Deserialize;
-use std::sync::Arc;
 
 // ─── Chat proxy ───
 
@@ -17,8 +16,8 @@ pub struct ChatQuery {
 /// just burns an upstream connection on a guaranteed-failing URL.
 const MAX_CURSOR_LEN: usize = 2048;
 
-fn canonical_chat_vod_id(vods: &Arc<Vec<Vod>>, requested_id: &str) -> Option<String> {
-    find_vod_by_id(vods.as_ref().as_slice(), requested_id).map(|vod| vod.id.clone())
+fn canonical_chat_vod_id(vods: &[Vod], requested_id: &str) -> Option<String> {
+    find_vod_by_id(vods, requested_id).map(|vod| vod.id.clone())
 }
 
 pub async fn chat_proxy(
@@ -33,8 +32,8 @@ pub async fn chat_proxy(
         return (axum::http::StatusCode::BAD_REQUEST, "invalid vod_id").into_response();
     }
     let canonical_vod_id = {
-        let vods = state.vods.read().await;
-        canonical_chat_vod_id(&vods, &vod_id)
+        let catalog = state.catalog.read().await;
+        canonical_chat_vod_id(&catalog.vods, &vod_id)
     };
     let Some(canonical_vod_id) = canonical_vod_id else {
         return (axum::http::StatusCode::NOT_FOUND, "unknown vod_id").into_response();
@@ -143,7 +142,7 @@ mod tests {
 
     #[test]
     fn test_canonical_chat_vod_id_accepts_internal_id() {
-        let vods = Arc::new(vec![make_vod("1430", Some("2768249708"))]);
+        let vods = vec![make_vod("1430", Some("2768249708"))];
 
         assert_eq!(
             canonical_chat_vod_id(&vods, "1430").as_deref(),
@@ -153,7 +152,7 @@ mod tests {
 
     #[test]
     fn test_canonical_chat_vod_id_accepts_platform_vod_id() {
-        let vods = Arc::new(vec![make_vod("1430", Some("2768249708"))]);
+        let vods = vec![make_vod("1430", Some("2768249708"))];
 
         assert_eq!(
             canonical_chat_vod_id(&vods, "2768249708").as_deref(),
@@ -163,7 +162,7 @@ mod tests {
 
     #[test]
     fn test_canonical_chat_vod_id_rejects_unknown_id() {
-        let vods = Arc::new(vec![make_vod("1430", Some("2768249708"))]);
+        let vods = vec![make_vod("1430", Some("2768249708"))];
 
         assert_eq!(canonical_chat_vod_id(&vods, "missing"), None);
     }

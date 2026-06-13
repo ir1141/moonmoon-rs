@@ -511,11 +511,8 @@ pub async fn calendar_page(
     let current_local = pacific_local_from_unix_seconds(now);
     let week_start = selected_week_start(&params, current_local.days);
 
-    let vods = {
-        let guard = state.vods.read().await;
-        Arc::clone(&*guard)
-    };
-    let guide = build_time_guide(&vods, week_start, current_local);
+    let catalog = Arc::clone(&*state.catalog.read().await);
+    let guide = build_time_guide(&catalog.vods, week_start, current_local);
 
     let tmpl = CalendarPageTemplate {
         guide,
