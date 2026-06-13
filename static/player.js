@@ -33,11 +33,9 @@ import {
   parseSearchResponse,
   PROVIDERS,
 } from "./lib/emote-providers.js";
-import {
-  RESUME_KEY as STORAGE_KEY,
-  WATCHED_KEY,
-} from "./lib/history-state.js";
+import { RESUME_KEY as STORAGE_KEY, WATCHED_KEY } from "./lib/history-state.js";
 import { markWatchedVod } from "./lib/watched.js";
+import { safeLocalStorage, storageGet, storageSet } from "./lib/storage.js";
 
 var dataEl = document.getElementById("vod-data");
 if (!dataEl) {
@@ -45,22 +43,9 @@ if (!dataEl) {
 }
 
 // localStorage access throws SecurityError in storage-blocking browsers; a
-// bare module-eval call would abort the whole player module.
-function storageGet(key) {
-  try {
-    return storageGet(key);
-  } catch (e) {
-    return null;
-  }
-}
-
-function storageSet(key, value) {
-  try {
-    storageSet(key, value);
-  } catch (e) {
-    /* storage blocked or quota exceeded */
-  }
-}
+// bare module-eval call would abort the whole player module, so all access
+// goes through the lib/storage.js guards against this handle.
+var storage = safeLocalStorage();
 var VOD_ID = dataEl.dataset.vodId || "";
 var GAME_HINT = dataEl.dataset.gameHint || "";
 var HAS_EXPLICIT_HINT = GAME_HINT.length > 0;
@@ -528,12 +513,12 @@ chatContainer.addEventListener("mouseout", function (e) {
 // ─── Chat Text Size ───
 
 var CHAT_SIZE_KEY = "moonmoon_chat_size";
-var chatFontSize = parseInt(storageGet(CHAT_SIZE_KEY), 10) || 13;
+var chatFontSize = parseInt(storageGet(storage, CHAT_SIZE_KEY), 10) || 13;
 var MIN_CHAT_SIZE = 10;
 var MAX_CHAT_SIZE = 30;
 var CHAT_TIMESTAMPS_KEY = "moonmoon_chat_timestamps";
 var chatTimestampsEnabled = isChatTimestampEnabled(
-  storageGet(CHAT_TIMESTAMPS_KEY),
+  storageGet(storage, CHAT_TIMESTAMPS_KEY),
 );
 
 function applyChatSize() {
@@ -552,7 +537,7 @@ document
   .addEventListener("click", function () {
     if (chatFontSize > MIN_CHAT_SIZE) {
       chatFontSize -= 1;
-      storageSet(CHAT_SIZE_KEY, String(chatFontSize));
+      storageSet(storage, CHAT_SIZE_KEY, String(chatFontSize));
       applyChatSize();
     }
   });
@@ -560,7 +545,7 @@ document
 document.getElementById("chat-size-up").addEventListener("click", function () {
   if (chatFontSize < MAX_CHAT_SIZE) {
     chatFontSize += 1;
-    storageSet(CHAT_SIZE_KEY, String(chatFontSize));
+    storageSet(storage, CHAT_SIZE_KEY, String(chatFontSize));
     applyChatSize();
   }
 });
@@ -581,7 +566,7 @@ applyChatTimestamps();
 
 chatTimestampToggle.addEventListener("click", function () {
   chatTimestampsEnabled = !chatTimestampsEnabled;
-  storageSet(CHAT_TIMESTAMPS_KEY, String(chatTimestampsEnabled));
+  storageSet(storage, CHAT_TIMESTAMPS_KEY, String(chatTimestampsEnabled));
   applyChatTimestamps();
 });
 
@@ -739,7 +724,7 @@ function updatePartSelector() {
 
 function getPartDurationsStore() {
   try {
-    return JSON.parse(storageGet(PART_DURATIONS_KEY)) || {};
+    return JSON.parse(storageGet(storage, PART_DURATIONS_KEY)) || {};
   } catch (e) {
     return {};
   }
@@ -766,7 +751,7 @@ function savePartDuration(index, duration) {
   );
   if (next === store) return;
   try {
-    storageSet(PART_DURATIONS_KEY, JSON.stringify(next));
+    storageSet(storage, PART_DURATIONS_KEY, JSON.stringify(next));
   } catch (e) {
     /* quota exceeded or similar */
   }
@@ -782,7 +767,7 @@ var resumeStoreCache = null;
 function getResumeStore() {
   if (resumeStoreCache) return resumeStoreCache;
   try {
-    resumeStoreCache = JSON.parse(storageGet(STORAGE_KEY)) || {};
+    resumeStoreCache = JSON.parse(storageGet(storage, STORAGE_KEY)) || {};
   } catch (e) {
     resumeStoreCache = {};
   }
@@ -824,7 +809,7 @@ function savePosition() {
         delete store[keys.shift()];
       }
     }
-    storageSet(STORAGE_KEY, JSON.stringify(store));
+    storageSet(storage, STORAGE_KEY, JSON.stringify(store));
   } catch (e) {
     /* quota exceeded or similar */
   }
@@ -839,7 +824,7 @@ function clearResume() {
   try {
     var store = getResumeStore();
     delete store[VOD_ID];
-    storageSet(STORAGE_KEY, JSON.stringify(store));
+    storageSet(storage, STORAGE_KEY, JSON.stringify(store));
   } catch (e) {
     /* ignore */
   }
@@ -847,7 +832,7 @@ function clearResume() {
 
 function getWatchedStore() {
   try {
-    return JSON.parse(storageGet(WATCHED_KEY)) || {};
+    return JSON.parse(storageGet(storage, WATCHED_KEY)) || {};
   } catch (e) {
     return {};
   }
@@ -861,7 +846,7 @@ function markWatched() {
       Date.now(),
       MAX_WATCHED_ENTRIES,
     );
-    storageSet(WATCHED_KEY, JSON.stringify(next));
+    storageSet(storage, WATCHED_KEY, JSON.stringify(next));
     window.dispatchEvent(new Event("moonmoon:watchedChanged"));
   } catch (e) {
     /* quota exceeded or similar */
@@ -1238,7 +1223,10 @@ function tick() {
   // UNSTARTED (which the tick guard skips), so we never observed the jump.
   var jumped = lastTickTime >= 0 && Math.abs(globalTime - lastTickTime) > 3;
   var firstTickAtOffset =
-    lastTickTime < 0 && globalTime > 10 && chatMessages.length === 0 && !chatLoading;
+    lastTickTime < 0 &&
+    globalTime > 10 &&
+    chatMessages.length === 0 &&
+    !chatLoading;
   if (jumped || firstTickAtOffset) {
     resetChat(globalTime);
   }
@@ -1550,11 +1538,11 @@ function setTheatre(on) {
   document.body.classList.toggle("theatre-mode", on);
   theatreBtn.setAttribute("aria-pressed", on ? "true" : "false");
   theatreBtn.title = on ? "Exit theatre mode (t)" : "Theatre mode (t)";
-  storageSet(THEATRE_KEY, on ? "1" : "0");
+  storageSet(storage, THEATRE_KEY, on ? "1" : "0");
 }
 
 // Restore saved preference
-if (storageGet(THEATRE_KEY) === "1") {
+if (storageGet(storage, THEATRE_KEY) === "1") {
   setTheatre(true);
 }
 

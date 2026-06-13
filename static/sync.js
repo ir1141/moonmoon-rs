@@ -5,46 +5,31 @@ import {
   generateToken as generateTokenPure,
 } from "./lib/token.js";
 import { mergeWatched as mergeWatchedPure } from "./lib/watched.js";
+import {
+  safeLocalStorage,
+  storageGet,
+  storageRemove,
+  storageSet,
+} from "./lib/storage.js";
 
 var TOKEN_KEY = "moonmoon_sync_token";
 var META_KEY = "moonmoon_sync_meta";
 
 // localStorage access throws SecurityError in storage-blocking browsers; a
-// bare module-eval call would abort the whole sync module.
-function storageGet(key) {
-  try {
-    return storageGet(key);
-  } catch (e) {
-    return null;
-  }
-}
-
-function storageSet(key, value) {
-  try {
-    storageSet(key, value);
-  } catch (e) {
-    /* storage blocked or quota exceeded */
-  }
-}
-
-function storageRemove(key) {
-  try {
-    storageRemove(key);
-  } catch (e) {
-    /* ignore */
-  }
-}
+// bare module-eval call would abort the whole sync module, so all access
+// goes through the lib/storage.js guards against this handle.
+var storage = safeLocalStorage();
 
 function getToken() {
-  var t = storageGet(TOKEN_KEY) || "";
+  var t = storageGet(storage, TOKEN_KEY) || "";
   return isValidToken(t) ? t : "";
 }
 
 function setToken(t) {
   if (t && isValidToken(t)) {
-    storageSet(TOKEN_KEY, t);
+    storageSet(storage, TOKEN_KEY, t);
   } else {
-    storageRemove(TOKEN_KEY);
+    storageRemove(storage, TOKEN_KEY);
   }
 }
 
@@ -58,7 +43,7 @@ function generateToken() {
 
 function getResume() {
   try {
-    return JSON.parse(storageGet(RESUME_KEY)) || {};
+    return JSON.parse(storageGet(storage, RESUME_KEY)) || {};
   } catch (e) {
     return {};
   }
@@ -66,7 +51,7 @@ function getResume() {
 
 function setResume(obj) {
   try {
-    storageSet(RESUME_KEY, JSON.stringify(obj));
+    storageSet(storage, RESUME_KEY, JSON.stringify(obj));
     window.dispatchEvent(new Event("moonmoon:resumeChanged"));
   } catch (e) {
     console.warn("[Sync] resume write failed:", e);
@@ -75,7 +60,7 @@ function setResume(obj) {
 
 function getWatched() {
   try {
-    return JSON.parse(storageGet(WATCHED_KEY)) || {};
+    return JSON.parse(storageGet(storage, WATCHED_KEY)) || {};
   } catch (e) {
     return {};
   }
@@ -83,7 +68,7 @@ function getWatched() {
 
 function setWatched(obj) {
   try {
-    storageSet(WATCHED_KEY, JSON.stringify(obj));
+    storageSet(storage, WATCHED_KEY, JSON.stringify(obj));
     window.dispatchEvent(new Event("moonmoon:watchedChanged"));
   } catch (e) {
     console.warn("[Sync] watched write failed:", e);
@@ -122,6 +107,7 @@ function pull() {
       var changed = resumeChanged || watchedChanged;
       try {
         storageSet(
+          storage,
           META_KEY,
           JSON.stringify({
             last_pulled_updated_at: data.updated_at || 0,
@@ -167,11 +153,11 @@ function schedulePush() {
 
 // localStorage `storage` events fire on OTHER tabs only, so we also poll
 // the resume key in this tab. 2s is fine — the debounce already coalesces.
-var lastResumeStr = storageGet(RESUME_KEY) || "";
-var lastWatchedStr = storageGet(WATCHED_KEY) || "";
+var lastResumeStr = storageGet(storage, RESUME_KEY) || "";
+var lastWatchedStr = storageGet(storage, WATCHED_KEY) || "";
 setInterval(function () {
-  var cur = storageGet(RESUME_KEY) || "";
-  var watched = storageGet(WATCHED_KEY) || "";
+  var cur = storageGet(storage, RESUME_KEY) || "";
+  var watched = storageGet(storage, WATCHED_KEY) || "";
   if (cur !== lastResumeStr || watched !== lastWatchedStr) {
     lastResumeStr = cur;
     lastWatchedStr = watched;
@@ -181,8 +167,8 @@ setInterval(function () {
 
 window.addEventListener("storage", function (e) {
   if (e.key === RESUME_KEY || e.key === WATCHED_KEY) {
-    lastResumeStr = storageGet(RESUME_KEY) || "";
-    lastWatchedStr = storageGet(WATCHED_KEY) || "";
+    lastResumeStr = storageGet(storage, RESUME_KEY) || "";
+    lastWatchedStr = storageGet(storage, WATCHED_KEY) || "";
     schedulePush();
   }
 });

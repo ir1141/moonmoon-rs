@@ -3,6 +3,7 @@ import {
   selectContinueWatchingEntries,
 } from "./lib/continue-watching.js";
 import { RESUME_KEY, readJsonStore } from "./lib/history-state.js";
+import { safeLocalStorage } from "./lib/storage.js";
 
 async function initContinueWatching() {
   const shelf = document.getElementById("continue-watching");
@@ -10,7 +11,7 @@ async function initContinueWatching() {
   if (!shelf || !hero) return;
 
   const [entry] = selectContinueWatchingEntries(
-    readJsonStore(localStorage, RESUME_KEY),
+    readJsonStore(safeLocalStorage(), RESUME_KEY),
   );
   if (!entry) return;
 

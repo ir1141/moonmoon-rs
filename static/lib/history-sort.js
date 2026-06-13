@@ -1,3 +1,5 @@
+import { safeLocalStorage } from "./storage.js";
+
 export const historySortKey = "moonmoon_history_sort";
 export const defaultHistorySort = "recent";
 
@@ -24,7 +26,7 @@ export function normalizeHistorySort(value) {
 /**
  * @param {HistorySortStorage} [storage]
  */
-export function readHistorySort(storage = localStorage) {
+export function readHistorySort(storage = safeLocalStorage()) {
   try {
     if (storage && typeof storage.getItem === "function") {
       return normalizeHistorySort(storage.getItem(historySortKey));
@@ -44,7 +46,7 @@ export function readHistorySort(storage = localStorage) {
  * @param {unknown} value
  */
 export function writeHistorySort(storage, value) {
-  storage = storage || localStorage;
+  storage = storage || safeLocalStorage();
   const sort = normalizeHistorySort(value);
 
   try {

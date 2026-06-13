@@ -6,7 +6,10 @@ import {
   serializeHistoryRequest,
 } from "./lib/history-state.js";
 import { readHistorySort, writeHistorySort } from "./lib/history-sort.js";
+import { safeLocalStorage } from "./lib/storage.js";
 import { initVodCards } from "./vod-cards.js";
+
+const storage = safeLocalStorage();
 
 function showMessage(grid, text) {
   grid.replaceChildren();
@@ -27,7 +30,8 @@ function initHistoryPage() {
   function applySortToControl(value) {
     sortInput.value = value;
     const control = sortInput.closest("[data-sort-control]");
-    const item = control && control.querySelector(`.sort-item[data-value="${value}"]`);
+    const item =
+      control && control.querySelector(`.sort-item[data-value="${value}"]`);
     const label = control && control.querySelector("[data-sort-label]");
     if (item instanceof HTMLElement && label instanceof HTMLElement) {
       label.innerHTML = `<b>Sort:</b> ${item.dataset.label}`;
@@ -42,8 +46,8 @@ function initHistoryPage() {
   applySortToControl(readHistorySort());
 
   const entries = buildHistoryEntries(
-    readJsonStore(localStorage, RESUME_KEY),
-    readJsonStore(localStorage, WATCHED_KEY),
+    readJsonStore(storage, RESUME_KEY),
+    readJsonStore(storage, WATCHED_KEY),
   );
 
   if (entries.length === 0) {
@@ -53,7 +57,9 @@ function initHistoryPage() {
   }
 
   stats.textContent =
-    entries.length === 1 ? "1 history entry" : `${entries.length} history entries`;
+    entries.length === 1
+      ? "1 history entry"
+      : `${entries.length} history entries`;
 
   let loadGeneration = 0;
 
@@ -63,7 +69,8 @@ function initHistoryPage() {
 
     fetch(`/history/vods?${params.toString()}`)
       .then((response) => {
-        if (!response.ok) throw new Error("history fetch failed");
+        if (!response.ok)
+          throw new Error(`history fetch failed: HTTP ${response.status}`);
         return response.text();
       })
       .then((html) => {
@@ -77,14 +84,15 @@ function initHistoryPage() {
           showMessage(grid, "No matching archived streams found");
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (generation !== loadGeneration) return;
+        console.warn("[History] load failed:", err);
         showMessage(grid, "Failed to load history");
       });
   }
 
   sortInput.addEventListener("change", () => {
-    writeHistorySort(localStorage, sortInput.value);
+    writeHistorySort(storage, sortInput.value);
     load();
   });
   load();

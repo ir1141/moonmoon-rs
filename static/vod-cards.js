@@ -1,11 +1,13 @@
 import { nextChapterPopoverOpen } from "./lib/chapter-popover.js";
 import { resumePercent } from "./lib/continue-watching.js";
-import {
-  RESUME_KEY,
-  WATCHED_KEY,
-  readJsonStore,
-} from "./lib/history-state.js";
+import { RESUME_KEY, WATCHED_KEY, readJsonStore } from "./lib/history-state.js";
 import { hasWatchedVod } from "./lib/watched.js";
+import { safeLocalStorage } from "./lib/storage.js";
+
+// Resolved through a guard: bare `localStorage` access throws in
+// storage-blocking browsers, which would abort this module at eval — and
+// history.js imports us, so it would take the history page down too.
+const storage = safeLocalStorage();
 
 function buildWatchedBadge() {
   const badge = document.createElement("div");
@@ -130,8 +132,8 @@ function initChapterPopovers(root = document) {
  * @param {Document | Element} [root]
  */
 export function applyVodCardState(root = document) {
-  const resumeStore = readJsonStore(localStorage, RESUME_KEY);
-  const watchedStore = readJsonStore(localStorage, WATCHED_KEY);
+  const resumeStore = readJsonStore(storage, RESUME_KEY);
+  const watchedStore = readJsonStore(storage, WATCHED_KEY);
   const cards =
     root instanceof Element && root.matches(".vod-card[data-vod-id]")
       ? [root]
@@ -182,7 +184,10 @@ document.addEventListener("click", (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   document.querySelectorAll(".vod-card.chapter-pop-open").forEach((card) => {
-    setChapterPopoverOpen(card, nextChapterPopoverOpen(true, { type: "escape" }));
+    setChapterPopoverOpen(
+      card,
+      nextChapterPopoverOpen(true, { type: "escape" }),
+    );
   });
 });
 
