@@ -190,8 +190,9 @@ pub(crate) struct VodDisplay {
     pub id: String,
     pub display_title: String,
     pub formatted_date: String,
-    /// Year-less short date for the streams-lens subtitle (e.g. "Mar 14"); the
-    /// year is carried by the month-group header above the card.
+    /// Year-less short date for the streams-lens subtitle (e.g. "Mar 14");
+    /// under date sorts the year is carried by the month-group header above
+    /// the card (other sorts render no year).
     pub formatted_date_short: String,
     pub duration: Option<String>,
     pub thumbnail_url: Option<String>,
@@ -1009,7 +1010,8 @@ pub(crate) fn format_date(created_at: &str) -> String {
 }
 
 /// Year-less date for the streams subtitle, e.g. "Mar 14". Falls back to the
-/// full input if it isn't a parseable `YYYY-MM-DD…` string.
+/// raw input — or its first 10 characters — when it isn't a parseable
+/// `YYYY-MM-DD…` string.
 pub(crate) fn format_date_short(created_at: &str) -> String {
     let Some(date_part) = created_at.get(..10) else {
         return created_at.to_string();
