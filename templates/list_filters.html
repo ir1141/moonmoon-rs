@@ -1,5 +1,9 @@
 <button type="button" class="btn-chip toolbar-search-open" data-search-overlay-open aria-controls="{{ filter.form_id }}" aria-expanded="false">Search filters</button>
 <form id="{{ filter.form_id }}" class="{{ filter.toolbar_class }}" action="{{ filter.action }}" method="get" data-list-filters data-search-overlay hx-sync="closest form:replace">
+  {# Carry the lens (and any game drilldown) so a no-JS native submit and the
+     htmx filter requests both stay on the current lens. #}
+  <input type="hidden" name="lens" value="{% if is_games_lens %}games{% else %}streams{% endif %}">
+  {% if let Some(g) = game %}<input type="hidden" name="game" value="{{ g }}">{% endif %}
   <div class="toolbar-overlay-panel">
     <div class="toolbar-mobile-actions">
       <span>{{ filter.title }}</span>
@@ -23,28 +27,10 @@
              hx-get="{{ filter.hx_get }}" hx-trigger="change"
              hx-select="#{{ filter.results_id }}" hx-target="#{{ filter.results_id }}" hx-swap="outerHTML"
              hx-push-url="true" hx-include="#{{ filter.form_id }}" hx-indicator="#{{ filter.loading_id }}">
-      <button type="button" class="toolbar-sort" aria-haspopup="listbox" aria-expanded="false" aria-label="{{ filter.sort_label }}">
-        <svg class="sort-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M3 6h13"></path><path d="M3 12h9"></path><path d="M3 18h5"></path>
-        </svg>
-        <span class="sort-label" data-sort-label><b>Sort:</b> {{ filter.selected_sort_label }}</span>
-        <svg class="sort-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M6 9l6 6 6-6"></path>
-        </svg>
-      </button>
-      <div class="sort-menu" role="listbox" aria-label="{{ filter.sort_label }}" hidden>
-        {% for option in filter.sort_options %}
-        {% if option.separator_before %}
-        <div class="sort-sep"></div>
-        {% endif %}
-        <button type="button" role="option" class="sort-item{% if option.selected %} is-active{% endif %}" data-value="{{ option.value }}" data-label="{{ option.label }}" aria-selected="{% if option.selected %}true{% else %}false{% endif %}">
-          <span>{{ option.label }}</span>
-          <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M20 6 9 17l-5-5"></path>
-          </svg>
-        </button>
-        {% endfor %}
-      </div>
+      {% let sort_aria_label = filter.sort_label %}
+      {% let selected_sort_label = filter.selected_sort_label %}
+      {% let sort_options = filter.sort_options %}
+      {% include "_sort_control.html" %}
     </div>
     <div class="toolbar-dates">
       <span class="toolbar-label">Aired</span>

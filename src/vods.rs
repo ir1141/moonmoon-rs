@@ -62,37 +62,35 @@ pub struct YoutubeVideo {
     pub created_at: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum IdValue {
+    Int(i64),
+    Str(String),
+}
+
+impl IdValue {
+    fn into_string(self) -> String {
+        match self {
+            IdValue::Int(n) => n.to_string(),
+            IdValue::Str(s) => s,
+        }
+    }
+}
+
 fn deserialize_id_string<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum IdValue {
-        Int(i64),
-        Str(String),
-    }
-    Ok(match IdValue::deserialize(deserializer)? {
-        IdValue::Int(n) => n.to_string(),
-        IdValue::Str(s) => s,
-    })
+    Ok(IdValue::deserialize(deserializer)?.into_string())
 }
 
 fn deserialize_optional_id_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum IdValue {
-        Int(i64),
-        Str(String),
-    }
     let value: Option<IdValue> = Option::deserialize(deserializer)?;
-    Ok(value.map(|v| match v {
-        IdValue::Int(n) => n.to_string(),
-        IdValue::Str(s) => s,
-    }))
+    Ok(value.map(IdValue::into_string))
 }
 
 fn format_duration_hm(secs: i64) -> String {
@@ -237,8 +235,16 @@ pub struct Game {
     pub dominant_stream_count: usize,
     pub first_streamed: Option<String>,
     pub last_streamed: Option<String>,
-    pub first_streamed_label: Option<String>,
-    pub last_streamed_label: Option<String>,
+}
+
+impl Game {
+    pub fn first_streamed_label(&self) -> Option<String> {
+        self.first_streamed.as_deref().map(format_stream_date)
+    }
+
+    pub fn last_streamed_label(&self) -> Option<String> {
+        self.last_streamed.as_deref().map(format_stream_date)
+    }
 }
 
 #[must_use]
@@ -257,8 +263,29 @@ struct ApiMeta {
 
 #[derive(Deserialize)]
 struct ApiResponse {
+    #[serde(deserialize_with = "deserialize_lossy_vods")]
     pub data: Vec<Vod>,
     pub meta: ApiMeta,
+}
+
+/// The upstream API is inconsistent; a single malformed row must not fail the
+/// entire page (and with it the whole catalog fetch). Parse rows individually
+/// and skip the broken ones with a warning.
+fn deserialize_lossy_vods<'de, D>(deserializer: D) -> Result<Vec<Vod>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let values = Vec::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(values
+        .into_iter()
+        .filter_map(|value| match serde_json::from_value::<Vod>(value) {
+            Ok(vod) => Some(vod),
+            Err(e) => {
+                tracing::warn!("skipping malformed vod row: {e}");
+                None
+            }
+        })
+        .collect())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -318,6 +345,19 @@ impl CatalogLoad {
 pub fn upscale_chapter_image(url: &str) -> String {
     url.replace("{width}x{height}", "285x380")
         .replace("40x53", "285x380")
+}
+
+pub(crate) const REFRESH_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+/// While the catalog is empty (failed/timed-out boot fetch) retry much faster
+/// so a bad boot doesn't leave the site empty for six hours.
+pub(crate) const EMPTY_RETRY_INTERVAL: Duration = Duration::from_secs(60);
+
+pub(crate) fn next_refresh_delay(vod_count: usize) -> Duration {
+    if vod_count == 0 {
+        EMPTY_RETRY_INTERVAL
+    } else {
+        REFRESH_INTERVAL
+    }
 }
 
 const API: &str = "https://archive.overpowered.tv/api/v1/moonmoon/vods";
@@ -571,8 +611,6 @@ pub fn build_games(vods: &[Vod]) -> Vec<Game> {
                         dominant_stream_count: 0,
                         first_streamed: None,
                         last_streamed: None,
-                        first_streamed_label: None,
-                        last_streamed_label: None,
                     });
                     entry.vod_count += 1;
                     if entry.image.is_none() {
@@ -590,8 +628,6 @@ pub fn build_games(vods: &[Vod]) -> Vec<Game> {
                 dominant_stream_count: 0,
                 first_streamed: None,
                 last_streamed: None,
-                first_streamed_label: None,
-                last_streamed_label: None,
             });
             if entry.image.is_none() {
                 entry.image = dominant.image;
@@ -604,7 +640,10 @@ pub fn build_games(vods: &[Vod]) -> Vec<Game> {
     games
 }
 
-pub fn build_dominant_games(vods: &[Vod]) -> Vec<Game> {
+pub fn build_dominant_games<'a, I>(vods: I) -> Vec<Game>
+where
+    I: IntoIterator<Item = &'a Vod>,
+{
     use std::collections::HashMap;
     let mut games: HashMap<String, Game> = HashMap::new();
 
@@ -620,8 +659,6 @@ pub fn build_dominant_games(vods: &[Vod]) -> Vec<Game> {
             dominant_stream_count: 0,
             first_streamed: None,
             last_streamed: None,
-            first_streamed_label: None,
-            last_streamed_label: None,
         });
         entry.vod_count += 1;
         if entry.image.is_none() {
@@ -725,7 +762,6 @@ fn update_dominant_stream_stats(game: &mut Game, stream_time: &str) {
         .is_none_or(|first| stream_time < first)
     {
         game.first_streamed = Some(stream_time.to_string());
-        game.first_streamed_label = Some(format_stream_date(stream_time));
     }
     if game
         .last_streamed
@@ -733,7 +769,6 @@ fn update_dominant_stream_stats(game: &mut Game, stream_time: &str) {
         .is_none_or(|last| stream_time > last)
     {
         game.last_streamed = Some(stream_time.to_string());
-        game.last_streamed_label = Some(format_stream_date(stream_time));
     }
 }
 
@@ -741,7 +776,7 @@ fn stream_time_for_vod(vod: &Vod) -> &str {
     vod.started_at.as_deref().unwrap_or(&vod.created_at)
 }
 
-fn format_stream_date(timestamp: &str) -> String {
+pub(crate) fn format_stream_date(timestamp: &str) -> String {
     let Some(date_part) = timestamp.get(..10) else {
         return timestamp.to_string();
     };
@@ -753,21 +788,28 @@ fn format_stream_date(timestamp: &str) -> String {
     format!("{} {day}, {}", month_abbr(parts[1]), parts[0])
 }
 
-fn month_abbr(month_part: &str) -> &str {
-    match month_part {
-        "01" => "Jan",
-        "02" => "Feb",
-        "03" => "Mar",
-        "04" => "Apr",
-        "05" => "May",
-        "06" => "Jun",
-        "07" => "Jul",
-        "08" => "Aug",
-        "09" => "Sep",
-        "10" => "Oct",
-        "11" => "Nov",
-        "12" => "Dec",
-        other => other,
+pub(crate) fn month_abbr_num(month: u32) -> &'static str {
+    match month {
+        1 => "Jan",
+        2 => "Feb",
+        3 => "Mar",
+        4 => "Apr",
+        5 => "May",
+        6 => "Jun",
+        7 => "Jul",
+        8 => "Aug",
+        9 => "Sep",
+        10 => "Oct",
+        11 => "Nov",
+        12 => "Dec",
+        _ => "???",
+    }
+}
+
+pub(crate) fn month_abbr(month_part: &str) -> &str {
+    match month_part.parse::<u32>() {
+        Ok(m @ 1..=12) => month_abbr_num(m),
+        _ => month_part,
     }
 }
 
@@ -809,19 +851,22 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
 
     let new_vods = std::sync::Arc::new(catalog.vods);
     let new_games = std::sync::Arc::new(build_games(&new_vods));
+    let new_bounds = crate::handlers::archive_date_bounds(&new_vods);
     let count = new_vods.len();
 
     {
-        // Acquire all three write guards together (vods → games → snapshot) so the
-        // swap is atomic from a reader's perspective. Safe against deadlock only
-        // because readers clone-and-release each guard and never hold two at once
-        // — see the lock-discipline note on `AppState`.
+        // Acquire all four write guards together (vods → games → snapshot →
+        // date_bounds) so the swap is atomic from a reader's perspective. Safe
+        // against deadlock only because readers clone-and-release each guard and
+        // never hold two at once — see the lock-discipline note on `AppState`.
         let mut vods_w = state.vods.write().await;
         let mut games_w = state.games.write().await;
         let mut snapshot_w = state.catalog_snapshot.write().await;
+        let mut bounds_w = state.date_bounds.write().await;
         *vods_w = new_vods;
         *games_w = new_games;
         *snapshot_w = catalog.snapshot;
+        *bounds_w = new_bounds;
     }
 
     tracing::info!("refresh: complete ({count} vods)");
@@ -867,6 +912,24 @@ mod tests {
             youtube: Some(uploads),
             is_live: false,
         }
+    }
+
+    #[test]
+    fn test_month_abbr_num() {
+        assert_eq!(month_abbr_num(1), "Jan");
+        assert_eq!(month_abbr_num(12), "Dec");
+        assert_eq!(month_abbr_num(13), "???");
+    }
+
+    #[test]
+    fn test_api_response_skips_malformed_rows() {
+        let json = r#"{"meta":{"total":2},"data":[
+            {"id":1,"title":"good","created_at":"2026-01-01T00:00:00Z"},
+            {"title":"missing id and created_at"}
+        ]}"#;
+        let resp: ApiResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.data.len(), 1);
+        assert_eq!(resp.data[0].id, "1");
     }
 
     #[test]
@@ -1501,5 +1564,11 @@ mod tests {
         );
         assert_eq!(catalog.vods.len(), 1);
         assert_eq!(catalog.vods[0].id, "1430");
+    }
+
+    #[test]
+    fn test_next_refresh_delay_retries_fast_when_empty() {
+        assert_eq!(next_refresh_delay(0), EMPTY_RETRY_INTERVAL);
+        assert_eq!(next_refresh_delay(1500), REFRESH_INTERVAL);
     }
 }

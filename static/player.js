@@ -33,12 +33,19 @@ import {
   parseSearchResponse,
   PROVIDERS,
 } from "./lib/emote-providers.js";
+import { RESUME_KEY as STORAGE_KEY, WATCHED_KEY } from "./lib/history-state.js";
 import { markWatchedVod } from "./lib/watched.js";
+import { safeLocalStorage, storageGet, storageSet } from "./lib/storage.js";
 
 var dataEl = document.getElementById("vod-data");
 if (!dataEl) {
   throw new Error("[Player] Missing #vod-data element");
 }
+
+// localStorage access throws SecurityError in storage-blocking browsers; a
+// bare module-eval call would abort the whole player module, so all access
+// goes through the lib/storage.js guards against this handle.
+var storage = safeLocalStorage();
 var VOD_ID = dataEl.dataset.vodId || "";
 var GAME_HINT = dataEl.dataset.gameHint || "";
 var HAS_EXPLICIT_HINT = GAME_HINT.length > 0;
@@ -49,8 +56,6 @@ var YOUTUBE_PARTS = parseYoutubePartsDataset(
 var YOUTUBE_IDS = YOUTUBE_PARTS.map(function (part) {
   return part.id;
 });
-var STORAGE_KEY = "moonmoon_resume";
-var WATCHED_KEY = "moonmoon_watched";
 var MAX_RESUME_ENTRIES = 500;
 var MAX_WATCHED_ENTRIES = 500;
 var PART_DURATIONS_KEY = "moonmoon_part_durations";
@@ -85,6 +90,9 @@ var chatUserScrollIntentUntil = 0;
 var chatAutoScrollFrame = null;
 var chatScrollGeneration = 0;
 var lastTickTime = -1;
+// Bumped whenever chat state is reset (seek, part switch). In-flight fetches
+// capture the value at start and drop their response if it has moved on.
+var chatGeneration = 0;
 
 // Reply threading: track most recent message per username
 var recentMessageByUser = {};
@@ -505,12 +513,12 @@ chatContainer.addEventListener("mouseout", function (e) {
 // ─── Chat Text Size ───
 
 var CHAT_SIZE_KEY = "moonmoon_chat_size";
-var chatFontSize = parseInt(localStorage.getItem(CHAT_SIZE_KEY), 10) || 13;
+var chatFontSize = parseInt(storageGet(storage, CHAT_SIZE_KEY), 10) || 13;
 var MIN_CHAT_SIZE = 10;
 var MAX_CHAT_SIZE = 30;
 var CHAT_TIMESTAMPS_KEY = "moonmoon_chat_timestamps";
 var chatTimestampsEnabled = isChatTimestampEnabled(
-  localStorage.getItem(CHAT_TIMESTAMPS_KEY),
+  storageGet(storage, CHAT_TIMESTAMPS_KEY),
 );
 
 function applyChatSize() {
@@ -529,7 +537,7 @@ document
   .addEventListener("click", function () {
     if (chatFontSize > MIN_CHAT_SIZE) {
       chatFontSize -= 1;
-      localStorage.setItem(CHAT_SIZE_KEY, String(chatFontSize));
+      storageSet(storage, CHAT_SIZE_KEY, String(chatFontSize));
       applyChatSize();
     }
   });
@@ -537,7 +545,7 @@ document
 document.getElementById("chat-size-up").addEventListener("click", function () {
   if (chatFontSize < MAX_CHAT_SIZE) {
     chatFontSize += 1;
-    localStorage.setItem(CHAT_SIZE_KEY, String(chatFontSize));
+    storageSet(storage, CHAT_SIZE_KEY, String(chatFontSize));
     applyChatSize();
   }
 });
@@ -558,7 +566,7 @@ applyChatTimestamps();
 
 chatTimestampToggle.addEventListener("click", function () {
   chatTimestampsEnabled = !chatTimestampsEnabled;
-  localStorage.setItem(CHAT_TIMESTAMPS_KEY, String(chatTimestampsEnabled));
+  storageSet(storage, CHAT_TIMESTAMPS_KEY, String(chatTimestampsEnabled));
   applyChatTimestamps();
 });
 
@@ -616,8 +624,22 @@ function clearChatContainer() {
   }
 }
 
+var pendingSeekListener = null;
+
+function clearPendingSeekListener() {
+  if (!pendingSeekListener) return;
+  try {
+    player.removeEventListener("onStateChange", pendingSeekListener);
+  } catch (e) {
+    /* ignore — the expectedPart guard below defuses it anyway */
+  }
+  pendingSeekListener = null;
+}
+
 function switchPart(index, seekTime) {
   if (index < 0 || index >= YOUTUBE_IDS.length) return;
+  clearPendingSeekListener();
+  chatGeneration += 1;
   currentPart = index;
   lastTickTime = -1;
   chatMessages = [];
@@ -630,14 +652,24 @@ function switchPart(index, seekTime) {
   player.loadVideoById(YOUTUBE_IDS[index]);
   if (typeof seekTime === "number" && seekTime > 0) {
     var seeked = false;
+    var expectedPart = index;
     var waitForPlay = function (e) {
       if (seeked) return;
+      if (currentPart !== expectedPart) {
+        // a later switchPart superseded this seek
+        seeked = true;
+        player.removeEventListener("onStateChange", waitForPlay);
+        if (pendingSeekListener === waitForPlay) pendingSeekListener = null;
+        return;
+      }
       if (e.data === YT.PlayerState.PLAYING) {
         seeked = true;
         player.seekTo(seekTime, true);
         player.removeEventListener("onStateChange", waitForPlay);
+        if (pendingSeekListener === waitForPlay) pendingSeekListener = null;
       }
     };
+    pendingSeekListener = waitForPlay;
     player.addEventListener("onStateChange", waitForPlay);
   }
   updatePartSelector();
@@ -692,7 +724,7 @@ function updatePartSelector() {
 
 function getPartDurationsStore() {
   try {
-    return JSON.parse(localStorage.getItem(PART_DURATIONS_KEY)) || {};
+    return JSON.parse(storageGet(storage, PART_DURATIONS_KEY)) || {};
   } catch (e) {
     return {};
   }
@@ -719,7 +751,7 @@ function savePartDuration(index, duration) {
   );
   if (next === store) return;
   try {
-    localStorage.setItem(PART_DURATIONS_KEY, JSON.stringify(next));
+    storageSet(storage, PART_DURATIONS_KEY, JSON.stringify(next));
   } catch (e) {
     /* quota exceeded or similar */
   }
@@ -727,13 +759,27 @@ function savePartDuration(index, duration) {
 
 // ─── Resume (localStorage) ───
 
+// In-memory cache of the parsed resume store. savePosition runs at 1 Hz; a
+// fresh JSON.parse of up to 500 entries every tick is measurable jank.
+// Invalidated when another writer (sync.js merge, another tab) touches the key.
+var resumeStoreCache = null;
+
 function getResumeStore() {
+  if (resumeStoreCache) return resumeStoreCache;
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    resumeStoreCache = JSON.parse(storageGet(storage, STORAGE_KEY)) || {};
   } catch (e) {
-    return {};
+    resumeStoreCache = {};
   }
+  return resumeStoreCache;
 }
+
+window.addEventListener("storage", function (e) {
+  if (e.key === STORAGE_KEY) resumeStoreCache = null;
+});
+window.addEventListener("moonmoon:resumeChanged", function () {
+  resumeStoreCache = null;
+});
 
 function savePosition() {
   if (!shouldSaveResume({ completed: watchCompleted })) return;
@@ -763,7 +809,7 @@ function savePosition() {
         delete store[keys.shift()];
       }
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    storageSet(storage, STORAGE_KEY, JSON.stringify(store));
   } catch (e) {
     /* quota exceeded or similar */
   }
@@ -778,7 +824,7 @@ function clearResume() {
   try {
     var store = getResumeStore();
     delete store[VOD_ID];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    storageSet(storage, STORAGE_KEY, JSON.stringify(store));
   } catch (e) {
     /* ignore */
   }
@@ -786,7 +832,7 @@ function clearResume() {
 
 function getWatchedStore() {
   try {
-    return JSON.parse(localStorage.getItem(WATCHED_KEY)) || {};
+    return JSON.parse(storageGet(storage, WATCHED_KEY)) || {};
   } catch (e) {
     return {};
   }
@@ -800,7 +846,7 @@ function markWatched() {
       Date.now(),
       MAX_WATCHED_ENTRIES,
     );
-    localStorage.setItem(WATCHED_KEY, JSON.stringify(next));
+    storageSet(storage, WATCHED_KEY, JSON.stringify(next));
     window.dispatchEvent(new Event("moonmoon:watchedChanged"));
   } catch (e) {
     /* quota exceeded or similar */
@@ -819,6 +865,7 @@ function finalizeCurrentVod() {
 function loadChat(fromOffset) {
   if (chatLoading) return;
   chatLoading = true;
+  var gen = chatGeneration;
   chatRetryOffset = fromOffset;
   setChatRetryVisible(false);
   setChatStatus(chatLoadStatusText());
@@ -838,6 +885,7 @@ function loadChat(fromOffset) {
       return res.json();
     })
     .then(function (data) {
+      if (gen !== chatGeneration) return; // stale: chat state was reset mid-flight
       if (data.comments && data.comments.length > 0) {
         chatMessages = chatMessages.concat(data.comments);
       }
@@ -850,6 +898,7 @@ function loadChat(fromOffset) {
       }
     })
     .catch(function (err) {
+      if (gen !== chatGeneration) return;
       console.warn("[Chat] Failed to load:", err);
       chatLoading = false;
       setChatStatus(chatErrorStatusText());
@@ -1144,6 +1193,7 @@ chatContainer.addEventListener("click", function (e) {
 // ─── Seek detection + chat reset ───
 
 function resetChat(fromOffset) {
+  chatGeneration += 1;
   chatMessages = [];
   chatIndex = 0;
   chatCursor = null;
@@ -1173,7 +1223,10 @@ function tick() {
   // UNSTARTED (which the tick guard skips), so we never observed the jump.
   var jumped = lastTickTime >= 0 && Math.abs(globalTime - lastTickTime) > 3;
   var firstTickAtOffset =
-    lastTickTime < 0 && globalTime > 10 && chatMessages.length === 0;
+    lastTickTime < 0 &&
+    globalTime > 10 &&
+    chatMessages.length === 0 &&
+    !chatLoading;
   if (jumped || firstTickAtOffset) {
     resetChat(globalTime);
   }
@@ -1485,11 +1538,11 @@ function setTheatre(on) {
   document.body.classList.toggle("theatre-mode", on);
   theatreBtn.setAttribute("aria-pressed", on ? "true" : "false");
   theatreBtn.title = on ? "Exit theatre mode (t)" : "Theatre mode (t)";
-  localStorage.setItem(THEATRE_KEY, on ? "1" : "0");
+  storageSet(storage, THEATRE_KEY, on ? "1" : "0");
 }
 
 // Restore saved preference
-if (localStorage.getItem(THEATRE_KEY) === "1") {
+if (storageGet(storage, THEATRE_KEY) === "1") {
   setTheatre(true);
 }
 

@@ -1,12 +1,15 @@
 import {
+  RESUME_KEY,
+  WATCHED_KEY,
   buildHistoryEntries,
   readJsonStore,
   serializeHistoryRequest,
 } from "./lib/history-state.js";
 import { readHistorySort, writeHistorySort } from "./lib/history-sort.js";
+import { safeLocalStorage } from "./lib/storage.js";
+import { initVodCards } from "./vod-cards.js";
 
-const RESUME_KEY = "moonmoon_resume";
-const WATCHED_KEY = "moonmoon_watched";
+const storage = safeLocalStorage();
 
 function showMessage(grid, text) {
   grid.replaceChildren();
@@ -19,16 +22,32 @@ function showMessage(grid, text) {
 function initHistoryPage() {
   const stats = document.getElementById("history-stats");
   const grid = document.getElementById("history-grid");
-  const sortSel = /** @type {HTMLSelectElement | null} */ (
+  const sortInput = /** @type {HTMLInputElement | null} */ (
     document.getElementById("history-sort")
   );
-  if (!stats || !grid || !sortSel) return;
+  if (!stats || !grid || !sortInput) return;
 
-  sortSel.value = readHistorySort();
+  function applySortToControl(value) {
+    sortInput.value = value;
+    const control = sortInput.closest("[data-sort-control]");
+    const item =
+      control && control.querySelector(`.sort-item[data-value="${value}"]`);
+    const label = control && control.querySelector("[data-sort-label]");
+    if (item instanceof HTMLElement && label instanceof HTMLElement) {
+      label.innerHTML = `<b>Sort:</b> ${item.dataset.label}`;
+      control.querySelectorAll(".sort-item").forEach((opt) => {
+        const active = opt === item;
+        opt.classList.toggle("is-active", active);
+        opt.setAttribute("aria-selected", active ? "true" : "false");
+      });
+    }
+  }
+
+  applySortToControl(readHistorySort());
 
   const entries = buildHistoryEntries(
-    readJsonStore(localStorage, RESUME_KEY),
-    readJsonStore(localStorage, WATCHED_KEY),
+    readJsonStore(storage, RESUME_KEY),
+    readJsonStore(storage, WATCHED_KEY),
   );
 
   if (entries.length === 0) {
@@ -38,36 +57,42 @@ function initHistoryPage() {
   }
 
   stats.textContent =
-    entries.length === 1 ? "1 history entry" : `${entries.length} history entries`;
+    entries.length === 1
+      ? "1 history entry"
+      : `${entries.length} history entries`;
+
+  let loadGeneration = 0;
 
   function load() {
-    const params = serializeHistoryRequest(entries, sortSel.value);
+    const generation = ++loadGeneration;
+    const params = serializeHistoryRequest(entries, sortInput.value);
 
     fetch(`/history/vods?${params.toString()}`)
       .then((response) => {
-        if (!response.ok) throw new Error("history fetch failed");
+        if (!response.ok)
+          throw new Error(`history fetch failed: HTTP ${response.status}`);
         return response.text();
       })
       .then((html) => {
+        if (generation !== loadGeneration) return; // a newer load superseded this one
         grid.replaceChildren();
         const temp = document.createElement("template");
         temp.innerHTML = html;
         grid.appendChild(temp.content);
-        const event = new CustomEvent("htmx:afterSwap", {
-          detail: { target: grid },
-        });
-        document.body.dispatchEvent(event);
+        initVodCards(grid);
         if (!grid.querySelector(".vod-card")) {
           showMessage(grid, "No matching archived streams found");
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        if (generation !== loadGeneration) return;
+        console.warn("[History] load failed:", err);
         showMessage(grid, "Failed to load history");
       });
   }
 
-  sortSel.addEventListener("change", () => {
-    sortSel.value = writeHistorySort(localStorage, sortSel.value);
+  sortInput.addEventListener("change", () => {
+    writeHistorySort(storage, sortInput.value);
     load();
   });
   load();

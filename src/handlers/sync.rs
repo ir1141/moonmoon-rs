@@ -48,10 +48,14 @@ pub async fn sync_put(
     if body.len() > MAX_BLOB_BYTES {
         return (StatusCode::PAYLOAD_TOO_LARGE, "blob too large").into_response();
     }
-    let blob: SyncBlob = match serde_json::from_slice(&body) {
+    let mut blob: SyncBlob = match serde_json::from_slice(&body) {
         Ok(b) => b,
         Err(_) => return (StatusCode::BAD_REQUEST, "invalid json").into_response(),
     };
+    blob.stored_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
     if let Err(e) = state.sync_store.put(token, blob).await {
         tracing::error!("sync put failed: {e}");
         return (StatusCode::INTERNAL_SERVER_ERROR, "store error").into_response();

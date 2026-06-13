@@ -1,4 +1,7 @@
-use axum::{Router, routing::get};
+use axum::{
+    Router,
+    routing::{get, post},
+};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -14,16 +17,20 @@ mod sync_store;
 mod vods;
 
 pub struct AppState {
-    // Lock discipline for the three catalog RwLocks below: readers must clone the
-    // inner `Arc` and drop the guard immediately — NEVER hold two of these guards
+    // Lock discipline for the four catalog RwLocks below: readers must clone the
+    // inner value and drop the guard immediately — NEVER hold two of these guards
     // open at once. The refresh writer (see `vods::refresh_in_place`) holds all
-    // three write guards together in the order vods → games → snapshot; readers
-    // acquire them in the opposite order (e.g. games → vods in `prepare_games`).
-    // That's deadlock-free only because no reader ever holds two simultaneously.
-    // Holding two read guards open together would reintroduce a circular wait.
+    // four write guards together in the order vods → games → snapshot →
+    // date_bounds; readers acquire them in the opposite order (e.g. games → vods
+    // in `prepare_games`). That's deadlock-free only because no reader ever holds
+    // two simultaneously. Holding two read guards open together would
+    // reintroduce a circular wait.
     pub vods: RwLock<Arc<Vec<vods::Vod>>>,
     pub games: RwLock<Arc<Vec<vods::Game>>>,
     pub(crate) catalog_snapshot: RwLock<vods::CatalogSnapshot>,
+    /// (min, max) `YYYY-MM-DD` stream dates across the catalog; only changes on
+    /// refresh, so it's computed once per catalog swap instead of per request.
+    pub date_bounds: RwLock<(String, String)>,
     pub http_client: reqwest::Client,
     pub refresh_lock: tokio::sync::Mutex<()>,
     pub sync_store: Arc<sync_store::SyncStore>,
@@ -45,7 +52,7 @@ async fn main() {
         .build()
         .expect("failed to build HTTP client");
 
-    const BOOT_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+    const BOOT_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
     let catalog =
         match tokio::time::timeout(BOOT_FETCH_TIMEOUT, vods::load_catalog(&http_client)).await {
             Ok(catalog) => catalog,
@@ -68,22 +75,23 @@ async fn main() {
         .into();
     let sync_store = Arc::new(sync_store::SyncStore::load(sync_store_path).await);
 
+    let date_bounds = handlers::archive_date_bounds(&all_vods);
+
     let state = Arc::new(AppState {
         vods: RwLock::new(Arc::new(all_vods)),
         games: RwLock::new(Arc::new(games)),
         catalog_snapshot: RwLock::new(catalog.snapshot),
+        date_bounds: RwLock::new(date_bounds),
         http_client,
         refresh_lock: tokio::sync::Mutex::new(()),
         sync_store,
     });
 
-    const REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
     let refresh_state = Arc::clone(&state);
     tokio::spawn(async move {
-        let mut tick = tokio::time::interval(REFRESH_INTERVAL);
-        tick.tick().await; // swallow the immediate first tick — boot just fetched
         loop {
-            tick.tick().await;
+            let count = refresh_state.vods.read().await.len();
+            tokio::time::sleep(vods::next_refresh_delay(count)).await;
             match vods::refresh_in_place(&refresh_state).await {
                 vods::RefreshOutcome::Refreshed(n) => {
                     tracing::info!("tick refresh: refreshed {n} vods")
@@ -127,21 +135,21 @@ async fn main() {
             "/api/sync/{token}",
             get(handlers::sync_get).put(handlers::sync_put),
         )
+        .route("/api/refresh", post(handlers::refresh_catalog))
+        .route("/history/resume", get(handlers::continue_resume))
+        .route("/history/vods", get(handlers::history_vods_grid))
         .layer(GovernorLayer::new(api_governor));
 
     let app = Router::new()
-        .route("/", get(handlers::games_page))
-        .route("/games", get(handlers::games_page))
-        .route("/games/grid", get(handlers::games_grid))
-        .route("/game/{name}", get(handlers::game_vods_page))
-        .route("/game/{name}/vods", get(handlers::game_vods_grid))
-        .route("/streams", get(handlers::all_streams_page))
-        .route("/streams/vods", get(handlers::all_streams_grid))
+        .route("/", get(handlers::home_page))
+        .route("/games", get(handlers::games_redirect))
+        .route("/game/{name}", get(handlers::game_redirect))
+        .route("/streams", get(handlers::streams_redirect))
+        .route("/browse", get(handlers::browse_page))
+        .route("/browse/grid", get(handlers::browse_grid))
         .route("/watch/{vod_id}", get(handlers::watch_page))
         .route("/calendar", get(handlers::calendar_page))
         .route("/history", get(handlers::history_page))
-        .route("/history/resume", get(handlers::continue_resume))
-        .route("/history/vods", get(handlers::history_vods_grid))
         .route("/random", get(handlers::random_vod))
         .merge(api_routes)
         .nest_service("/static", ServeDir::new("static"))

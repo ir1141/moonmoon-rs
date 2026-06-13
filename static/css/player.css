@@ -341,6 +341,10 @@
   display: none;
 }
 
+.theatre-mode .site-footer {
+  display: none;
+}
+
 .theatre-mode .content {
   padding: 0;
   max-width: 100%;

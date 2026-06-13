@@ -16,6 +16,23 @@ pub struct SyncBlob {
     /// Client-supplied milliseconds since epoch. Used for last-write-wins
     /// across the whole blob; per-VOD merging is the client's job.
     pub(crate) updated_at: i64,
+    /// Server-set seconds-since-epoch when this blob was last stored. Used for
+    /// eviction order — `updated_at` is client-supplied and gameable.
+    #[serde(default)]
+    pub(crate) stored_at: i64,
+}
+
+/// Hard cap on distinct sync tokens. ~10k × 256 KiB bounds worst-case memory
+/// and on-disk size; real usage is a handful of tokens.
+pub(crate) const MAX_SYNC_ENTRIES: usize = 10_000;
+
+fn token_to_evict(map: &HashMap<String, SyncBlob>, incoming: &str, cap: usize) -> Option<String> {
+    if map.contains_key(incoming) || map.len() < cap {
+        return None;
+    }
+    map.iter()
+        .min_by_key(|(_, blob)| blob.stored_at)
+        .map(|(token, _)| token.clone())
 }
 
 pub struct SyncStore {
@@ -76,6 +93,10 @@ impl SyncStore {
     /// — the route is rate-limited and writes are small.
     pub async fn put(&self, token: String, blob: SyncBlob) -> std::io::Result<()> {
         let mut g = self.inner.lock().await;
+        if let Some(evict) = token_to_evict(&g, &token, MAX_SYNC_ENTRIES) {
+            tracing::warn!("sync store at capacity ({MAX_SYNC_ENTRIES}); evicting oldest token");
+            g.remove(&evict);
+        }
         g.insert(token, blob);
         let bytes = serde_json::to_vec(&*g)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
@@ -117,7 +138,29 @@ mod tests {
         SyncBlob {
             blob: serde_json::json!({ "resume": { "v": value } }),
             updated_at,
+            stored_at: 0,
         }
+    }
+
+    fn blob_with_stored(value: &str, updated_at: i64, stored_at: i64) -> SyncBlob {
+        SyncBlob {
+            blob: serde_json::json!({ "resume": { "v": value } }),
+            updated_at,
+            stored_at,
+        }
+    }
+
+    #[test]
+    fn token_to_evict_prefers_oldest_stored_at() {
+        let mut map = HashMap::new();
+        map.insert("OLD".to_string(), blob_with_stored("x", 9, 100));
+        map.insert("NEW".to_string(), blob_with_stored("y", 1, 200));
+        // at capacity, a brand-new token evicts the oldest-stored entry
+        assert_eq!(token_to_evict(&map, "FRESH", 2), Some("OLD".to_string()));
+        // under capacity: no eviction
+        assert_eq!(token_to_evict(&map, "FRESH", 3), None);
+        // overwriting an existing token never evicts
+        assert_eq!(token_to_evict(&map, "OLD", 2), None);
     }
 
     /// Self-cleaning tempdir. Avoids adding a `tempfile` dep just for a

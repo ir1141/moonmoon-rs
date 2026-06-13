@@ -5,6 +5,7 @@ use super::{
 use crate::SharedState;
 use crate::middleware::CspNonce;
 use crate::vods::Vod;
+use crate::vods::month_abbr_num;
 use askama::Template;
 use axum::extract::{Extension, Query, State};
 use axum::response::IntoResponse;
@@ -101,24 +102,6 @@ fn month_name(m: u32) -> &'static str {
     }
 }
 
-fn short_month_name(m: u32) -> &'static str {
-    match m {
-        1 => "Jan",
-        2 => "Feb",
-        3 => "Mar",
-        4 => "Apr",
-        5 => "May",
-        6 => "Jun",
-        7 => "Jul",
-        8 => "Aug",
-        9 => "Sep",
-        10 => "Oct",
-        11 => "Nov",
-        12 => "Dec",
-        _ => "???",
-    }
-}
-
 // Tomohiko Sakamoto's algorithm: day of week for any date (0=Sun..6=Sat)
 fn day_of_week(year: i32, month: u32, day: u32) -> u32 {
     let t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
@@ -134,10 +117,6 @@ fn calendar_duration_display(total_minutes: i64) -> String {
     }
 }
 
-fn parse_date_query_days(value: &str) -> Option<i64> {
-    parse_ymd_to_days(value)
-}
-
 fn date_query(days: i64) -> String {
     let (year, month, day) = days_to_civil(days);
     format!("{year:04}-{month:02}-{day:02}")
@@ -145,7 +124,7 @@ fn date_query(days: i64) -> String {
 
 fn date_label(days: i64) -> String {
     let (_, month, day) = days_to_civil(days);
-    format!("{} {day}", short_month_name(month))
+    format!("{} {day}", month_abbr_num(month))
 }
 
 fn weekday_label(days: i64) -> &'static str {
@@ -213,17 +192,17 @@ fn selected_week_start(params: &CalendarQuery, current_local_days: i64) -> i64 {
     let selected_days = params
         .week
         .as_deref()
-        .and_then(parse_date_query_days)
+        .and_then(parse_ymd_to_days)
         .or_else(|| {
             let year = params.year?;
             let month = params.month?;
-            parse_date_query_days(&format!("{year:04}-{month:02}-01"))
+            parse_ymd_to_days(&format!("{year:04}-{month:02}-01"))
         })
         .unwrap_or(current_local_days);
 
     let current_week_start = week_start_for_days(current_local_days);
     let min_week_start =
-        week_start_for_days(parse_date_query_days("2015-01-01").unwrap_or(current_week_start));
+        week_start_for_days(parse_ymd_to_days("2015-01-01").unwrap_or(current_week_start));
 
     week_start_for_days(selected_days).clamp(min_week_start, current_week_start)
 }
@@ -246,7 +225,7 @@ fn parse_utc_timestamp(timestamp: &str) -> Option<(i64, i64)> {
 }
 
 fn date_to_days(year: i32, month: u32, day: u32) -> i64 {
-    parse_date_query_days(&format!("{year:04}-{month:02}-{day:02}")).unwrap_or_default()
+    parse_ymd_to_days(&format!("{year:04}-{month:02}-{day:02}")).unwrap_or_default()
 }
 
 fn nth_weekday_of_month(year: i32, month: u32, weekday: u32, n: u32) -> u32 {
@@ -595,7 +574,7 @@ mod tests {
 
     #[test]
     fn test_time_guide_uses_existing_sunday_week_start() {
-        let selected = parse_date_query_days("2026-05-26").unwrap();
+        let selected = parse_ymd_to_days("2026-05-26").unwrap();
         let week_start = week_start_for_days(selected);
 
         assert_eq!(date_query(week_start), "2026-05-24");
@@ -622,7 +601,7 @@ mod tests {
 
     #[test]
     fn test_time_guide_marks_today_and_future_days_distinctly() {
-        let week_start = parse_date_query_days("2026-05-24").unwrap();
+        let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let guide = build_time_guide(
             &[],
             week_start,
@@ -642,7 +621,7 @@ mod tests {
 
     #[test]
     fn test_time_guide_places_utc_streams_on_pt_axis_with_segments() {
-        let week_start = parse_date_query_days("2026-05-24").unwrap();
+        let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let vod = test_vod(
             "v1",
             "2026-05-25T20:30:00.000Z",
@@ -688,7 +667,7 @@ mod tests {
 
     #[test]
     fn test_time_guide_segments_link_to_chapter_offsets_and_expose_hover_labels() {
-        let week_start = parse_date_query_days("2026-05-24").unwrap();
+        let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let vod = test_vod(
             "segmented",
             "2026-05-25T19:00:00.000Z",
@@ -735,7 +714,7 @@ mod tests {
 
     #[test]
     fn test_time_guide_multiple_sessions_link_to_each_vod_not_utc_date_filter() {
-        let week_start = parse_date_query_days("2026-05-24").unwrap();
+        let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let first = test_vod(
             "v1",
             "2026-05-25T20:30:00.000Z",
@@ -771,7 +750,7 @@ mod tests {
 
     #[test]
     fn test_single_game_segment_range_matches_block_range() {
-        let week_start = parse_date_query_days("2026-05-24").unwrap();
+        let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let vod = test_vod(
             "v2",
             "2026-05-25T20:30:00.000Z",
@@ -795,7 +774,7 @@ mod tests {
 
     #[test]
     fn test_time_guide_marks_in_progress_block_live_and_builds_legend() {
-        let week_start = parse_date_query_days("2026-05-24").unwrap();
+        let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let vod = test_vod(
             "live",
             "2026-05-25T20:00:00.000Z",

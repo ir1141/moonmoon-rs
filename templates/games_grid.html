@@ -1,26 +1,5 @@
 {% for game in games %}
-<a href="/game/{{ game.name|urlencode }}" class="game-card">
-  <div class="art-wrap">
-    {% if let Some(image) = game.image %}
-    <img class="art" src="{{ image }}" alt="{{ game.name }}" loading="lazy">
-    {% endif %}
-    <div class="stream-badge">{{ game.vod_count }} VODs</div>
-  </div>
-  <div class="info">
-    <div class="name" title="{{ game.name }}">{{ game.name }}</div>
-    {% if show_recency %}
-    {% if show_oldest_recency %}
-    {% if let Some(label) = game.first_streamed_label %}
-    <div class="last">Streamed {{ label }}</div>
-    {% endif %}
-    {% else %}
-    {% if let Some(label) = game.last_streamed_label %}
-    <div class="last">Streamed {{ label }}</div>
-    {% endif %}
-    {% endif %}
-    {% endif %}
-  </div>
-</a>
+{% include "game_card.html" %}
 {% endfor %}
 {% if games.is_empty() %}
 <div class="no-results">

@@ -15,7 +15,8 @@ font-src 'self' https://fonts.gstatic.com; \
 script-src 'self' 'nonce-{NONCE}' 'strict-dynamic' https://unpkg.com https://www.youtube.com; \
 connect-src 'self' https://7tv.io https://api.betterttv.net https://api.frankerfacez.com; \
 frame-src https://www.youtube.com https://player.twitch.tv; \
-frame-ancestors 'none'";
+frame-ancestors 'none'; \
+base-uri 'self'";
 
 pub async fn csp_nonce(mut req: Request<Body>, next: Next) -> Response {
     let nonce: String = rand::rng()
@@ -35,4 +36,14 @@ pub async fn csp_nonce(mut req: Request<Body>, next: Next) -> Response {
         headers.insert(header::CONTENT_SECURITY_POLICY, value);
     }
     response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn csp_includes_base_uri() {
+        assert!(CSP_TEMPLATE.contains("base-uri 'self'"));
+    }
 }

@@ -1,0 +1,467 @@
+/* landing.css — Direction C "launcher → rails" home page (GET /).
+   Builds on base.css / header.css / vods.css / games.css: it reuses their tokens,
+   the shared .vod-card / .game-card / .chapter-dot components, and the existing
+   header + continue-watching hero. Only landing-specific chrome lives here. */
+
+/* The landing owns its full-bleed layout and its own atmosphere, so it opts out
+   of the shared .content gutter and the global top glow (the hero glow replaces it). */
+body.lp-page .content {
+  max-width: none;
+  padding: 0;
+}
+body.lp-page::before {
+  display: none;
+}
+
+.lp {
+  position: relative;
+  z-index: 1;
+}
+
+/* The continue-watching hero sits between the launcher and the rails. The
+   landing zeroes the shared .content gutter, so give the hero its own gutter
+   (matching .lp-body) instead of letting it bleed edge-to-edge. */
+body.lp-page .continue-hero {
+  max-width: 1400px;
+  margin: 10px auto 30px;
+  padding: 0 32px;
+}
+
+/* the card replaces the divider when continue-watching is present */
+.lp-launch:has(+ .continue-hero:not([hidden])) {
+  border-bottom-color: transparent;
+}
+
+/* ─── hero: compact search launcher ─── */
+.lp-launch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 80px 24px 44px;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+.lp-launch-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 70% 80% at 50% 0%, rgba(108, 92, 231, 0.22), transparent 60%);
+}
+[data-theme="light"] .lp-launch-glow {
+  background: radial-gradient(ellipse 70% 80% at 50% 0%, rgba(91, 75, 209, 0.16), transparent 60%);
+}
+.lp-launch > * {
+  position: relative;
+  z-index: 1;
+}
+
+.lp-eyebrow {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2.4px;
+  text-transform: uppercase;
+  color: var(--accent-soft);
+  margin-bottom: 18px;
+}
+.lp-wordmark {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(38px, 5.5vw, 60px);
+  line-height: 1.04;
+  letter-spacing: -1px;
+  text-transform: uppercase;
+  margin: 0;
+  color: var(--text);
+  white-space: nowrap;
+}
+.lp-wordmark .moon-b {
+  color: var(--accent-soft);
+}
+.lp-sub {
+  font-size: 15px;
+  color: var(--text-dim);
+  margin-top: 16px;
+}
+.lp-sub b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.lp-searchbox {
+  position: relative;
+  width: 100%;
+  max-width: 620px;
+  margin: 30px auto 0;
+}
+.lp-searchbox .s-ic {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 21px;
+  height: 21px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.lp-searchbox input {
+  width: 100%;
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--text);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 110px 18px 54px;
+  outline: none;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+.lp-searchbox input::placeholder {
+  color: var(--text-muted);
+}
+.lp-searchbox input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-glow);
+}
+.lp-searchbox .kbd {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.lp-searchbox .kbd kbd {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  color: var(--text-dim);
+}
+
+.lp-chips {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin: 22px auto 0;
+  /* let the standard 5 chips fit one row (they need ~723px; cap was 660px) */
+  max-width: 880px;
+}
+.lp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    color 0.2s,
+    background 0.2s,
+    transform 0.08s;
+}
+.lp-chip:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+.lp-chip:active {
+  transform: scale(0.96);
+}
+.lp-chip .c-num {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.lp-launch-stats {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  flex-wrap: wrap;
+  margin-top: 34px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.lp-launch-stats b {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.lp-launch-stats .sep {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.lp-scrollcue {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 30px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+.lp-scrollcue:hover {
+  color: var(--text-dim);
+}
+.lp-scrollcue svg {
+  width: 15px;
+  height: 15px;
+  animation: cuebob 1.8s ease-in-out infinite;
+}
+@keyframes cuebob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(3px);
+  }
+}
+
+/* ─── content rails ─── */
+.lp-body {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 12px 32px 40px;
+  position: relative;
+  z-index: 1;
+}
+.lp-section {
+  margin-top: 46px;
+}
+.lp-section:first-child {
+  margin-top: 38px;
+}
+.lp-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.lp-section-head h2 {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--text);
+}
+.lp-section-head .sub {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.lp-seeall {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--accent-soft);
+  cursor: pointer;
+  transition:
+    gap 0.2s,
+    color 0.2s;
+}
+.lp-seeall svg {
+  width: 18px;
+  height: 11px;
+}
+.lp-seeall:hover {
+  gap: 11px;
+  color: var(--text);
+}
+
+.rail {
+  display: flex;
+  gap: 18px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 32px 18px;
+  margin: 0 -32px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.rail::-webkit-scrollbar {
+  height: 8px;
+}
+.rail::-webkit-scrollbar-track {
+  background: transparent;
+}
+.rail::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+.rail::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
+}
+.rail > * {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+.rail-games > * {
+  width: 158px;
+}
+.rail-vods > * {
+  width: 330px;
+}
+
+/* "on this day" calendar hook */
+.lp-calhook {
+  margin-top: 46px;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 24px 28px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: linear-gradient(110deg, var(--bg-card), color-mix(in oklab, var(--bg-card) 70%, var(--accent) 9%));
+  flex-wrap: wrap;
+}
+.lp-calhook .cal-ic {
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in oklab, var(--accent) 18%, transparent);
+  color: var(--accent-soft);
+}
+.lp-calhook .cal-ic svg {
+  width: 26px;
+  height: 26px;
+}
+.lp-calhook .cal-txt {
+  flex: 1;
+  min-width: 220px;
+}
+.lp-calhook .cal-txt h3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.lp-calhook .cal-txt p {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 5px;
+  line-height: 1.5;
+}
+.lp-calhook .cal-txt b {
+  color: var(--accent-soft);
+  font-weight: 600;
+}
+.lp-calhook .cal-txt a {
+  color: var(--accent-soft);
+  font-weight: 600;
+  transition: color 0.2s;
+}
+.lp-calhook .cal-txt a:hover {
+  color: var(--text);
+}
+
+/* ghost button (the calendar hook CTA) */
+.lp-btn-lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  padding: 14px 24px;
+  border-radius: 11px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    box-shadow 0.2s,
+    transform 0.08s,
+    color 0.2s;
+}
+.lp-btn-lg:active {
+  transform: scale(0.98);
+}
+.lp-btn-lg svg {
+  width: 17px;
+  height: 17px;
+}
+.lp-btn-ghost {
+  background: rgba(20, 20, 26, 0.55);
+  border-color: var(--border);
+  color: var(--text);
+}
+[data-theme="light"] .lp-btn-ghost {
+  background: rgba(255, 255, 255, 0.55);
+}
+.lp-btn-ghost:hover {
+  border-color: var(--border-hover);
+}
+
+/* ─── responsive ─── */
+@media (max-width: 768px) {
+  .lp-body {
+    padding: 12px 18px 32px;
+  }
+  body.lp-page .continue-hero {
+    padding: 0 18px;
+  }
+  .rail {
+    margin: 0 -18px;
+    padding: 4px 18px 18px;
+  }
+  .lp-searchbox input {
+    font-size: 15px;
+    padding: 16px 18px 16px 50px;
+  }
+  .lp-searchbox .kbd {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-scrollcue svg {
+    animation: none;
+  }
+  .lp .vod-card,
+  .lp .game-card {
+    animation: none;
+  }
+}

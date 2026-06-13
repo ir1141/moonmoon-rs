@@ -8,12 +8,12 @@
 <div class="games-view">
   <div class="games-toolbar">
     <div class="stats" id="history-stats"></div>
-    <div class="games-filters">
-      <select name="sort" id="history-sort" class="toolbar-select">
-        <option value="recent">Most recently watched</option>
-        <option value="game">By game</option>
-      </select>
-    </div>
+    <form id="history-filters" class="games-filters" data-list-filters>
+      <div class="toolbar-sort-wrap" data-sort-control>
+        <input type="hidden" name="sort" class="toolbar-sort-value" id="history-sort" value="recent">
+        {% include "_sort_control.html" %}
+      </div>
+    </form>
   </div>
   <div id="history-grid" class="vod-grid"></div>
 </div>

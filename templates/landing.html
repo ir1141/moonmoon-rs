@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block body_class %}lp-page{% endblock %}
+
+{% block search %}{% endblock %}
+
+{% block content %}
+<div class="lp">
+  <section class="lp-launch">
+    <div class="lp-launch-glow" aria-hidden="true"></div>
+    <div class="lp-eyebrow">The MOONMOON VOD archive</div>
+    <h1 class="lp-wordmark">Find any <span class="moon-b">stream</span></h1>
+    <p class="lp-sub"><b>{{ total_vods_label }}</b> streams across <b>{{ total_games }}</b> games — search a title, a game, or a vibe.</p>
+    <form class="lp-searchbox" action="/browse" method="get" role="search">
+      <input type="hidden" name="lens" value="streams">
+      <svg class="s-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>
+      </svg>
+      <input id="lp-search" type="search" name="search" autocomplete="off" placeholder="Search streams, games, dates…" aria-label="Search streams">
+      <span class="kbd" aria-hidden="true"><kbd>/</kbd> to focus</span>
+    </form>
+    <div class="lp-chips">
+      {% for chip in chips %}
+      <a class="lp-chip" href="{{ chip.href }}">
+        {% if chip.is_game %}<span class="chapter-dot color-{{ chip.color_idx }}" aria-hidden="true"></span>{% endif %}
+        {{ chip.label }}<span class="c-num">{{ chip.count_label }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    <div class="lp-launch-stats">
+      <span><b>{{ new_this_week }}</b> new this week</span>
+      <span class="sep" aria-hidden="true"></span>
+      <span>Archiving since <b>{{ archive_since }}</b></span>
+    </div>
+    <a class="lp-scrollcue" href="#lp-discover">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M6 9l6 6 6-6"/>
+      </svg>
+      Or scroll to explore
+    </a>
+  </section>
+
+  {% include "continue_watching_block.html" %}
+
+  <div class="lp-body" id="lp-discover">
+    <div class="lp-section">
+      <div class="lp-section-head">
+        <h2>Recently archived</h2>
+        <span class="sub">Fresh off the stream</span>
+        <a class="lp-seeall" href="/browse?lens=streams">See all
+          <svg viewBox="0 0 24 14" fill="none" aria-hidden="true" focusable="false"><path d="M1 7h20M16 2l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+      <div class="rail rail-vods">
+        {% for vod in recent_vods %}
+        {% include "vod_card.html" %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="lp-section">
+      <div class="lp-section-head">
+        <h2>Most-streamed games</h2>
+        <span class="sub">{{ total_games }} in the archive</span>
+        <a class="lp-seeall" href="/browse?lens=games">See all
+          <svg viewBox="0 0 24 14" fill="none" aria-hidden="true" focusable="false"><path d="M1 7h20M16 2l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+      <div class="rail rail-games">
+        {% for game in top_games %}
+        {% include "game_card.html" %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="lp-calhook">
+      <div class="cal-ic" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/>
+        </svg>
+      </div>
+      <div class="cal-txt">
+        {% if let Some(on) = on_this_day %}
+        <h3>On this day, {{ on.years_ago_label }}</h3>
+        <p>{{ on.date_label }} — <b>{{ on.game }}</b>{% if let Some(dur) = on.duration %}, a {{ dur }} stream{% endif %}: <a href="{{ on.watch_url }}">{{ on.title }}</a>. The calendar maps every stream day since {{ archive_since }}.</p>
+        {% else %}
+        <h3>On this day</h3>
+        <p>Today is <b>{{ today_label }}</b>. The calendar maps every stream day since {{ archive_since }} — explore the archive by date.</p>
+        {% endif %}
+      </div>
+      <a class="lp-btn-lg lp-btn-ghost" href="/calendar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/>
+        </svg>
+        Open calendar
+      </a>
+    </div>
+  </div>
+</div>
+<script nonce="{{ nonce }}">
+(function () {
+  var input = document.getElementById('lp-search');
+  if (!input) return;
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+    var el = document.activeElement;
+    var tag = el && el.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
+    e.preventDefault();
+    input.focus();
+  });
+})();
+</script>
+{% endblock %}

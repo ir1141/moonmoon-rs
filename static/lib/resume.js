@@ -9,6 +9,14 @@ export function mergeResume(local, remote) {
   for (const k of keys) {
     const l = safeLocal[k];
     const r = remote[k];
+    if (!l && !r) {
+      // Junk entry (null/0/false) on one or both sides: drop it rather than
+      // copying an undefined value into the merged map — JSON.stringify would
+      // silently delete the key from the synced blob. Flag a change only when
+      // the junk came from local storage so it gets cleaned up there.
+      if (Object.prototype.hasOwnProperty.call(safeLocal, k)) changed = true;
+      continue;
+    }
     if (!l) {
       merged[k] = r;
       changed = true;

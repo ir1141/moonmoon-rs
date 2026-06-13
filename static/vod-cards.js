@@ -1,16 +1,13 @@
 import { nextChapterPopoverOpen } from "./lib/chapter-popover.js";
+import { resumePercent } from "./lib/continue-watching.js";
+import { RESUME_KEY, WATCHED_KEY, readJsonStore } from "./lib/history-state.js";
 import { hasWatchedVod } from "./lib/watched.js";
+import { safeLocalStorage } from "./lib/storage.js";
 
-const RESUME_KEY = "moonmoon_resume";
-const WATCHED_KEY = "moonmoon_watched";
-
-function readStore(key) {
-  try {
-    return JSON.parse(localStorage.getItem(key)) || {};
-  } catch (error) {
-    return {};
-  }
-}
+// Resolved through a guard: bare `localStorage` access throws in
+// storage-blocking browsers, which would abort this module at eval — and
+// history.js imports us, so it would take the history page down too.
+const storage = safeLocalStorage();
 
 function buildWatchedBadge() {
   const badge = document.createElement("div");
@@ -49,7 +46,7 @@ function applyResumeState(card, resumeStore) {
     Number.isFinite(duration) &&
     duration > 0
   ) {
-    const percent = Math.max(0, Math.min((time / duration) * 100, 100));
+    const percent = resumePercent(time, duration);
     card.classList.add("has-resume");
     if (fill) fill.style.width = `${percent}%`;
     return;
@@ -135,8 +132,8 @@ function initChapterPopovers(root = document) {
  * @param {Document | Element} [root]
  */
 export function applyVodCardState(root = document) {
-  const resumeStore = readStore(RESUME_KEY);
-  const watchedStore = readStore(WATCHED_KEY);
+  const resumeStore = readJsonStore(storage, RESUME_KEY);
+  const watchedStore = readJsonStore(storage, WATCHED_KEY);
   const cards =
     root instanceof Element && root.matches(".vod-card[data-vod-id]")
       ? [root]
@@ -148,10 +145,18 @@ export function applyVodCardState(root = document) {
   });
 }
 
-function applyFromEvent(event) {
-  const root = (event.detail && event.detail.target) || document;
+/**
+ * Re-apply card state and wire popovers for freshly inserted cards. Pages that
+ * swap grid HTML manually (without htmx) call this directly.
+ * @param {Document | Element} [root]
+ */
+export function initVodCards(root = document) {
   applyVodCardState(root);
   initChapterPopovers(root);
+}
+
+function applyFromEvent(event) {
+  initVodCards((event.detail && event.detail.target) || document);
 }
 
 applyVodCardState();
@@ -179,7 +184,10 @@ document.addEventListener("click", (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   document.querySelectorAll(".vod-card.chapter-pop-open").forEach((card) => {
-    setChapterPopoverOpen(card, nextChapterPopoverOpen(true, { type: "escape" }));
+    setChapterPopoverOpen(
+      card,
+      nextChapterPopoverOpen(true, { type: "escape" }),
+    );
   });
 });
 

@@ -46,4 +46,14 @@ describe("history sort storage", () => {
     expect(readHistorySort(throwingStorage)).toBe(defaultHistorySort);
     expect(writeHistorySort(throwingStorage, "game")).toBe("game");
   });
+
+  // The localStorage *global* itself can throw (SecurityError in
+  // storage-blocking browsers) or be absent (bun) — falling back to it must
+  // go through a guard, not a bare reference.
+  test("defaults do not touch a bare localStorage global", () => {
+    expect(() => readHistorySort()).not.toThrow();
+    expect(readHistorySort()).toBe(defaultHistorySort);
+    expect(() => writeHistorySort(null, "game")).not.toThrow();
+    expect(writeHistorySort(null, "game")).toBe("game");
+  });
 });
