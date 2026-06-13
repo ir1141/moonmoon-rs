@@ -27,7 +27,7 @@
 .site-footer .f-logo svg {
   width: 20px;
   height: 20px;
-  color: var(--accent-soft);
+  color: var(--text);
 }
 .site-footer .f-links {
   display: flex;

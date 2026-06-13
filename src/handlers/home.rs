@@ -11,7 +11,7 @@ use axum::response::IntoResponse;
 use std::sync::Arc;
 
 /// How many cards each landing rail shows before the user has to "See all".
-const RECENT_RAIL_SIZE: usize = 12;
+const RECENT_RAIL_SIZE: usize = 4;
 const GAMES_RAIL_SIZE: usize = 12;
 /// Top games surfaced as quick-filter chips (followed by the "This week" lens).
 const CHIP_GAME_COUNT: usize = 4;
@@ -136,7 +136,7 @@ pub async fn home_page(
         show_game_tags: true,
         show_recency: false,
         show_oldest_recency: false,
-        show_subtitle: false,
+        show_subtitle: true,
         active_section: Section::Home,
         nonce: nonce.0,
     })
