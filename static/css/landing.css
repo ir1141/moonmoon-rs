@@ -362,6 +362,9 @@ body.lp-page .continue-hero {
   background: linear-gradient(110deg, var(--bg-card), color-mix(in oklab, var(--bg-card) 70%, var(--accent) 9%));
   flex-wrap: wrap;
 }
+[data-theme="light"] .lp-calhook {
+  background: linear-gradient(110deg, var(--bg-card), var(--continue-grad-end));
+}
 .lp-calhook .cal-ic {
   width: 54px;
   height: 54px;

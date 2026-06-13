@@ -49,7 +49,12 @@
 
 .continue-still-fallback {
   background:
-    radial-gradient(circle at 35% 20%, rgba(162, 155, 254, 0.24), transparent 38%),
+    radial-gradient(circle at 35% 20%, color-mix(in oklab, var(--accent-soft) 24%, transparent), transparent 38%),
+    var(--bg-elevated);
+}
+[data-theme="light"] .continue-still-fallback {
+  background:
+    radial-gradient(circle at 35% 20%, color-mix(in oklab, var(--accent) 12%, transparent), transparent 38%),
     var(--bg-elevated);
 }
 
