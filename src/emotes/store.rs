@@ -1,6 +1,6 @@
 use crate::emotes::EmoteRecord;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use tokio::sync::Mutex as AsyncMutex;
 
 /// What we cache for a failed lookup. The unit struct lets us store "miss"
@@ -30,8 +30,10 @@ pub struct EmoteIndex {
     /// `/api/emotes/lookup/{name}` handler.
     resolved: RwLock<HashMap<String, ResolvedEntry>>,
     /// Per-name gate: only one upstream search runs at a time for a given
-    /// name. Concurrent callers wait, then read the populated cache.
-    in_flight: AsyncMutex<HashMap<String, Arc<AsyncMutex<()>>>>,
+    /// name. Concurrent callers wait, then read the populated cache. The map
+    /// is only ever locked briefly (never across an await), so a sync mutex is
+    /// correct and lets the RAII `InFlightGuard` reclaim entries on drop.
+    in_flight: Mutex<HashMap<String, Arc<AsyncMutex<()>>>>,
 }
 
 impl EmoteIndex {
@@ -39,7 +41,7 @@ impl EmoteIndex {
         Self {
             prefetched,
             resolved: RwLock::new(HashMap::new()),
-            in_flight: AsyncMutex::new(HashMap::new()),
+            in_flight: Mutex::new(HashMap::new()),
         }
     }
 
@@ -82,6 +84,10 @@ impl EmoteIndex {
     /// returns `Some(entry)` to cache a hit/miss, or `None` for a transient
     /// failure (reported as a miss to this caller but left uncached so a later
     /// caller retries).
+    ///
+    /// The per-name gate entry is reclaimed by an RAII `InFlightGuard`, so a
+    /// caller whose future is dropped mid-search (e.g. the client disconnects
+    /// during the upstream call) does not leak its `in_flight` entry.
     pub async fn lookup_or_resolve<F, Fut>(&self, name: &str, search: F) -> Lookup
     where
         F: FnOnce() -> Fut,
@@ -92,23 +98,25 @@ impl EmoteIndex {
             resolved => return resolved,
         }
 
-        let gate = {
-            let mut in_flight = self.in_flight.lock().await;
-            Arc::clone(
+        let guard = {
+            let mut in_flight = self.in_flight.lock().expect("not poisoned");
+            let gate = Arc::clone(
                 in_flight
                     .entry(name.to_string())
                     .or_insert_with(|| Arc::new(AsyncMutex::new(()))),
-            )
+            );
+            InFlightGuard {
+                map: &self.in_flight,
+                name,
+                gate,
+            }
         };
-        let _hold = gate.lock().await;
+        let _hold = guard.gate.lock().await;
 
         // A prior holder may have populated the cache while we waited.
         match self.lookup(name) {
             Lookup::Unknown => {}
-            resolved => {
-                self.release_gate(name, &gate).await;
-                return resolved;
-            }
+            resolved => return resolved,
         }
 
         let outcome = search().await;
@@ -119,22 +127,39 @@ impl EmoteIndex {
         if let Some(entry) = outcome {
             self.record(name.to_string(), entry);
         }
-        self.release_gate(name, &gate).await;
         result
-    }
-
-    async fn release_gate(&self, name: &str, gate: &Arc<AsyncMutex<()>>) {
-        let mut in_flight = self.in_flight.lock().await;
-        // strong_count == 2 -> only the map entry and our handle remain, so no
-        // other caller is waiting on this gate; drop it to bound the map.
-        if Arc::strong_count(gate) == 2 {
-            in_flight.remove(name);
-        }
     }
 
     #[cfg(test)]
     pub fn resolved_len(&self) -> usize {
         self.resolved.read().unwrap().len()
+    }
+
+    #[cfg(test)]
+    pub fn in_flight_len(&self) -> usize {
+        self.in_flight.lock().expect("not poisoned").len()
+    }
+}
+
+/// RAII cleanup for a single-flight gate entry. On drop it removes the
+/// per-name entry from `in_flight` once no other caller still holds the gate
+/// (`strong_count == 2` -> only the map slot and this guard's clone remain).
+/// Running cleanup in `Drop` makes it robust to cancellation: if the owning
+/// future is dropped mid-search, the entry is still reclaimed. Removing an
+/// entry a late waiter is about to reuse is harmless — that waiter just
+/// re-creates the gate and re-checks the cache.
+struct InFlightGuard<'a> {
+    map: &'a Mutex<HashMap<String, Arc<AsyncMutex<()>>>>,
+    name: &'a str,
+    gate: Arc<AsyncMutex<()>>,
+}
+
+impl Drop for InFlightGuard<'_> {
+    fn drop(&mut self) {
+        let mut map = self.map.lock().expect("not poisoned");
+        if Arc::strong_count(&self.gate) == 2 {
+            map.remove(self.name);
+        }
     }
 }
 
@@ -247,5 +272,26 @@ mod tests {
         }
         // Distinct names each search once — the gate is per-name, not global.
         assert_eq!(calls.load(Ordering::SeqCst), 8);
+    }
+
+    #[tokio::test]
+    async fn cancelled_lookup_does_not_leak_in_flight_entry() {
+        let idx = Arc::new(EmoteIndex::new(HashMap::new()));
+        // Drive the lookup until it suspends at the upstream search, then drop
+        // the future by letting the timeout elapse (simulates a client
+        // disconnecting mid-lookup).
+        let cancelled = tokio::time::timeout(
+            std::time::Duration::from_millis(20),
+            idx.lookup_or_resolve("Cancelled", || async {
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                Some(ResolvedEntry::Miss)
+            }),
+        )
+        .await;
+        assert!(cancelled.is_err(), "the search should still be in flight");
+        // The RAII guard reclaimed the gate entry on cancellation — no leak.
+        assert_eq!(idx.in_flight_len(), 0);
+        // Nothing was cached, so a later caller still resolves fresh.
+        assert_eq!(idx.lookup("Cancelled"), Lookup::Unknown);
     }
 }
