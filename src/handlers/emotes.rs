@@ -52,53 +52,31 @@ pub async fn lookup_emote(
     }
 
     let index = state.emotes.read().await.clone();
-    match index.lookup(&name) {
-        Lookup::Hit(record) => {
-            return (
-                axum::http::StatusCode::OK,
-                [("content-type", "application/json")],
-                serde_json::to_string(&LookupResponse::Hit { hit: true, record }).unwrap(),
-            );
-        }
-        Lookup::Miss => {
-            return (
-                axum::http::StatusCode::OK,
-                [("content-type", "application/json")],
-                serde_json::to_string(&LookupResponse::Miss { hit: false }).unwrap(),
-            );
-        }
-        Lookup::Unknown => {}
-    }
+    let client = state.http_client.clone();
+    let search_name = name.clone();
+    let result = index
+        .lookup_or_resolve(&name, || async move {
+            match search_all_providers(&client, &search_name).await {
+                SearchOutcome::Hit(record) => Some(ResolvedEntry::Hit(record)),
+                SearchOutcome::CleanMiss => Some(ResolvedEntry::Miss),
+                SearchOutcome::AllFailed => None,
+            }
+        })
+        .await;
 
-    // Search the three providers concurrently. First hit wins; otherwise miss
-    // is cached only if at least one provider returned a clean response. (If
-    // every provider errored, leave the entry unrecorded so the next viewer
-    // can retry.)
-    let response = search_all_providers(&state.http_client, &name).await;
-    match response {
-        SearchOutcome::Hit(record) => {
-            index.record(name.clone(), ResolvedEntry::Hit(record.clone()));
-            (
-                axum::http::StatusCode::OK,
-                [("content-type", "application/json")],
-                serde_json::to_string(&LookupResponse::Hit { hit: true, record }).unwrap(),
-            )
+    let body = match result {
+        Lookup::Hit(record) => {
+            serde_json::to_string(&LookupResponse::Hit { hit: true, record }).unwrap()
         }
-        SearchOutcome::CleanMiss => {
-            index.record(name.clone(), ResolvedEntry::Miss);
-            (
-                axum::http::StatusCode::OK,
-                [("content-type", "application/json")],
-                serde_json::to_string(&LookupResponse::Miss { hit: false }).unwrap(),
-            )
+        Lookup::Miss | Lookup::Unknown => {
+            serde_json::to_string(&LookupResponse::Miss { hit: false }).unwrap()
         }
-        SearchOutcome::AllFailed => (
-            axum::http::StatusCode::OK,
-            [("content-type", "application/json")],
-            // Don't cache, return Miss to the client so it falls back to plain text.
-            serde_json::to_string(&LookupResponse::Miss { hit: false }).unwrap(),
-        ),
-    }
+    };
+    (
+        axum::http::StatusCode::OK,
+        [("content-type", "application/json")],
+        body,
+    )
 }
 
 // Mirrors the JS isEmoteCandidate length/charset rules so we never call
