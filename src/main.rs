@@ -163,21 +163,32 @@ async fn main() {
             .expect("valid governor config"),
     );
 
-    let governor_limiter = api_governor.limiter().clone();
-    tokio::spawn(async move {
-        let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
-        loop {
-            tick.tick().await;
-            governor_limiter.retain_recent();
-        }
-    });
+    // Emote lookups burst hard on chat load but are cache-backed and
+    // single-flighted, so they get a lenient bucket of their own — a burst
+    // must not 429 or starve a viewer's sync/playback API calls.
+    let emote_governor = Arc::new(
+        GovernorConfigBuilder::default()
+            .key_extractor(SmartIpKeyExtractor)
+            .per_second(20)
+            .burst_size(120)
+            .finish()
+            .expect("valid emote governor config"),
+    );
+
+    for limiter in [api_governor.limiter().clone(), emote_governor.limiter().clone()] {
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+            loop {
+                tick.tick().await;
+                limiter.retain_recent();
+            }
+        });
+    }
 
     let api_routes = Router::new()
         .route("/api/chat/{vod_id}", get(handlers::chat_proxy))
         .route("/api/vod/{vod_id}", get(handlers::vod_detail))
         .route("/api/next/{vod_id}", get(handlers::next_in_period))
-        .route("/api/emotes/channel", get(handlers::channel_emotes))
-        .route("/api/emotes/lookup/{name}", get(handlers::lookup_emote))
         .route(
             "/api/sync/{token}",
             get(handlers::sync_get).put(handlers::sync_put),
@@ -186,6 +197,11 @@ async fn main() {
         .route("/history/resume", get(handlers::continue_resume))
         .route("/history/vods", get(handlers::history_vods_grid))
         .layer(GovernorLayer::new(api_governor));
+
+    let emote_routes = Router::new()
+        .route("/api/emotes/channel", get(handlers::channel_emotes))
+        .route("/api/emotes/lookup/{name}", get(handlers::lookup_emote))
+        .layer(GovernorLayer::new(emote_governor));
 
     let app = Router::new()
         .route("/", get(handlers::home_page))
@@ -199,6 +215,7 @@ async fn main() {
         .route("/history", get(handlers::history_page))
         .route("/random", get(handlers::random_vod))
         .merge(api_routes)
+        .merge(emote_routes)
         .nest_service("/static", ServeDir::new("static"))
         .layer(axum::middleware::from_fn(middleware::csp_nonce))
         .layer(
