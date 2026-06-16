@@ -359,7 +359,7 @@ pub fn upscale_chapter_image(url: &str) -> String {
         .replace("40x53", "285x380")
 }
 
-pub(crate) const REFRESH_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+pub(crate) const REFRESH_INTERVAL: Duration = Duration::from_secs(60 * 60);
 /// While the catalog is empty (failed/timed-out boot fetch) retry much faster
 /// so a bad boot doesn't leave the site empty for six hours.
 pub(crate) const EMPTY_RETRY_INTERVAL: Duration = Duration::from_secs(60);

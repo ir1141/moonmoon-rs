@@ -1,0 +1,13 @@
+{
+  "id": "global-set",
+  "emotes": [
+    {
+      "id": "60ae3e54259ac5a73e56a426",
+      "name": "PauseChamp",
+      "data": {
+        "host": { "url": "//cdn.7tv.app/emote/60ae3e54259ac5a73e56a426" },
+        "owner": null
+      }
+    }
+  ]
+}
