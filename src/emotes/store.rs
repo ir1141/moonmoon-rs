@@ -11,9 +11,14 @@ pub enum ResolvedEntry {
     Miss,
 }
 
-/// Soft cap on the resolved map. Exceeding it triggers a full clear (we keep
-/// the prefetched map intact). 50k entries × ~200 bytes ≈ 10 MB worst case.
+/// Soft cap on the resolved map. Exceeding it evicts a batch down to
+/// `EVICT_TO` (we keep the prefetched map intact). 50k × ~200 bytes ≈ 10 MB.
 pub const RESOLVED_CAP: usize = 50_000;
+
+/// When the resolved map hits `RESOLVED_CAP`, evict down to this many entries
+/// instead of clearing it entirely, so a full cache only forces ~10% of names
+/// to re-resolve rather than all of them.
+const EVICT_TO: usize = RESOLVED_CAP * 9 / 10;
 
 pub struct EmoteIndex {
     /// Channel + global emotes from each of the three providers. Built once
@@ -48,16 +53,18 @@ impl EmoteIndex {
         Lookup::Unknown
     }
 
-    /// Record a resolved hit or miss. Clears the whole resolved map if the cap
-    /// is exceeded (cheaper than LRU bookkeeping; misses re-cache on demand).
+    /// Record a resolved hit or miss. When the cap is exceeded, evicts a batch
+    /// down to `EVICT_TO` instead of wiping everything, so a full cache only
+    /// forces ~10% of names to re-resolve rather than all of them.
     pub fn record(&self, name: String, entry: ResolvedEntry) {
         let mut map = self.resolved.write().expect("not poisoned");
         if map.len() >= RESOLVED_CAP {
-            tracing::info!(
-                "emote resolved cache reached {} entries, clearing",
-                map.len()
-            );
-            map.clear();
+            let drop_count = map.len() - EVICT_TO;
+            let victims: Vec<String> = map.keys().take(drop_count).cloned().collect();
+            for k in &victims {
+                map.remove(k);
+            }
+            tracing::info!("emote resolved cache hit cap; evicted {} entries", victims.len());
         }
         map.insert(name, entry);
     }
@@ -109,15 +116,15 @@ mod tests {
     }
 
     #[test]
-    fn resolved_clears_when_cap_exceeded() {
+    fn resolved_evicts_batch_when_cap_exceeded() {
         let idx = EmoteIndex::new(HashMap::new());
         for i in 0..RESOLVED_CAP {
             idx.record(format!("e{i}"), ResolvedEntry::Miss);
         }
         assert_eq!(idx.resolved_len(), RESOLVED_CAP);
-        // The next record() call sees len() >= cap and clears before insert.
+        // Exceeding the cap evicts a batch (not a full wipe), then inserts.
         idx.record("overflow".to_string(), ResolvedEntry::Miss);
-        assert_eq!(idx.resolved_len(), 1);
+        assert_eq!(idx.resolved_len(), EVICT_TO + 1);
         assert_eq!(idx.lookup("overflow"), Lookup::Miss);
     }
 }
