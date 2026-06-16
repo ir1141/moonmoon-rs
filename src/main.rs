@@ -175,7 +175,10 @@ async fn main() {
             .expect("valid emote governor config"),
     );
 
-    for limiter in [api_governor.limiter().clone(), emote_governor.limiter().clone()] {
+    for limiter in [
+        api_governor.limiter().clone(),
+        emote_governor.limiter().clone(),
+    ] {
         tokio::spawn(async move {
             let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
             loop {

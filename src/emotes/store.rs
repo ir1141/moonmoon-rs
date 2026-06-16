@@ -69,7 +69,10 @@ impl EmoteIndex {
             for k in &victims {
                 map.remove(k);
             }
-            tracing::info!("emote resolved cache hit cap; evicted {} entries", victims.len());
+            tracing::info!(
+                "emote resolved cache hit cap; evicted {} entries",
+                victims.len()
+            );
         }
         map.insert(name, entry);
     }
