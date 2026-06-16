@@ -1,6 +1,7 @@
 use crate::emotes::EmoteRecord;
 use std::collections::HashMap;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
+use tokio::sync::Mutex as AsyncMutex;
 
 /// What we cache for a failed lookup. The unit struct lets us store "miss"
 /// without paying the size of a full record, and lets `lookup` return a
@@ -28,6 +29,9 @@ pub struct EmoteIndex {
     /// Search-fallback hits and misses. Mutated through the RwLock from the
     /// `/api/emotes/lookup/{name}` handler.
     resolved: RwLock<HashMap<String, ResolvedEntry>>,
+    /// Per-name gate: only one upstream search runs at a time for a given
+    /// name. Concurrent callers wait, then read the populated cache.
+    in_flight: AsyncMutex<HashMap<String, Arc<AsyncMutex<()>>>>,
 }
 
 impl EmoteIndex {
@@ -35,6 +39,7 @@ impl EmoteIndex {
         Self {
             prefetched,
             resolved: RwLock::new(HashMap::new()),
+            in_flight: AsyncMutex::new(HashMap::new()),
         }
     }
 
@@ -67,6 +72,61 @@ impl EmoteIndex {
             tracing::info!("emote resolved cache hit cap; evicted {} entries", victims.len());
         }
         map.insert(name, entry);
+    }
+
+    /// Resolve a name through the cache, running `search` at most once across
+    /// all concurrent callers for the same name (single-flight). `search`
+    /// returns `Some(entry)` to cache a hit/miss, or `None` for a transient
+    /// failure (reported as a miss to this caller but left uncached so a later
+    /// caller retries).
+    pub async fn lookup_or_resolve<F, Fut>(&self, name: &str, search: F) -> Lookup
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = Option<ResolvedEntry>>,
+    {
+        match self.lookup(name) {
+            Lookup::Unknown => {}
+            resolved => return resolved,
+        }
+
+        let gate = {
+            let mut in_flight = self.in_flight.lock().await;
+            Arc::clone(
+                in_flight
+                    .entry(name.to_string())
+                    .or_insert_with(|| Arc::new(AsyncMutex::new(()))),
+            )
+        };
+        let _hold = gate.lock().await;
+
+        // A prior holder may have populated the cache while we waited.
+        match self.lookup(name) {
+            Lookup::Unknown => {}
+            resolved => {
+                self.release_gate(name, &gate).await;
+                return resolved;
+            }
+        }
+
+        let outcome = search().await;
+        let result = match &outcome {
+            Some(ResolvedEntry::Hit(record)) => Lookup::Hit(record.clone()),
+            Some(ResolvedEntry::Miss) | None => Lookup::Miss,
+        };
+        if let Some(entry) = outcome {
+            self.record(name.to_string(), entry);
+        }
+        self.release_gate(name, &gate).await;
+        result
+    }
+
+    async fn release_gate(&self, name: &str, gate: &Arc<AsyncMutex<()>>) {
+        let mut in_flight = self.in_flight.lock().await;
+        // strong_count == 2 -> only the map entry and our handle remain, so no
+        // other caller is waiting on this gate; drop it to bound the map.
+        if Arc::strong_count(gate) == 2 {
+            in_flight.remove(name);
+        }
     }
 
     #[cfg(test)]
@@ -126,5 +186,63 @@ mod tests {
         idx.record("overflow".to_string(), ResolvedEntry::Miss);
         assert_eq!(idx.resolved_len(), EVICT_TO + 1);
         assert_eq!(idx.lookup("overflow"), Lookup::Miss);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_lookups_for_same_name_search_once() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let idx = Arc::new(EmoteIndex::new(HashMap::new()));
+        let calls = Arc::new(AtomicUsize::new(0));
+
+        let mut handles = Vec::new();
+        for _ in 0..16 {
+            let idx = Arc::clone(&idx);
+            let calls = Arc::clone(&calls);
+            handles.push(tokio::spawn(async move {
+                idx.lookup_or_resolve("Greetings", || async move {
+                    calls.fetch_add(1, Ordering::SeqCst);
+                    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                    Some(ResolvedEntry::Hit(EmoteRecord {
+                        url: "https://x/g".into(),
+                        provider: EmoteProvider::Bttv,
+                        owner: None,
+                    }))
+                })
+                .await
+            }));
+        }
+
+        for h in handles {
+            assert!(matches!(h.await.unwrap(), Lookup::Hit(_)));
+        }
+        // Single-flight: all 16 callers shared one upstream search.
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        // And the result is cached for later callers.
+        assert!(matches!(idx.lookup("Greetings"), Lookup::Hit(_)));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn lookups_for_different_names_do_not_block_each_other() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let idx = Arc::new(EmoteIndex::new(HashMap::new()));
+        let calls = Arc::new(AtomicUsize::new(0));
+
+        let mut handles = Vec::new();
+        for i in 0..8 {
+            let idx = Arc::clone(&idx);
+            let calls = Arc::clone(&calls);
+            handles.push(tokio::spawn(async move {
+                idx.lookup_or_resolve(&format!("name{i}"), || async move {
+                    calls.fetch_add(1, Ordering::SeqCst);
+                    Some(ResolvedEntry::Miss)
+                })
+                .await
+            }));
+        }
+        for h in handles {
+            assert_eq!(h.await.unwrap(), Lookup::Miss);
+        }
+        // Distinct names each search once — the gate is per-name, not global.
+        assert_eq!(calls.load(Ordering::SeqCst), 8);
     }
 }
