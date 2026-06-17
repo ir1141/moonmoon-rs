@@ -11,6 +11,7 @@ use tower_governor::{
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
+mod emotes;
 mod handlers;
 mod middleware;
 mod sync_store;
@@ -52,6 +53,7 @@ pub struct AppState {
     pub http_client: reqwest::Client,
     pub refresh_lock: tokio::sync::Mutex<()>,
     pub sync_store: Arc<sync_store::SyncStore>,
+    pub emotes: RwLock<Arc<emotes::EmoteIndex>>,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -86,6 +88,21 @@ async fn main() {
     tracing::info!("ready with {} vods", catalog.vods.len());
     tracing::info!("found {} games", catalog.games.len());
 
+    const EMOTE_BOOT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+    let prefetched =
+        match tokio::time::timeout(EMOTE_BOOT_TIMEOUT, emotes::load_prefetched(&http_client)).await
+        {
+            Ok(map) => map,
+            Err(_) => {
+                tracing::warn!(
+                    "emote boot fetch timed out after {:?}; starting with empty index",
+                    EMOTE_BOOT_TIMEOUT
+                );
+                std::collections::HashMap::new()
+            }
+        };
+    tracing::info!("emotes: prefetched {} entries", prefetched.len());
+
     let sync_store_path: std::path::PathBuf = std::env::var("SYNC_STORE_PATH")
         .unwrap_or_else(|_| "sync.json".to_string())
         .into();
@@ -96,6 +113,7 @@ async fn main() {
         http_client,
         refresh_lock: tokio::sync::Mutex::new(()),
         sync_store,
+        emotes: RwLock::new(Arc::new(emotes::EmoteIndex::new(prefetched))),
     });
 
     let refresh_state = Arc::clone(&state);
@@ -120,6 +138,22 @@ async fn main() {
         }
     });
 
+    let emote_state = Arc::clone(&state);
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(emotes::EMOTE_REFRESH_INTERVAL);
+        tick.tick().await; // skip immediate tick; boot already loaded
+        loop {
+            tick.tick().await;
+            let prefetched = emotes::load_prefetched(&emote_state.http_client).await;
+            tracing::info!(
+                "emote tick refresh: {} prefetched entries",
+                prefetched.len()
+            );
+            let new_index = Arc::new(emotes::EmoteIndex::new(prefetched));
+            *emote_state.emotes.write().await = new_index;
+        }
+    });
+
     let api_governor = Arc::new(
         GovernorConfigBuilder::default()
             .key_extractor(SmartIpKeyExtractor)
@@ -129,14 +163,30 @@ async fn main() {
             .expect("valid governor config"),
     );
 
-    let governor_limiter = api_governor.limiter().clone();
-    tokio::spawn(async move {
-        let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
-        loop {
-            tick.tick().await;
-            governor_limiter.retain_recent();
-        }
-    });
+    // Emote lookups burst hard on chat load but are cache-backed and
+    // single-flighted, so they get a lenient bucket of their own — a burst
+    // must not 429 or starve a viewer's sync/playback API calls.
+    let emote_governor = Arc::new(
+        GovernorConfigBuilder::default()
+            .key_extractor(SmartIpKeyExtractor)
+            .per_second(20)
+            .burst_size(120)
+            .finish()
+            .expect("valid emote governor config"),
+    );
+
+    for limiter in [
+        api_governor.limiter().clone(),
+        emote_governor.limiter().clone(),
+    ] {
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+            loop {
+                tick.tick().await;
+                limiter.retain_recent();
+            }
+        });
+    }
 
     let api_routes = Router::new()
         .route("/api/chat/{vod_id}", get(handlers::chat_proxy))
@@ -151,6 +201,11 @@ async fn main() {
         .route("/history/vods", get(handlers::history_vods_grid))
         .layer(GovernorLayer::new(api_governor));
 
+    let emote_routes = Router::new()
+        .route("/api/emotes/channel", get(handlers::channel_emotes))
+        .route("/api/emotes/lookup/{name}", get(handlers::lookup_emote))
+        .layer(GovernorLayer::new(emote_governor));
+
     let app = Router::new()
         .route("/", get(handlers::home_page))
         .route("/games", get(handlers::games_redirect))
@@ -163,6 +218,7 @@ async fn main() {
         .route("/history", get(handlers::history_page))
         .route("/random", get(handlers::random_vod))
         .merge(api_routes)
+        .merge(emote_routes)
         .nest_service("/static", ServeDir::new("static"))
         .layer(axum::middleware::from_fn(middleware::csp_nonce))
         .layer(

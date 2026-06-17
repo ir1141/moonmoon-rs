@@ -1,6 +1,7 @@
 mod api;
 mod browse;
 mod calendar;
+mod emotes;
 mod history;
 mod home;
 mod sync;
@@ -9,6 +10,7 @@ mod watch;
 pub use api::{chat_proxy, refresh_catalog};
 pub use browse::{browse_grid, browse_page, game_redirect, games_redirect, streams_redirect};
 pub use calendar::calendar_page;
+pub use emotes::{channel_emotes, lookup_emote};
 pub use history::{continue_resume, history_page, history_vods_grid};
 pub use home::home_page;
 pub use sync::{sync_get, sync_put};

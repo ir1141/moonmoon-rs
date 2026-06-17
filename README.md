@@ -47,7 +47,7 @@ bun test                                     # JS helper tests
 bun run check:js                             # TypeScript check for browser JS
 ```
 
-`/api/*` and `/history/{resume,vods}` routes are rate-limited (2 rps, burst 20) per smart-detected client IP via `tower_governor`.
+Most `/api/*` and `/history/{resume,vods}` routes are rate-limited (2 rps, burst 20) per smart-detected client IP via `tower_governor`. The high-volume `/api/emotes/*` lookups have their own more lenient bucket (20 rps, burst 120) so an emote burst on chat load can't 429 a viewer's sync/playback calls.
 
 ## Routes
 

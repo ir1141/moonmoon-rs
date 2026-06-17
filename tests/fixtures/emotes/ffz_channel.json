@@ -1,0 +1,15 @@
+{
+  "room": { "id": 121059319 },
+  "sets": {
+    "12345": {
+      "emoticons": [
+        {
+          "id": 28138,
+          "name": "ZreknarF",
+          "urls": { "1": "//cdn.frankerfacez.com/emote/28138/1" },
+          "owner": { "display_name": "Zreknarf" }
+        }
+      ]
+    }
+  }
+}
