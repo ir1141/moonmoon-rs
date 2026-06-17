@@ -79,6 +79,203 @@
   color: #fff;
 }
 
+/* ─── Chapter selector (game chip + "jump to a game" popover) ─── */
+.chapter-selector {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.wc-chapters-chip {
+  position: relative;
+}
+
+.wc-chapters-chip .wc-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: var(--chapter-color, var(--accent));
+}
+
+.wc-chapters-chip .wc-chip-label {
+  max-width: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.wc-chapters-chip .wc-caret {
+  width: 12px;
+  height: 12px;
+  opacity: 0.7;
+  transition: transform 0.2s ease;
+}
+
+.wc-chapters-chip[aria-expanded="true"] {
+  background: var(--button-hover-bg);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.wc-chapters-chip[aria-expanded="true"] .wc-caret {
+  transform: rotate(180deg);
+}
+
+.wc-pop {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  width: 320px;
+  /* The chip sits at the right of the bar, so right-anchor and cap the width to
+     the viewport so the panel never clips off-screen on narrow/stacked layouts. */
+  max-width: calc(100vw - 32px);
+  max-height: 380px;
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  padding: 8px;
+  z-index: 60;
+  animation: wcPopIn 0.16s ease;
+}
+
+.wc-pop[hidden] {
+  display: none;
+}
+
+@keyframes wcPopIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.wc-pop-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 6px 8px 8px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.wc-pop-count {
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.wc-pop-link {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-body);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.wc-pop-link:hover {
+  background: var(--bg-card);
+}
+
+.wc-pop-link.active {
+  background: color-mix(in oklab, var(--accent) 18%, transparent);
+}
+
+.wc-pop-link:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: -2px;
+}
+
+.wc-pop-marker {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+  background: var(--chapter-color, var(--accent));
+}
+
+.wc-pop-name {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wc-pop-link.active .wc-pop-name {
+  color: var(--accent-soft);
+  font-weight: 600;
+}
+
+.wc-pop-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.wc-pop-time {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.wc-pop-dur {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.wc-pop-nowtag {
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--accent-soft);
+}
+
+/* Each row shows its start time, except the active row which shows a "Now" tag. */
+.wc-pop-link .wc-pop-nowtag {
+  display: none;
+}
+
+.wc-pop-link.active .wc-pop-nowtag {
+  display: block;
+}
+
+.wc-pop-link.active .wc-pop-time {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wc-pop {
+    animation: none;
+  }
+}
+
 /* ─── Chat Panel ─── */
 .chat-panel {
   width: 340px;

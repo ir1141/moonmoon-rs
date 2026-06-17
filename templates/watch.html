@@ -15,6 +15,7 @@
       <div class="player-info">
         <h2 class="player-title">{{ vod_title }}</h2>
         <div class="part-selector" id="part-selector"></div>
+        <div class="chapter-selector" id="chapter-selector"></div>
         <button class="btn-chip theatre-btn" id="theatre-toggle" title="Theatre Mode (t)" aria-pressed="false">Theatre</button>
       </div>
     </div>
@@ -47,7 +48,7 @@
   </div>
 </div>
 
-<div id="vod-data" data-vod-id="{{ vod_id }}" data-youtube-parts="{{ youtube_parts_json }}" data-game-hint="{{ game_hint }}"></div>
+<div id="vod-data" data-vod-id="{{ vod_id }}" data-youtube-parts="{{ youtube_parts_json }}" data-chapters="{{ chapters_json }}" data-total-secs="{{ total_secs }}" data-game-hint="{{ game_hint }}"></div>
 <!-- SRI not used: Google serves a versionless URL whose contents change over time. -->
 <script src="https://www.youtube.com/iframe_api" nonce="{{ nonce }}"></script>
 <script type="module" src="/static/player.js" nonce="{{ nonce }}"></script>

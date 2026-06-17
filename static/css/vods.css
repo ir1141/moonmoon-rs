@@ -605,28 +605,28 @@
   border-radius: 1px;
   transition: filter 0.15s ease;
 }
-:is(.chapter-seg, .chapter-link-marker, .chapter-dot, .cal-leg).color-0 {
+:is(.chapter-seg, .chapter-link-marker, .chapter-dot, .cal-leg, .wc-chip-dot, .wc-pop-marker).color-0 {
   --chapter-color: #ef4d5b;
 }
-:is(.chapter-seg, .chapter-link-marker, .chapter-dot, .cal-leg).color-1 {
+:is(.chapter-seg, .chapter-link-marker, .chapter-dot, .cal-leg, .wc-chip-dot, .wc-pop-marker).color-1 {
   --chapter-color: #f08a3a;
 }
-:is(.chapter-seg, .chapter-link-marker, .chapter-dot, .cal-leg).color-2 {
+:is(.chapter-seg, .chapter-link-marker, .chapter-dot, .cal-leg, .wc-chip-dot, .wc-pop-marker).color-2 {
   --chapter-color: #e8c247;
 }
-:is(.chapter-seg, .chapter-link-marker, .chapter-dot, .cal-leg).color-3 {
+:is(.chapter-seg, .chapter-link-marker, .chapter-dot, .cal-leg, .wc-chip-dot, .wc-pop-marker).color-3 {
   --chapter-color: #6dcf4a;
 }
-:is(.chapter-seg, .chapter-link-marker, .chapter-dot, .cal-leg).color-4 {
+:is(.chapter-seg, .chapter-link-marker, .chapter-dot, .cal-leg, .wc-chip-dot, .wc-pop-marker).color-4 {
   --chapter-color: #38c79a;
 }
-:is(.chapter-seg, .chapter-link-marker, .chapter-dot, .cal-leg).color-5 {
+:is(.chapter-seg, .chapter-link-marker, .chapter-dot, .cal-leg, .wc-chip-dot, .wc-pop-marker).color-5 {
   --chapter-color: #2fb3d8;
 }
-:is(.chapter-seg, .chapter-link-marker, .chapter-dot, .cal-leg).color-6 {
+:is(.chapter-seg, .chapter-link-marker, .chapter-dot, .cal-leg, .wc-chip-dot, .wc-pop-marker).color-6 {
   --chapter-color: #4d8ee8;
 }
-:is(.chapter-seg, .chapter-link-marker, .chapter-dot, .cal-leg).color-7 {
+:is(.chapter-seg, .chapter-link-marker, .chapter-dot, .cal-leg, .wc-chip-dot, .wc-pop-marker).color-7 {
   --chapter-color: #d650b0;
 }
 
