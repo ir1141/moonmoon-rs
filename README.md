@@ -81,7 +81,10 @@ Most `/api/*` and `/history/{resume,vods}` routes are rate-limited (2 rps, burst
 ```
 src/
 ├── main.rs              # AppState, Catalog generation, router, background tickers, rate limiters
-├── vods.rs              # Upstream API client, Catalog/Vod/Game models, refresh + change detection
+├── vods/
+│   ├── mod.rs           # Vod/Chapter/YoutubeVideo/VodDuration models, playable filtering, re-exports
+│   ├── catalog.rs       # Upstream API client, load/refresh, CatalogSnapshot change detection
+│   └── games.rs         # Game model, build_games/build_dominant_games, chapter color + date helpers
 ├── middleware.rs        # Per-request CSP nonce generation and header injection
 ├── sync_store.rs        # Token-keyed sync blob store, atomic JSON persistence
 ├── emotes/
