@@ -69,6 +69,10 @@
   gap: 6px;
 }
 
+.part-selector[hidden] {
+  display: none;
+}
+
 .part-btn {
   flex-shrink: 0;
 }

@@ -500,6 +500,13 @@ function switchPart(index, seekTime) {
 }
 
 function buildPartSelector() {
+  // The chapter selector replaces the parts picker when the VOD has chapters to
+  // navigate by; fall back to the Part N buttons only when it doesn't. Part
+  // switching itself still works through seekToGlobal/switchPart either way.
+  if (CHAPTERS.length > 1) {
+    partSelector.hidden = true;
+    return;
+  }
   if (YOUTUBE_IDS.length <= 1) return;
   while (partSelector.firstChild) {
     partSelector.removeChild(partSelector.firstChild);
