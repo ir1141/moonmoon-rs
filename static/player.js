@@ -31,6 +31,13 @@ import { fetchChannelEmotes, lookupEmote } from "./lib/emote-client.js";
 import { RESUME_KEY as STORAGE_KEY, WATCHED_KEY } from "./lib/history-state.js";
 import { markWatchedVod } from "./lib/watched.js";
 import { safeLocalStorage, storageGet, storageSet } from "./lib/storage.js";
+import { nextChapterPopoverOpen } from "./lib/chapter-popover.js";
+import {
+  chapterDurationSecs,
+  currentChapterIdx,
+  formatChapterDuration,
+  parseChapters,
+} from "./lib/watch-chapters.js";
 
 var dataEl = document.getElementById("vod-data");
 if (!dataEl) {
@@ -51,6 +58,8 @@ var YOUTUBE_PARTS = parseYoutubePartsDataset(
 var YOUTUBE_IDS = YOUTUBE_PARTS.map(function (part) {
   return part.id;
 });
+var CHAPTERS = parseChapters(dataEl.dataset.chapters || "");
+var VOD_TOTAL_SECS = parseInt(dataEl.dataset.totalSecs || "0", 10) || 0;
 var MAX_RESUME_ENTRIES = 500;
 var MAX_WATCHED_ENTRIES = 500;
 var PART_DURATIONS_KEY = "moonmoon_part_durations";
@@ -200,6 +209,7 @@ var chatRetry = document.getElementById("chat-retry");
 var chatPaused = document.getElementById("chat-paused");
 var chatTimestampToggle = document.getElementById("chat-timestamp-toggle");
 var partSelector = document.getElementById("part-selector");
+var chapterSelector = document.getElementById("chapter-selector");
 var playerWrap = document.getElementById("player-wrap");
 var playerFallback = document.getElementById("player-fallback");
 var youtubePlayerElement = document.getElementById("youtube-player");
@@ -490,6 +500,13 @@ function switchPart(index, seekTime) {
 }
 
 function buildPartSelector() {
+  // The chapter selector replaces the parts picker when the VOD has chapters to
+  // navigate by; fall back to the Part N buttons only when it doesn't. Part
+  // switching itself still works through seekToGlobal/switchPart either way.
+  if (CHAPTERS.length > 1) {
+    partSelector.hidden = true;
+    return;
+  }
   if (YOUTUBE_IDS.length <= 1) return;
   while (partSelector.firstChild) {
     partSelector.removeChild(partSelector.firstChild);
@@ -519,6 +536,185 @@ function updatePartSelector() {
       buttons[i].classList.remove("active");
     }
   }
+}
+
+// ─── Chapter selector (game chip + "jump to a game" popover) ───
+
+var chapterPopoverOpen = false;
+var currentChapterIndex = -1;
+var chapterChip = null;
+var chapterChipDot = null;
+var chapterChipLabel = null;
+var chapterPopover = null;
+var chapterLinks = [];
+
+function buildChapterCaret() {
+  var ns = "http://www.w3.org/2000/svg";
+  var svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("class", "wc-caret");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2.5");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  var poly = document.createElementNS(ns, "polyline");
+  poly.setAttribute("points", "6 9 12 15 18 9");
+  svg.appendChild(poly);
+  return svg;
+}
+
+// Total stream length, used only for the final chapter's duration label. Prefer
+// the VOD's authoritative duration (the same value the server clamps chapter
+// offsets to); summing YouTube part durations would over-count whenever a part's
+// duration is missing server-side and falls back to the MAX_PART_DURATION
+// placeholder. When the chip renders there is always >1 chapter, which only
+// happens when the server duration is > 0.
+function totalTimelineSecs() {
+  if (VOD_TOTAL_SECS > 0) return VOD_TOTAL_SECS;
+  return CHAPTERS.length ? CHAPTERS[CHAPTERS.length - 1].start : 0;
+}
+
+function setChapterPopoverOpen(open) {
+  if (!chapterChip || !chapterPopover) return;
+  chapterPopoverOpen = open;
+  chapterChip.setAttribute("aria-expanded", open ? "true" : "false");
+  chapterPopover.hidden = !open;
+}
+
+// Recompute the current chapter from the live playhead and reflect it in the chip
+// (label + dot color) and the popover's active row. DOM writes are gated on an
+// index change so this stays cheap at 1 Hz.
+function updateActiveChapter() {
+  if (!chapterChip || CHAPTERS.length <= 1) return;
+  var idx = currentChapterIdx(CHAPTERS, getGlobalTime());
+  if (idx === currentChapterIndex) return;
+  currentChapterIndex = idx;
+  var cur = CHAPTERS[idx];
+  chapterChipLabel.textContent = cur.name;
+  chapterChipDot.className = "wc-chip-dot color-" + cur.color;
+  for (var i = 0; i < chapterLinks.length; i++) {
+    chapterLinks[i].classList.toggle("active", i === idx);
+  }
+}
+
+function buildChapterSelector() {
+  if (!chapterSelector || CHAPTERS.length <= 1) return;
+  var total = totalTimelineSecs();
+
+  var chip = document.createElement("button");
+  chip.type = "button";
+  chip.className = "btn-chip wc-chapters-chip";
+  chip.setAttribute("aria-haspopup", "true");
+  chip.setAttribute("aria-expanded", "false");
+  chip.setAttribute("aria-label", "Jump to a game");
+
+  var dot = document.createElement("span");
+  dot.className = "wc-chip-dot";
+  var label = document.createElement("span");
+  label.className = "wc-chip-label";
+  chip.appendChild(dot);
+  chip.appendChild(label);
+  chip.appendChild(buildChapterCaret());
+
+  var pop = document.createElement("div");
+  pop.className = "wc-pop";
+  pop.setAttribute("role", "menu");
+  pop.hidden = true;
+
+  var head = document.createElement("div");
+  head.className = "wc-pop-head";
+  var headTitle = document.createElement("span");
+  headTitle.textContent = "Jump to a game";
+  var headCount = document.createElement("span");
+  headCount.className = "wc-pop-count";
+  headCount.textContent = CHAPTERS.length + " games";
+  head.appendChild(headTitle);
+  head.appendChild(headCount);
+  pop.appendChild(head);
+
+  chapterLinks = [];
+  for (var i = 0; i < CHAPTERS.length; i++) {
+    var c = CHAPTERS[i];
+    var link = document.createElement("button");
+    link.type = "button";
+    link.className = "wc-pop-link";
+    link.setAttribute("role", "menuitem");
+    link.dataset.index = String(i);
+
+    var marker = document.createElement("span");
+    marker.className = "wc-pop-marker color-" + c.color;
+    marker.setAttribute("aria-hidden", "true");
+
+    var name = document.createElement("span");
+    name.className = "wc-pop-name";
+    name.textContent = c.name;
+
+    var meta = document.createElement("span");
+    meta.className = "wc-pop-meta";
+    var timeEl = document.createElement("span");
+    timeEl.className = "wc-pop-time";
+    timeEl.textContent = formatTime(c.start);
+    var nowEl = document.createElement("span");
+    nowEl.className = "wc-pop-nowtag";
+    nowEl.textContent = "Now";
+    var durEl = document.createElement("span");
+    durEl.className = "wc-pop-dur";
+    durEl.textContent = formatChapterDuration(
+      chapterDurationSecs(CHAPTERS, i, total),
+    );
+    meta.appendChild(timeEl);
+    meta.appendChild(nowEl);
+    meta.appendChild(durEl);
+
+    link.appendChild(marker);
+    link.appendChild(name);
+    link.appendChild(meta);
+    link.addEventListener("click", function () {
+      var button = /** @type {HTMLButtonElement} */ (this);
+      var idx = parseInt(button.dataset.index || "0", 10);
+      seekToGlobal(CHAPTERS[idx].start);
+      setChapterPopoverOpen(false);
+    });
+
+    pop.appendChild(link);
+    chapterLinks.push(link);
+  }
+
+  chip.addEventListener("click", function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    setChapterPopoverOpen(
+      nextChapterPopoverOpen(chapterPopoverOpen, { type: "chip" }),
+    );
+  });
+
+  chapterSelector.appendChild(chip);
+  chapterSelector.appendChild(pop);
+
+  chapterChip = chip;
+  chapterChipDot = dot;
+  chapterChipLabel = label;
+  chapterPopover = pop;
+
+  // Close on outside pointer-down and Escape, mirroring the card popover wiring.
+  document.addEventListener("mousedown", function (e) {
+    if (!chapterPopoverOpen) return;
+    if (e.target instanceof Node && chapterSelector.contains(e.target)) return;
+    setChapterPopoverOpen(
+      nextChapterPopoverOpen(chapterPopoverOpen, { type: "outside" }),
+    );
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape" || !chapterPopoverOpen) return;
+    setChapterPopoverOpen(
+      nextChapterPopoverOpen(chapterPopoverOpen, { type: "escape" }),
+    );
+    chapterChip.focus();
+  });
+
+  updateActiveChapter();
 }
 
 // ─── Part duration cache (localStorage) ───
@@ -1014,6 +1210,9 @@ function resetChat(fromOffset) {
 // ─── Tick (1 second interval) ───
 
 function tick() {
+  // Keep the chapter chip in sync even while paused (e.g. autoplay blocked after
+  // a deep-link seek), so this runs before the PLAYING guard below.
+  updateActiveChapter();
   try {
     var state = player.getPlayerState();
     if (state !== YT.PlayerState.PLAYING) return;
@@ -1172,6 +1371,7 @@ function onPlayerReady() {
   }
 
   buildPartSelector();
+  buildChapterSelector();
 
   // Resolve the initial position. Priority: ?t= deep-link > saved resume > start.
   var urlParams = new URLSearchParams(window.location.search);
