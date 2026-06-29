@@ -1,4 +1,4 @@
-use super::{Vod, canonical_youtube_uploads, filter_playable_vods};
+use super::{Vod, canonical_youtube_uploads, filter_playable_vods, is_playable_vod};
 use serde::Deserialize;
 use std::time::Duration;
 
@@ -60,6 +60,12 @@ pub(crate) struct CatalogSnapshot {
     pub total: usize,
     pub latest_id: Option<String>,
     pub latest_updated_at: Option<String>,
+    /// Whether the newest upstream row is playable. The newest VOD is often
+    /// still live or awaiting upload transcoding when first seen, so it gets
+    /// filtered out of the catalog while `total`/`latest_id`/`latest_updated_at`
+    /// already record it. Without this flag the cheap refresh check would then
+    /// report Unchanged forever and never re-ingest it once it becomes playable.
+    pub latest_playable: bool,
 }
 
 impl CatalogSnapshot {
@@ -70,6 +76,7 @@ impl CatalogSnapshot {
             total: vods.len(),
             latest_id: latest.map(|vod| vod.id.clone()),
             latest_updated_at: latest.and_then(|vod| vod.updated_at.clone()),
+            latest_playable: latest.is_some_and(is_playable_vod),
         }
     }
 
@@ -79,6 +86,7 @@ impl CatalogSnapshot {
             total: resp.meta.total,
             latest_id: latest.map(|vod| vod.id.clone()),
             latest_updated_at: latest.and_then(|vod| vod.updated_at.clone()),
+            latest_playable: latest.is_some_and(is_playable_vod),
         }
     }
 }
@@ -97,6 +105,7 @@ impl CatalogLoad {
                 total: 0,
                 latest_id: None,
                 latest_updated_at: None,
+                latest_playable: false,
             },
         }
     }
@@ -477,11 +486,13 @@ mod tests {
             total: 1,
             latest_id: Some("1430".into()),
             latest_updated_at: Some("2026-05-10T00:00:00.000Z".into()),
+            latest_playable: true,
         };
         let remote = CatalogSnapshot {
             total: 1,
             latest_id: Some("1430".into()),
             latest_updated_at: Some("2026-05-11T00:00:00.000Z".into()),
+            latest_playable: true,
         };
 
         assert_ne!(cached, remote);
@@ -543,10 +554,59 @@ mod tests {
                 total: 2,
                 latest_id: Some("live".into()),
                 latest_updated_at: Some("2026-05-12T02:41:51.672Z".into()),
+                latest_playable: false,
             }
         );
         assert_eq!(catalog.vods.len(), 1);
         assert_eq!(catalog.vods[0].id, "1430");
+    }
+
+    #[test]
+    fn test_snapshot_changes_when_latest_row_becomes_playable() {
+        // The newest VOD while still live and the same VOD once its uploads have
+        // completed share id/total/updated_at — only playability differs. The
+        // snapshot must distinguish them, otherwise the refresh never re-ingests
+        // a head VOD that was filtered out as not-yet-playable.
+        let head = |is_live: bool, uploads: Vec<YoutubeVideo>| ApiResponse {
+            meta: ApiMeta { total: 1 },
+            data: vec![Vod {
+                id: "1465".into(),
+                platform: None,
+                platform_vod_id: None,
+                platform_stream_id: None,
+                title: Some("gamer time".into()),
+                created_at: "2026-06-27T22:20:27.000Z".into(),
+                started_at: None,
+                updated_at: Some("2026-06-28T06:44:01.803Z".into()),
+                duration: None,
+                thumbnail_url: None,
+                chapters: None,
+                youtube: Some(uploads),
+                is_live,
+            }],
+        };
+
+        let pending = CatalogSnapshot::from_api_response(&head(true, vec![]));
+        let ready = CatalogSnapshot::from_api_response(&head(
+            false,
+            vec![YoutubeVideo {
+                row_id: None,
+                id: "XH3oi5Mf1Lo".into(),
+                thumbnail_url: None,
+                part: None,
+                duration: None,
+                status: Some("COMPLETED".into()),
+                upload_type: Some("live".into()),
+                created_at: None,
+            }],
+        ));
+
+        assert_eq!(pending.latest_id, ready.latest_id);
+        assert_eq!(pending.latest_updated_at, ready.latest_updated_at);
+        assert_eq!(pending.total, ready.total);
+        assert!(!pending.latest_playable);
+        assert!(ready.latest_playable);
+        assert_ne!(pending, ready);
     }
 
     #[test]
