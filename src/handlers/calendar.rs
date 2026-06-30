@@ -37,7 +37,7 @@ struct GuideBlock {
     left_pct: f64,
     width_pct: f64,
     range: String,
-    total: String,
+    title: String,
     primary_game: String,
     is_live: bool,
     segments: Vec<GuideSeg>,
@@ -107,14 +107,6 @@ fn day_of_week(year: i32, month: u32, day: u32) -> u32 {
     let t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
     let y = if month < 3 { year - 1 } else { year };
     ((y + y / 4 - y / 100 + y / 400 + t[(month - 1) as usize] + day as i32) % 7) as u32
-}
-
-fn calendar_duration_display(total_minutes: i64) -> String {
-    if total_minutes >= 60 {
-        format!("{}h {}m", total_minutes / 60, total_minutes % 60)
-    } else {
-        format!("{total_minutes}m")
-    }
 }
 
 fn date_query(days: i64) -> String {
@@ -386,6 +378,12 @@ fn build_guide_block(session: &RawSession<'_>, current_local: PacificLocalTime) 
         session.local.seconds_of_day,
     );
     let primary_game = primary_game(&segments);
+    let title = session
+        .vod
+        .title
+        .clone()
+        .filter(|title| !title.trim().is_empty())
+        .unwrap_or_else(|| primary_game.clone());
     let (left_pct, width_pct) =
         block_position(session.local.seconds_of_day, session.duration_seconds);
     let session_end = session.local.seconds_of_day + session.duration_seconds;
@@ -396,7 +394,7 @@ fn build_guide_block(session: &RawSession<'_>, current_local: PacificLocalTime) 
         left_pct,
         width_pct,
         range: format_time_range(session.local.seconds_of_day, session.duration_seconds),
-        total: calendar_duration_display(session.duration_seconds / 60),
+        title,
         primary_game,
         is_live,
         segments,
@@ -648,7 +646,7 @@ mod tests {
         assert!(!monday.is_off);
         assert_eq!(monday.date_label, "May 25");
         assert_eq!(block.range, "1:30 - 7:50 PM");
-        assert_eq!(block.total, "6h 20m");
+        assert_eq!(block.title, "Playable Stream");
         assert_eq!(block.primary_game, "Elden Ring");
         assert_eq!(block.segments[0].watch_url, "/watch/v1?t=0");
         assert_close(block.left_pct, 12.5);
