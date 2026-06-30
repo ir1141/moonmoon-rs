@@ -1,5 +1,6 @@
 import "./lib/emote-cache.js";
 import {
+  computeChatDelay,
   getCachedPartDurations as getCachedPartDurationsPure,
   savePartDuration as savePartDurationPure,
 } from "./lib/part-durations.js";
@@ -60,6 +61,11 @@ var YOUTUBE_IDS = YOUTUBE_PARTS.map(function (part) {
 });
 var CHAPTERS = parseChapters(dataEl.dataset.chapters || "");
 var VOD_TOTAL_SECS = parseInt(dataEl.dataset.totalSecs || "0", 10) || 0;
+// Twitch chat offsets run on the original broadcast clock, but the YouTube
+// re-uploads can be shorter than the broadcast (parts are capped at 3h and the
+// capture can miss content). This constant gap maps player time → chat time so
+// chat stays aligned. Mirrors the upstream site's `delay`.
+var CHAT_DELAY = computeChatDelay(VOD_TOTAL_SECS, YOUTUBE_PARTS);
 var MAX_RESUME_ENTRIES = 500;
 var MAX_WATCHED_ENTRIES = 500;
 var PART_DURATIONS_KEY = "moonmoon_part_durations";
@@ -415,6 +421,12 @@ function getGlobalTime() {
   return cumulative + currentTime;
 }
 
+// Player time mapped onto the Twitch broadcast clock that chat offsets use.
+// Resume/seek stay in player time; only chat fetching and rendering use this.
+function getChatTime() {
+  return getGlobalTime() + CHAT_DELAY;
+}
+
 function seekToGlobal(seconds) {
   var cumulative = 0;
   for (var i = 0; i < YOUTUBE_IDS.length; i++) {
@@ -496,7 +508,7 @@ function switchPart(index, seekTime) {
     cumulative += partDurations[p] || 0;
   }
   var localStart = typeof seekTime === "number" && seekTime > 0 ? seekTime : 0;
-  loadChat(cumulative + localStart);
+  loadChat(cumulative + localStart + CHAT_DELAY);
 }
 
 function buildPartSelector() {
@@ -1017,7 +1029,7 @@ function showReplyPopup(msgDiv) {
 
 function renderChat() {
   if (!player || !player.getCurrentTime) return;
-  var globalTime = getGlobalTime();
+  var globalTime = getChatTime();
   var rendered = false;
 
   while (chatIndex < chatMessages.length) {
@@ -1219,7 +1231,7 @@ function tick() {
   } catch (e) {
     /* ignore */
   }
-  var globalTime = getGlobalTime();
+  var globalTime = getChatTime();
   // Detect seek: time jumped by more than 3 seconds. Also treat the very first
   // tick after PLAYING as a potential seek if globalTime is non-trivial — this
   // catches the autoplay-blocked path where the resume seek happened during
@@ -1414,7 +1426,7 @@ function onPlayerReady() {
   // Load chat from the same offset the player will be at, NOT 0. Otherwise the
   // tick loop pages through every chat message from 0 → initialOffset trying to
   // catch up, which floods the DOM and visibly desyncs from the video.
-  loadChat(initialOffset);
+  loadChat(initialOffset + CHAT_DELAY);
 
   // Start tick
   tickInterval = setInterval(tick, 1000);

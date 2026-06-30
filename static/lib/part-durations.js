@@ -1,3 +1,14 @@
+export function computeChatDelay(totalVodSeconds, parts) {
+  if (!(totalVodSeconds > 0) || !Array.isArray(parts)) return 0;
+  let totalYoutube = 0;
+  for (const part of parts) {
+    if (part && typeof part.duration === "number" && part.duration > 0) {
+      totalYoutube += part.duration;
+    }
+  }
+  return Math.max(0, totalVodSeconds - totalYoutube);
+}
+
 export function getCachedPartDurations(store, vodId, partCount) {
   const entry = store && store[vodId];
   if (!entry || !Array.isArray(entry.durations)) return null;
