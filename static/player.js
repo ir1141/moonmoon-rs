@@ -61,19 +61,19 @@ var YOUTUBE_IDS = YOUTUBE_PARTS.map(function (part) {
 });
 var CHAPTERS = parseChapters(dataEl.dataset.chapters || "");
 var VOD_TOTAL_SECS = parseInt(dataEl.dataset.totalSecs || "0", 10) || 0;
+var MAX_PART_DURATION = 10800; // 3 hours
 // Twitch chat offsets run on the original broadcast clock, but the YouTube
 // re-uploads can be shorter than the broadcast (parts are capped at 3h and the
 // capture can miss content). This constant gap maps player time → chat time so
-// chat stays aligned. Mirrors the upstream site's `delay`.
-var CHAT_DELAY = computeChatDelay(VOD_TOTAL_SECS, YOUTUBE_PARTS);
+// chat stays aligned. Mirrors the upstream site's `delay`. Unknown part
+// durations are estimated at the 3h cap, matching the playback timeline.
+var CHAT_DELAY = computeChatDelay(VOD_TOTAL_SECS, YOUTUBE_PARTS, MAX_PART_DURATION);
 var MAX_RESUME_ENTRIES = 500;
 var MAX_WATCHED_ENTRIES = 500;
 var PART_DURATIONS_KEY = "moonmoon_part_durations";
 var MAX_PART_DURATION_ENTRIES = 500;
 var MAX_CHAT_DOM_NODES = 2000;
 var CHAT_SCROLL_INTENT_MS = 800;
-
-var MAX_PART_DURATION = 10800; // 3 hours
 
 var player = null;
 var currentPart = 0;
@@ -1380,6 +1380,10 @@ function onPlayerReady() {
         partDurations[ci] = cachedDurations[ci];
       }
     }
+    // Real durations refine the player timeline, so recompute the chat delay
+    // against the same array — otherwise getChatTime maps player time onto the
+    // broadcast clock using stale server estimates and chat drifts.
+    CHAT_DELAY = computeChatDelay(VOD_TOTAL_SECS, partDurations, MAX_PART_DURATION);
   }
 
   buildPartSelector();

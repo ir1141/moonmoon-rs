@@ -1,10 +1,21 @@
-export function computeChatDelay(totalVodSeconds, parts) {
+// `parts` accepts either {duration} objects (the raw server payload) or plain
+// numbers (the resolved partDurations array the player walks); both must agree
+// on unknown durations or the chat clock drifts from the video.
+export function computeChatDelay(totalVodSeconds, parts, maxPartDuration) {
   if (!(totalVodSeconds > 0) || !Array.isArray(parts)) return 0;
+  // Estimate unknown part durations at the 3h cap, exactly as the playback
+  // timeline does (see initialPartDurations). If the two disagreed, an unknown
+  // part would count toward player time but not the YouTube total, inflating
+  // the delay and pushing chat ahead of the video.
+  const fallback =
+    typeof maxPartDuration === "number" && maxPartDuration > 0
+      ? maxPartDuration
+      : 0;
   let totalYoutube = 0;
   for (const part of parts) {
-    if (part && typeof part.duration === "number" && part.duration > 0) {
-      totalYoutube += part.duration;
-    }
+    const duration = typeof part === "number" ? part : part && part.duration;
+    totalYoutube +=
+      typeof duration === "number" && duration > 0 ? duration : fallback;
   }
   return Math.max(0, totalVodSeconds - totalYoutube);
 }
