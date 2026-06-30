@@ -186,6 +186,50 @@ pub fn parse_seventv_search(json: &serde_json::Value, name: &str) -> Option<Emot
     None
 }
 
+/// Parse the archive's per-VOD emote snapshot (the `data` object from
+/// `/vods/{id}/emotes`). Entries are minimal `{id, code}` (7TV also carries
+/// `flags`/`width`/`height`, which we ignore). URLs are built directly from the
+/// id per provider; the snapshot carries no owner, so `owner` is always None.
+/// 7TV is absorbed first, so it wins any cross-provider name collision.
+#[allow(dead_code)]
+pub fn parse_vod_emote_snapshot(data: &serde_json::Value) -> HashMap<String, EmoteRecord> {
+    let mut out = HashMap::new();
+    absorb_snapshot(&mut out, data.get("seventv_emotes"), EmoteProvider::SevenTv);
+    absorb_snapshot(&mut out, data.get("bttv_emotes"), EmoteProvider::Bttv);
+    absorb_snapshot(&mut out, data.get("ffz_emotes"), EmoteProvider::Ffz);
+    out
+}
+
+fn absorb_snapshot(
+    out: &mut HashMap<String, EmoteRecord>,
+    arr: Option<&serde_json::Value>,
+    provider: EmoteProvider,
+) {
+    let Some(items) = arr.and_then(|v| v.as_array()) else {
+        return;
+    };
+    for item in items {
+        let id = item.get("id").and_then(|v| v.as_str());
+        let name = item
+            .get("code")
+            .or_else(|| item.get("name"))
+            .and_then(|v| v.as_str());
+        let (Some(id), Some(name)) = (id, name) else {
+            continue;
+        };
+        let url = match provider {
+            EmoteProvider::SevenTv => format!("https://cdn.7tv.app/emote/{id}/1x.webp"),
+            EmoteProvider::Bttv => format!("https://cdn.betterttv.net/emote/{id}/1x"),
+            EmoteProvider::Ffz => format!("https://cdn.frankerfacez.com/emote/{id}/1"),
+        };
+        out.entry(name.to_string()).or_insert(EmoteRecord {
+            url,
+            provider,
+            owner: None,
+        });
+    }
+}
+
 /// Parse BTTV's `/3/emotes/shared/search?query=...` response (top-level JSON array).
 pub fn parse_bttv_search(json: &serde_json::Value, name: &str) -> Option<EmoteRecord> {
     let items = json.as_array()?;
@@ -406,5 +450,46 @@ mod tests {
         )
         .unwrap();
         assert!(parse_ffz_search(&json, "ZreknarF").is_none());
+    }
+
+    #[test]
+    fn vod_snapshot_parses_each_provider_with_direct_cdn_urls() {
+        let json = load_fixture("tests/fixtures/emotes/vod_snapshot.json");
+        let map = parse_vod_emote_snapshot(&json["data"]);
+
+        let frog = map.get("FROG4").expect("FROG4 present");
+        assert_eq!(frog.provider, EmoteProvider::SevenTv);
+        assert_eq!(
+            frog.url,
+            "https://cdn.7tv.app/emote/01KG6N0PJSDP7GPCB542CCB979/1x.webp"
+        );
+        assert_eq!(frog.owner, None);
+
+        let soulful = map.get("SOULFUL").expect("SOULFUL present");
+        assert_eq!(soulful.provider, EmoteProvider::Bttv);
+        assert_eq!(
+            soulful.url,
+            "https://cdn.betterttv.net/emote/566ca04265dbbdab32ec054a/1x"
+        );
+    }
+
+    #[test]
+    fn vod_snapshot_7tv_wins_name_collision() {
+        let json = load_fixture("tests/fixtures/emotes/vod_snapshot.json");
+        let map = parse_vod_emote_snapshot(&json["data"]);
+        assert_eq!(map.get(":tf:").unwrap().provider, EmoteProvider::SevenTv);
+    }
+
+    #[test]
+    fn vod_snapshot_skips_entries_missing_id_or_name() {
+        let json = load_fixture("tests/fixtures/emotes/vod_snapshot.json");
+        let map = parse_vod_emote_snapshot(&json["data"]);
+        assert!(!map.values().any(|r| r.url.contains("missingname7tv")));
+    }
+
+    #[test]
+    fn vod_snapshot_handles_missing_arrays() {
+        let empty: serde_json::Value = serde_json::from_str("{}").unwrap();
+        assert!(parse_vod_emote_snapshot(&empty).is_empty());
     }
 }

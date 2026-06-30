@@ -1,0 +1,17 @@
+{
+  "success": true,
+  "data": {
+    "vodId": 1414,
+    "ffz_emotes": [],
+    "bttv_emotes": [
+      { "id": "54fa8f1401e468494b85b537", "code": ":tf:" },
+      { "id": "566ca04265dbbdab32ec054a", "code": "SOULFUL" }
+    ],
+    "seventv_emotes": [
+      { "id": "01F6WPPJMR00079YM5Q59EWYQW", "code": "BorpaBeLickinDaBUSSERS", "flags": 0 },
+      { "id": "01KG6N0PJSDP7GPCB542CCB979", "code": "FROG4", "flags": 0, "width": 96, "height": 32 },
+      { "id": "01F6WPPJMR00079YM5Q59EWYQW", "code": ":tf:", "flags": 0 },
+      { "id": "missingname7tv", "flags": 0 }
+    ]
+  }
+}
