@@ -3,6 +3,7 @@ use crate::emotes::parse;
 use crate::emotes::{Lookup, ResolvedEntry};
 use axum::extract::{Path, State};
 use axum::response::IntoResponse;
+use axum::response::Response;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -88,6 +89,77 @@ fn valid_emote_name(name: &str) -> bool {
         return false;
     }
     name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+// Mirrors chat_proxy's vod_id charset gate. The endpoint is public, so we
+// validate independently of the client.
+fn valid_vod_id(id: &str) -> bool {
+    !id.is_empty()
+        && id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+}
+
+/// Proxy the archive's per-VOD emote snapshot, returning the same `{emotes}`
+/// map shape as `channel_emotes`. Unknown ids, upstream 404s (old VODs predate
+/// snapshot capture, roughly id < 310), and transport errors all return an
+/// empty map so the client falls back cleanly to prefetch + live search.
+pub async fn vod_emotes(State(state): State<SharedState>, Path(vod_id): Path<String>) -> Response {
+    use axum::http::StatusCode;
+
+    if !valid_vod_id(&vod_id) {
+        return (
+            StatusCode::BAD_REQUEST,
+            [("content-type", "application/json")],
+            r#"{"error":"invalid vod_id"}"#,
+        )
+            .into_response();
+    }
+
+    let canonical = {
+        let catalog = state.catalog.read().await;
+        super::find_vod_by_id(&catalog.vods, &vod_id).map(|v| v.id.clone())
+    };
+    let empty = || {
+        (
+            StatusCode::OK,
+            [
+                ("content-type", "application/json"),
+                ("cache-control", "public, max-age=300"),
+            ],
+            r#"{"emotes":{}}"#.to_string(),
+        )
+            .into_response()
+    };
+    let Some(canonical) = canonical else {
+        return empty();
+    };
+
+    let url = format!("https://archive.overpowered.tv/api/v1/moonmoon/vods/{canonical}/emotes");
+    let map = match state.http_client.get(&url).send().await {
+        Ok(resp) => match resp.json::<serde_json::Value>().await {
+            Ok(json) if json.get("success").and_then(|v| v.as_bool()) == Some(true) => json
+                .get("data")
+                .map(parse::parse_vod_emote_snapshot)
+                .unwrap_or_default(),
+            _ => Default::default(),
+        },
+        Err(e) => {
+            tracing::warn!("vod emote snapshot fetch failed for {canonical}: {e}");
+            Default::default()
+        }
+    };
+
+    let body = serde_json::json!({ "emotes": map }).to_string();
+    (
+        StatusCode::OK,
+        [
+            ("content-type", "application/json"),
+            ("cache-control", "public, max-age=300"),
+        ],
+        body,
+    )
+        .into_response()
 }
 
 enum SearchOutcome {

@@ -204,6 +204,7 @@ async fn main() {
     let emote_routes = Router::new()
         .route("/api/emotes/channel", get(handlers::channel_emotes))
         .route("/api/emotes/lookup/{name}", get(handlers::lookup_emote))
+        .route("/api/emotes/vod/{vod_id}", get(handlers::vod_emotes))
         .layer(GovernorLayer::new(emote_governor));
 
     let app = Router::new()

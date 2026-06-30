@@ -191,7 +191,6 @@ pub fn parse_seventv_search(json: &serde_json::Value, name: &str) -> Option<Emot
 /// `flags`/`width`/`height`, which we ignore). URLs are built directly from the
 /// id per provider; the snapshot carries no owner, so `owner` is always None.
 /// 7TV is absorbed first, so it wins any cross-provider name collision.
-#[allow(dead_code)]
 pub fn parse_vod_emote_snapshot(data: &serde_json::Value) -> HashMap<String, EmoteRecord> {
     let mut out = HashMap::new();
     absorb_snapshot(&mut out, data.get("seventv_emotes"), EmoteProvider::SevenTv);
