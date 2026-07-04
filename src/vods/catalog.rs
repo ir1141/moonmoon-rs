@@ -1,5 +1,6 @@
 use super::{Vod, canonical_youtube_uploads, filter_playable_vods};
 use serde::Deserialize;
+use std::future::Future;
 use std::time::Duration;
 
 #[must_use]
@@ -240,6 +241,40 @@ pub(crate) async fn fetch_catalog_load(
     Ok(catalog)
 }
 
+/// The catalog's error currency: a `reqwest::Error` in production, or whatever
+/// a test fake needs to raise. It is only ever surfaced as a `String`.
+type SourceError = Box<dyn std::error::Error + Send + Sync>;
+
+/// A source of catalog data: the cheap snapshot poll and the full paged load.
+/// [`HttpArchive`] serves it from the live archive; a test fake serves it from
+/// memory, so [`plan_refresh`] can be driven without touching the network. The
+/// futures are `Send` because refresh runs inside `tokio::spawn`.
+trait VodSource {
+    fn snapshot(&self) -> impl Future<Output = Result<CatalogSnapshot, SourceError>> + Send;
+    fn load(&self) -> impl Future<Output = Result<CatalogLoad, SourceError>> + Send;
+}
+
+/// The sole production adapter: every catalog network access goes through here.
+struct HttpArchive<'a> {
+    client: &'a reqwest::Client,
+}
+
+impl<'a> HttpArchive<'a> {
+    fn new(client: &'a reqwest::Client) -> Self {
+        Self { client }
+    }
+}
+
+impl VodSource for HttpArchive<'_> {
+    async fn snapshot(&self) -> Result<CatalogSnapshot, SourceError> {
+        Ok(fetch_catalog_snapshot(self.client).await?)
+    }
+
+    async fn load(&self) -> Result<CatalogLoad, SourceError> {
+        Ok(fetch_catalog_load(self.client).await?)
+    }
+}
+
 /// Upstream doesn't expose `thumbnail_url` at the VOD level — only on each
 /// `vod_uploads` entry. Lift it from the first upload so templates and
 /// `VodDisplay` can keep reading `vod.thumbnail_url` directly.
@@ -258,12 +293,48 @@ fn backfill_thumbnails(vods: &mut [Vod]) {
 }
 
 pub async fn load_catalog(client: &reqwest::Client) -> CatalogLoad {
-    match fetch_catalog_load(client).await {
+    match HttpArchive::new(client).load().await {
         Ok(catalog) => catalog,
         Err(e) => {
             tracing::error!("failed to fetch vods: {e}");
             tracing::error!("starting with 0 vods — site will be empty until next refresh");
             CatalogLoad::empty()
+        }
+    }
+}
+
+/// The refresh decision, isolated from the lock and the catalog swap so it can
+/// be driven end-to-end against a fake source. Poll the cheap snapshot; if it
+/// matches the cached one nothing moved, otherwise fetch the full catalog. The
+/// `latest_playable` field means a head VOD that was filtered out as not-yet-
+/// playable still flips the snapshot and re-ingests once it is ready.
+#[derive(Debug)]
+enum RefreshPlan {
+    Unchanged,
+    Refresh(CatalogLoad),
+    Failed(String),
+}
+
+async fn plan_refresh(cached: &CatalogSnapshot, source: &impl VodSource) -> RefreshPlan {
+    let remote = match source.snapshot().await {
+        Ok(snapshot) => snapshot,
+        Err(e) => {
+            tracing::error!("refresh: failed to check catalog snapshot: {e}");
+            return RefreshPlan::Failed(format!("failed to check catalog snapshot: {e}"));
+        }
+    };
+
+    if remote == *cached {
+        tracing::info!("refresh: catalog unchanged ({cached:?})");
+        return RefreshPlan::Unchanged;
+    }
+
+    tracing::info!("refresh: catalog changed ({cached:?} -> {remote:?}), fetching...");
+    match source.load().await {
+        Ok(catalog) => RefreshPlan::Refresh(catalog),
+        Err(e) => {
+            tracing::error!("refresh: failed to fetch vods: {e}");
+            RefreshPlan::Failed(format!("failed to fetch vods: {e}"))
         }
     }
 }
@@ -279,37 +350,20 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
 
     let cached_snapshot = state.catalog.read().await.snapshot.clone();
 
-    let remote_snapshot = match fetch_catalog_snapshot(&state.http_client).await {
-        Ok(snapshot) => snapshot,
-        Err(e) => {
-            tracing::error!("refresh: failed to check catalog snapshot: {e}");
-            return RefreshOutcome::Error(format!("failed to check catalog snapshot: {e}"));
+    match plan_refresh(&cached_snapshot, &HttpArchive::new(&state.http_client)).await {
+        RefreshPlan::Unchanged => {
+            let count = state.catalog.read().await.vods.len();
+            RefreshOutcome::Unchanged(count)
         }
-    };
-
-    if remote_snapshot == cached_snapshot {
-        tracing::info!("refresh: catalog unchanged ({cached_snapshot:?})");
-        let count = state.catalog.read().await.vods.len();
-        return RefreshOutcome::Unchanged(count);
+        RefreshPlan::Refresh(catalog) => {
+            let new_catalog = std::sync::Arc::new(crate::Catalog::build(catalog));
+            let count = new_catalog.vods.len();
+            *state.catalog.write().await = new_catalog;
+            tracing::info!("refresh: complete ({count} vods)");
+            RefreshOutcome::Refreshed(count)
+        }
+        RefreshPlan::Failed(msg) => RefreshOutcome::Error(msg),
     }
-
-    tracing::info!(
-        "refresh: catalog changed ({cached_snapshot:?} -> {remote_snapshot:?}), fetching..."
-    );
-    let catalog = match fetch_catalog_load(&state.http_client).await {
-        Ok(catalog) => catalog,
-        Err(e) => {
-            tracing::error!("refresh: failed to fetch vods: {e}");
-            return RefreshOutcome::Error(format!("failed to fetch vods: {e}"));
-        }
-    };
-
-    let new_catalog = std::sync::Arc::new(crate::Catalog::build(catalog));
-    let count = new_catalog.vods.len();
-    *state.catalog.write().await = new_catalog;
-
-    tracing::info!("refresh: complete ({count} vods)");
-    RefreshOutcome::Refreshed(count)
 }
 
 #[cfg(test)]
@@ -613,5 +667,101 @@ mod tests {
     fn test_next_refresh_delay_retries_fast_when_empty() {
         assert_eq!(next_refresh_delay(0), EMPTY_RETRY_INTERVAL);
         assert_eq!(next_refresh_delay(1500), REFRESH_INTERVAL);
+    }
+
+    /// An in-memory [`VodSource`]: canned snapshot and load, either of which can
+    /// be an error the live archive could never mint. Drives the whole refresh
+    /// decision tree without a network.
+    struct FakeArchive {
+        snapshot: Result<CatalogSnapshot, String>,
+        load: Result<CatalogLoad, String>,
+    }
+
+    impl VodSource for FakeArchive {
+        async fn snapshot(&self) -> Result<CatalogSnapshot, SourceError> {
+            self.snapshot.clone().map_err(Into::into)
+        }
+        async fn load(&self) -> Result<CatalogLoad, SourceError> {
+            self.load.clone().map_err(Into::into)
+        }
+    }
+
+    fn make_snapshot(total: usize, latest_id: &str, latest_playable: bool) -> CatalogSnapshot {
+        CatalogSnapshot {
+            total,
+            latest_id: Some(latest_id.into()),
+            latest_updated_at: Some("2026-05-10T00:00:00.000Z".into()),
+            latest_playable,
+        }
+    }
+
+    #[tokio::test]
+    async fn plan_refresh_reports_unchanged_when_snapshot_matches() {
+        let cached = make_snapshot(10, "1430", true);
+        let source = FakeArchive {
+            snapshot: Ok(cached.clone()),
+            load: Err("load must not be called when unchanged".into()),
+        };
+        assert!(matches!(
+            plan_refresh(&cached, &source).await,
+            RefreshPlan::Unchanged
+        ));
+    }
+
+    #[tokio::test]
+    async fn plan_refresh_fetches_when_snapshot_moves() {
+        let cached = make_snapshot(10, "1430", true);
+        let source = FakeArchive {
+            snapshot: Ok(make_snapshot(11, "1500", true)),
+            load: Ok(CatalogLoad::empty()),
+        };
+        assert!(matches!(
+            plan_refresh(&cached, &source).await,
+            RefreshPlan::Refresh(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn plan_refresh_reingests_when_only_latest_playable_flips() {
+        // Same id/total/updated_at as the cached head VOD — only playability
+        // differs. This is the not-yet-playable head that must re-ingest once
+        // its uploads complete, and it had no coverage before the seam.
+        let cached = make_snapshot(10, "1465", false);
+        let source = FakeArchive {
+            snapshot: Ok(make_snapshot(10, "1465", true)),
+            load: Ok(CatalogLoad::empty()),
+        };
+        assert!(matches!(
+            plan_refresh(&cached, &source).await,
+            RefreshPlan::Refresh(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn plan_refresh_fails_when_snapshot_poll_errors() {
+        let cached = make_snapshot(10, "1430", true);
+        let source = FakeArchive {
+            snapshot: Err("upstream 503".into()),
+            load: Err("load must not be called after a poll failure".into()),
+        };
+        match plan_refresh(&cached, &source).await {
+            RefreshPlan::Failed(msg) => {
+                assert!(msg.contains("failed to check catalog snapshot"), "{msg}")
+            }
+            other => panic!("expected Failed, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn plan_refresh_fails_when_load_errors() {
+        let cached = make_snapshot(10, "1430", true);
+        let source = FakeArchive {
+            snapshot: Ok(make_snapshot(11, "1500", true)),
+            load: Err("connection reset mid-page".into()),
+        };
+        match plan_refresh(&cached, &source).await {
+            RefreshPlan::Failed(msg) => assert!(msg.contains("failed to fetch vods"), "{msg}"),
+            other => panic!("expected Failed, got {other:?}"),
+        }
     }
 }
