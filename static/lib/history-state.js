@@ -285,19 +285,15 @@ export function buildHistoryEntries(store) {
     );
 }
 
-export function serializeHistoryRequest(entries, sort = "recent") {
-  const params = new URLSearchParams({
-    ids: entries.map((entry) => entry.id).join(","),
-    times: entries
-      .map((entry) =>
-        entry.state === "in_progress" && Number.isFinite(entry.time)
-          ? String(Math.floor(entry.time))
-          : "",
-      )
-      .join(","),
-    states: entries.map((entry) => entry.state).join(","),
+// Wire contract with the server render path (POST /history/vods). The same
+// shape is pinned on both sides by tests/fixtures/history-request.json.
+export function buildHistoryRequest(entries, sort = "recent") {
+  return {
+    entries: entries.map((entry) =>
+      entry.state === "in_progress" && Number.isFinite(entry.time)
+        ? { id: entry.id, state: entry.state, time: Math.floor(entry.time) }
+        : { id: entry.id, state: entry.state },
+    ),
     sort: sort === "game" ? "game" : "recent",
-  });
-
-  return params;
+  };
 }

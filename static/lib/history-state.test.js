@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import wireFixture from "../../tests/fixtures/history-request.json";
 import {
   HISTORY_KEY,
   LEGACY_RESUME_KEY,
   LEGACY_WATCHED_KEY,
   MAX_HISTORY_ENTRIES,
   buildHistoryEntries,
+  buildHistoryRequest,
   historyFromBlob,
   loadHistoryStore,
   markWatched,
@@ -14,7 +16,6 @@ import {
   readJsonStore,
   resumePercent,
   saveResumePosition,
-  serializeHistoryRequest,
 } from "./history-state.js";
 
 describe("readJsonStore", () => {
@@ -295,16 +296,14 @@ describe("buildHistoryEntries", () => {
     expect(entries.map((entry) => entry.id)).toEqual(["a", "b"]);
   });
 
-  test("history request serializes ids times and states in the same order", () => {
+  test("the request body matches the cross-language wire fixture", () => {
     const entries = [
       { id: "recent", state: "watched", updated: 500 },
-      { id: "resume", state: "in_progress", time: 42, updated: 400 },
+      { id: "resume", state: "in_progress", time: 42.9, updated: 400 },
     ];
 
-    expect(serializeHistoryRequest(entries, "recent").toString()).toBe(
-      "ids=recent%2Cresume&times=%2C42&states=watched%2Cin_progress&sort=recent",
-    );
-
-    expect(serializeHistoryRequest(entries, "game").get("sort")).toBe("game");
+    expect(buildHistoryRequest(entries, "recent")).toEqual(wireFixture);
+    expect(buildHistoryRequest(entries, "game").sort).toBe("game");
+    expect(buildHistoryRequest(entries, "junk").sort).toBe("recent");
   });
 });

@@ -1,7 +1,7 @@
 import {
   buildHistoryEntries,
+  buildHistoryRequest,
   loadHistoryStore,
-  serializeHistoryRequest,
 } from "./lib/history-state.js";
 import { readHistorySort, writeHistorySort } from "./lib/history-sort.js";
 import { safeLocalStorage } from "./lib/storage.js";
@@ -60,9 +60,12 @@ function initHistoryPage() {
 
   function load() {
     const generation = ++loadGeneration;
-    const params = serializeHistoryRequest(entries, sortInput.value);
 
-    fetch(`/history/vods?${params.toString()}`)
+    fetch("/history/vods", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildHistoryRequest(entries, sortInput.value)),
+    })
       .then((response) => {
         if (!response.ok)
           throw new Error(`history fetch failed: HTTP ${response.status}`);

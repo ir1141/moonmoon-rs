@@ -198,7 +198,7 @@ async fn main() {
         )
         .route("/api/refresh", post(handlers::refresh_catalog))
         .route("/history/resume", get(handlers::continue_resume))
-        .route("/history/vods", get(handlers::history_vods_grid))
+        .route("/history/vods", post(handlers::history_vods_grid))
         .layer(GovernorLayer::new(api_governor));
 
     let emote_routes = Router::new()
