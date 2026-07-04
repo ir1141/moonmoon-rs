@@ -239,12 +239,8 @@ pub fn upscale_chapter_image(url: &str) -> String {
         .replace("40x53", "285x380")
 }
 
-pub fn is_playable_vod(vod: &Vod) -> bool {
-    !vod.is_live && !canonical_youtube_uploads(vod).is_empty()
-}
-
 pub fn filter_playable_vods(vods: &mut Vec<Vod>) {
-    vods.retain(is_playable_vod);
+    vods.retain(|vod| vod.is_playable());
 }
 
 pub fn canonical_youtube_uploads(vod: &Vod) -> Vec<YoutubeVideo> {
@@ -550,7 +546,7 @@ mod tests {
             .collect();
 
         assert_eq!(ids, vec!["processing-live", "processing-vod"]);
-        assert!(is_playable_vod(&vod));
+        assert!(vod.is_playable());
     }
 
     #[test]
@@ -558,7 +554,7 @@ mod tests {
         let vod = vod_with_uploads(vec![]);
 
         assert!(canonical_youtube_uploads(&vod).is_empty());
-        assert!(!is_playable_vod(&vod));
+        assert!(!vod.is_playable());
     }
 
     #[test]
@@ -618,7 +614,7 @@ mod tests {
             is_live: true,
         };
 
-        assert!(!is_playable_vod(&vod));
+        assert!(!vod.is_playable());
     }
 
     #[test]
@@ -648,7 +644,7 @@ mod tests {
             is_live: false,
         };
 
-        assert!(is_playable_vod(&vod));
+        assert!(vod.is_playable());
     }
 
     #[test]
