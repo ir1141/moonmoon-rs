@@ -100,9 +100,8 @@ struct HistoryRequestedVod {
     state: HistoryEntryState,
 }
 
-/// Clients legitimately send at most MAX_RESUME_ENTRIES + MAX_WATCHED_ENTRIES
-/// (500 + 500 — see static/player.js) ids; anything beyond that is garbage
-/// or abuse.
+/// Clients legitimately send at most MAX_HISTORY_ENTRIES (1000 — see
+/// static/lib/history-state.js) ids; anything beyond that is garbage or abuse.
 const MAX_HISTORY_IDS: usize = 1000;
 
 fn parse_history_requests(

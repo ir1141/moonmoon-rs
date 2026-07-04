@@ -1,8 +1,6 @@
 import {
-  RESUME_KEY,
-  WATCHED_KEY,
   buildHistoryEntries,
-  readJsonStore,
+  loadHistoryStore,
   serializeHistoryRequest,
 } from "./lib/history-state.js";
 import { readHistorySort, writeHistorySort } from "./lib/history-sort.js";
@@ -45,10 +43,7 @@ function initHistoryPage() {
 
   applySortToControl(readHistorySort());
 
-  const entries = buildHistoryEntries(
-    readJsonStore(storage, RESUME_KEY),
-    readJsonStore(storage, WATCHED_KEY),
-  );
+  const entries = buildHistoryEntries(loadHistoryStore(storage));
 
   if (entries.length === 0) {
     stats.textContent = "No watch history";

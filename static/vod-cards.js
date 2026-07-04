@@ -1,7 +1,10 @@
 import { nextChapterPopoverOpen } from "./lib/chapter-popover.js";
-import { resumePercent } from "./lib/continue-watching.js";
-import { RESUME_KEY, WATCHED_KEY, readJsonStore } from "./lib/history-state.js";
-import { hasWatchedVod } from "./lib/watched.js";
+import {
+  HISTORY_KEY,
+  RESUME_MIN_SECONDS,
+  loadHistoryStore,
+  resumePercent,
+} from "./lib/history-state.js";
 import { safeLocalStorage } from "./lib/storage.js";
 
 // Resolved through a guard: bare `localStorage` access throws in
@@ -23,16 +26,19 @@ function buildWatchedBadge() {
   return badge;
 }
 
-function applyResumeState(card, resumeStore) {
+// Server-rendered history pages stamp data-history-state/-progress-seconds on
+// the card; those win. Cards without them (browse, home) are decorated from
+// the local store.
+function applyResumeState(card, store) {
   const id = card.dataset.vodId;
   const duration = Number(card.dataset.durationSecs);
-  const resume = resumeStore[id];
+  const entry = store[id];
   const fill = card.querySelector(".resume-bar-fill");
   const historyState = card.dataset.historyState;
   const time =
     historyState === "in_progress"
       ? Number(card.dataset.progressSeconds)
-      : Number(resume && resume.time);
+      : Number(entry && entry.state === "in_progress" && entry.time);
 
   if (historyState === "watched") {
     card.classList.remove("has-resume");
@@ -42,7 +48,7 @@ function applyResumeState(card, resumeStore) {
 
   if (
     Number.isFinite(time) &&
-    time > 10 &&
+    time > RESUME_MIN_SECONDS &&
     Number.isFinite(duration) &&
     duration > 0
   ) {
@@ -56,14 +62,15 @@ function applyResumeState(card, resumeStore) {
   if (fill) fill.style.width = "0%";
 }
 
-function applyWatchedState(card, watchedStore) {
+function applyWatchedState(card, store) {
   const historyState = card.dataset.historyState;
+  const entry = store[card.dataset.vodId];
   const watched =
     historyState === "watched"
       ? true
       : historyState === "in_progress"
         ? false
-        : hasWatchedVod(watchedStore, card.dataset.vodId);
+        : !!(entry && entry.state === "watched");
   const existingBadge = card.querySelector(".watched-badge");
 
   card.classList.toggle("watched", watched);
@@ -132,16 +139,15 @@ function initChapterPopovers(root = document) {
  * @param {Document | Element} [root]
  */
 export function applyVodCardState(root = document) {
-  const resumeStore = readJsonStore(storage, RESUME_KEY);
-  const watchedStore = readJsonStore(storage, WATCHED_KEY);
+  const store = loadHistoryStore(storage);
   const cards =
     root instanceof Element && root.matches(".vod-card[data-vod-id]")
       ? [root]
       : root.querySelectorAll(".vod-card[data-vod-id]");
 
   cards.forEach((card) => {
-    applyResumeState(card, resumeStore);
-    applyWatchedState(card, watchedStore);
+    applyResumeState(card, store);
+    applyWatchedState(card, store);
   });
 }
 
@@ -163,11 +169,9 @@ applyVodCardState();
 initChapterPopovers();
 
 document.body.addEventListener("htmx:afterSwap", applyFromEvent);
-window.addEventListener("moonmoon:resumeChanged", () => applyVodCardState());
-window.addEventListener("moonmoon:watchedChanged", () => applyVodCardState());
+window.addEventListener("moonmoon:historyChanged", () => applyVodCardState());
 window.addEventListener("storage", (event) => {
-  if (event.key === RESUME_KEY || event.key === WATCHED_KEY)
-    applyVodCardState();
+  if (event.key === HISTORY_KEY) applyVodCardState();
 });
 
 document.addEventListener("click", (event) => {
