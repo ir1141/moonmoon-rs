@@ -257,6 +257,38 @@ impl VodDisplay {
             watch_url,
         }
     }
+
+    /// In-progress history card: `progress_seconds` and the label's `· {time}`
+    /// suffix are present together exactly when `resume_time` is `Some`.
+    /// `link_start` is the already-resolved watch-url start; the
+    /// resume-vs-chapter choice belongs to the caller.
+    pub(crate) fn in_progress(
+        vod: &Vod,
+        link_start: Option<i64>,
+        resume_time: Option<i64>,
+        game_name_hint: Option<&str>,
+    ) -> Self {
+        let mut display = Self::from_vod_with(vod, link_start, game_name_hint);
+        display.status_label = Some(match resume_time {
+            Some(time) => format!("In progress · {}", format_chapter_start(time)),
+            None => "In progress".to_string(),
+        });
+        display.progress_seconds = resume_time;
+        display.history_state = Some("in_progress");
+        display
+    }
+
+    /// Watched history card.
+    pub(crate) fn watched(
+        vod: &Vod,
+        chapter_start: Option<i64>,
+        game_name_hint: Option<&str>,
+    ) -> Self {
+        let mut display = Self::from_vod_with(vod, chapter_start, game_name_hint);
+        display.status_label = Some("Watched".to_string());
+        display.history_state = Some("watched");
+        display
+    }
 }
 
 pub(crate) fn build_watch_url(
