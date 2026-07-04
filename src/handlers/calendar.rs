@@ -1,6 +1,6 @@
 use super::{
     Section, build_watch_url, days_to_civil, get_chapter_segments, parse_ymd_to_days,
-    render_template, vod_stream_time,
+    render_template,
 };
 use crate::SharedState;
 use crate::middleware::CspNonce;
@@ -286,7 +286,7 @@ fn fallback_segment(vod: &Vod, start_of_day_seconds: i64, duration_seconds: i64)
 }
 
 fn guide_segments(vod: &Vod, duration_seconds: i64, start_of_day_seconds: i64) -> Vec<GuideSeg> {
-    let segments = get_chapter_segments(vod, duration_seconds);
+    let segments = get_chapter_segments(vod);
     if segments.is_empty() {
         return vec![fallback_segment(
             vod,
@@ -409,7 +409,7 @@ fn build_time_guide(
     let mut sessions_by_day: Vec<Vec<RawSession<'_>>> = (0..7).map(|_| Vec::new()).collect();
 
     for vod in vods {
-        let Some(local) = pacific_local_from_timestamp(vod_stream_time(vod)) else {
+        let Some(local) = pacific_local_from_timestamp(vod.stream_time()) else {
             continue;
         };
         let duration_seconds = vod

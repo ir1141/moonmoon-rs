@@ -1,7 +1,7 @@
 use super::{
     Headers, Listing, Pagination, Section, SortOption, VodDisplay, VodsGridTemplate,
     build_watch_url, find_vod_by_id, format_chapter_start, list_sort_options_grouped,
-    render_template, resolve_watched_chapter, vod_stream_time,
+    render_template, resolve_watched_chapter,
 };
 use crate::SharedState;
 use crate::middleware::CspNonce;
@@ -195,7 +195,7 @@ fn build_history_displays(
             let ak = a.game_key.as_deref().unwrap_or("").to_lowercase();
             let bk = b.game_key.as_deref().unwrap_or("").to_lowercase();
             ak.cmp(&bk)
-                .then_with(|| vod_stream_time(b.vod).cmp(vod_stream_time(a.vod)))
+                .then_with(|| b.vod.stream_time().cmp(a.vod.stream_time()))
         });
     }
 

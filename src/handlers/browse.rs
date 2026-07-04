@@ -1,9 +1,8 @@
 use super::{
     GAME_BATCH_SIZE, GamesGridTemplate, Headers, ListFilterConfig, ListMetadata, ListQuery,
     Listing, Pagination, Section, VOD_BATCH_SIZE, VodDisplay, VodsGridTemplate, date_preset_state,
-    filter_games_with_metadata, filter_vods_with_metadata, get_chapter_start,
-    list_sort_options_grouped, paginate_with_nav, render_template, selected_sort_option,
-    vod_has_game,
+    filter_games_with_metadata, filter_vods_with_metadata, list_sort_options_grouped,
+    paginate_with_nav, render_template, selected_sort_option,
 };
 use crate::SharedState;
 use crate::middleware::CspNonce;
@@ -144,7 +143,7 @@ async fn prepare_browse(
         Lens::Streams => {
             let (refs, metadata) = match game {
                 Some(name) => filter_vods_with_metadata(
-                    vods.iter().filter(|v| vod_has_game(v, name)),
+                    vods.iter().filter(|v| v.has_game(name)),
                     params,
                     sort,
                     "/browse?lens=streams",
@@ -177,7 +176,7 @@ async fn prepare_browse(
                     let mut display = match game {
                         Some(name) => VodDisplay::from_vod_with(
                             r.vod,
-                            get_chapter_start(r.vod, name),
+                            r.vod.chapter_start_for(name),
                             Some(name),
                         ),
                         None => VodDisplay::from_vod(r.vod),

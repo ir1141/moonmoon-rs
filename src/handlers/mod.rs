@@ -57,10 +57,6 @@ pub(crate) fn find_vod_by_id<'a>(vods: &'a [Vod], requested_id: &str) -> Option<
     vods.iter().find(|vod| vod_matches_id(vod, requested_id))
 }
 
-pub(crate) fn vod_stream_time(vod: &Vod) -> &str {
-    vod.started_at.as_deref().unwrap_or(&vod.created_at)
-}
-
 // ─── Query types ───
 
 #[derive(Deserialize, Default)]
@@ -229,7 +225,7 @@ impl VodDisplay {
             .title
             .clone()
             .unwrap_or_else(|| "Untitled Stream".to_string());
-        let stream_time = vod_stream_time(vod);
+        let stream_time = vod.stream_time();
         let formatted_date = format_date(stream_time);
         let formatted_date_short = format_date_short(stream_time);
         let duration_seconds = vod
@@ -237,7 +233,7 @@ impl VodDisplay {
             .as_ref()
             .map_or(0, |duration| duration.seconds());
         let watch_url = build_watch_url(&vod.id, chapter_start, game_name_hint);
-        let chapter_segments = get_chapter_segments(vod, duration_seconds);
+        let chapter_segments = get_chapter_segments(vod);
         let chapter_names = get_game_tags(vod);
         VodDisplay {
             id: vod.id.clone(),
@@ -395,7 +391,7 @@ fn list_date_filter_is_active(params: &ListQuery) -> bool {
 pub(crate) fn archive_date_bounds(vods: &[Vod]) -> (String, String) {
     let mut dates = vods
         .iter()
-        .filter_map(|vod| vod_stream_time(vod).get(..10))
+        .filter_map(|vod| vod.stream_time().get(..10))
         .filter(|date| parse_ymd_to_days(date).is_some());
     let Some(first) = dates.next() else {
         let today = current_utc_days();
@@ -494,7 +490,7 @@ pub(crate) fn date_query_for_days(days: i64) -> String {
 }
 
 fn vod_matches_date_filter(vod: &Vod, params: &ListQuery) -> bool {
-    let stream_time = vod_stream_time(vod);
+    let stream_time = vod.stream_time();
     let date = stream_time.get(..10).unwrap_or(stream_time);
 
     if let Some(from) = date_filter_lower_bound(&params.from)
@@ -559,10 +555,10 @@ pub(crate) fn filter_vods_with_metadata<'a>(
     }
 
     match sort {
-        "oldest" => refs.sort_by(|a, b| vod_stream_time(a.vod).cmp(vod_stream_time(b.vod))),
+        "oldest" => refs.sort_by(|a, b| a.vod.stream_time().cmp(b.vod.stream_time())),
         "longest" => refs.sort_by_key(|r| std::cmp::Reverse(vod_duration_minutes(r.vod))),
         "shortest" => refs.sort_by_key(|r| vod_duration_minutes(r.vod)),
-        _ => refs.sort_by(|a, b| vod_stream_time(b.vod).cmp(vod_stream_time(a.vod))),
+        _ => refs.sort_by(|a, b| b.vod.stream_time().cmp(a.vod.stream_time())),
     }
 
     let metadata = build_list_metadata(unfiltered_count, refs.len(), params, clear_base_url);
@@ -570,7 +566,7 @@ pub(crate) fn filter_vods_with_metadata<'a>(
 }
 
 fn vod_date(vod: &Vod) -> &str {
-    let t = vod_stream_time(vod);
+    let t = vod.stream_time();
     t.get(..10).unwrap_or(t)
 }
 
@@ -789,19 +785,6 @@ pub(crate) fn days_to_civil(days: i64) -> (i32, u32, u32) {
     (year, m, d)
 }
 
-pub(crate) fn get_chapter_start(vod: &Vod, game_name: &str) -> Option<i64> {
-    if let Some(ref chapters) = vod.chapters {
-        for ch in chapters {
-            if let Some(ref name) = ch.name
-                && name.eq_ignore_ascii_case(game_name)
-            {
-                return ch.start.map(|s| s as i64);
-            }
-        }
-    }
-    None
-}
-
 pub(crate) struct NextVod {
     pub id: String,
     pub title: String,
@@ -814,16 +797,16 @@ pub(crate) fn next_vod_in_period(
 ) -> Option<NextVod> {
     let current = vods
         .iter()
-        .find(|v| v.id == current_id && vod_has_game(v, game_name))?;
-    let current_time = vod_stream_time(current);
+        .find(|v| v.id == current_id && v.has_game(game_name))?;
+    let current_time = current.stream_time();
     // Earliest stream of the same game strictly after the current one.
     let next = vods
         .iter()
-        .filter(|v| v.id != current_id && vod_has_game(v, game_name))
-        .filter(|v| vod_stream_time(v) > current_time)
-        .min_by(|a, b| vod_stream_time(a).cmp(vod_stream_time(b)))?;
+        .filter(|v| v.id != current_id && v.has_game(game_name))
+        .filter(|v| v.stream_time() > current_time)
+        .min_by(|a, b| a.stream_time().cmp(b.stream_time()))?;
     let curr_days = parse_ymd_to_days(current_time)?;
-    let next_days = parse_ymd_to_days(vod_stream_time(next))?;
+    let next_days = parse_ymd_to_days(next.stream_time())?;
     if (next_days - curr_days).abs() <= PERIOD_GAP_DAYS {
         Some(NextVod {
             id: next.id.clone(),
@@ -834,65 +817,31 @@ pub(crate) fn next_vod_in_period(
     }
 }
 
-pub(crate) fn vod_has_game(vod: &Vod, game_name: &str) -> bool {
-    if let Some(ref chapters) = vod.chapters {
-        chapters.iter().any(|ch| {
-            ch.name
-                .as_deref()
-                .map(|n| n.eq_ignore_ascii_case(game_name))
-                .unwrap_or(false)
+pub(crate) fn get_chapter_segments(vod: &Vod) -> Vec<ChapterSegment> {
+    let total_duration_secs = vod
+        .duration
+        .as_ref()
+        .map_or(0, |duration| duration.seconds());
+    if total_duration_secs <= 0 {
+        return Vec::new();
+    }
+
+    vod.chapter_spans()
+        .into_iter()
+        .map(|span| {
+            let len = span.end - span.start;
+            let width_pct = (len as f64 / total_duration_secs as f64) * 100.0;
+            ChapterSegment {
+                name: span.name.to_string(),
+                width_pct,
+                watch_url: build_watch_url(&vod.id, Some(span.start), None),
+                color_idx: crate::vods::chapter_color_idx(span.name),
+                start_label: format_chapter_start(span.start),
+                start_secs: span.start,
+                duration_secs: len,
+            }
         })
-    } else {
-        false
-    }
-}
-
-pub(crate) fn get_chapter_segments(vod: &Vod, total_duration_secs: i64) -> Vec<ChapterSegment> {
-    let Some(chapters) = vod.chapters.as_ref() else {
-        return Vec::new();
-    };
-    if chapters.is_empty() || total_duration_secs <= 0 {
-        return Vec::new();
-    }
-
-    let mut named: Vec<(usize, &str, i64, Option<i64>)> = Vec::new();
-    for (i, ch) in chapters.iter().enumerate() {
-        if let Some(name) = ch.name.as_deref().filter(|n| !n.is_empty()) {
-            let start = ch.start.map(|s| s as i64).unwrap_or(0);
-            let explicit_end = ch
-                .end
-                .map(|end| end as i64)
-                .or_else(|| ch.duration.map(|duration| start + duration as i64));
-            named.push((i, name, start, explicit_end));
-        }
-    }
-    if named.is_empty() {
-        return Vec::new();
-    }
-
-    let mut out = Vec::with_capacity(named.len());
-    for (k, &(_, name, start, explicit_end)) in named.iter().enumerate() {
-        let inferred_end = named.get(k + 1).map(|n| n.2).unwrap_or(total_duration_secs);
-        let start = start.clamp(0, total_duration_secs);
-        let end = explicit_end
-            .unwrap_or(inferred_end)
-            .clamp(0, total_duration_secs);
-        if end <= start {
-            continue;
-        }
-        let len = end - start;
-        let width_pct = (len as f64 / total_duration_secs as f64) * 100.0;
-        out.push(ChapterSegment {
-            name: name.to_string(),
-            width_pct,
-            watch_url: build_watch_url(&vod.id, Some(start), None),
-            color_idx: crate::vods::chapter_color_idx(name),
-            start_label: format_chapter_start(start),
-            start_secs: start,
-            duration_secs: len,
-        });
-    }
-    out
+        .collect()
 }
 
 pub(crate) fn format_chapter_start(seconds: i64) -> String {
@@ -1170,10 +1119,10 @@ mod tests {
             youtube: None,
             is_live: false,
         };
-        assert!(vod_has_game(&vod, "Elden Ring"));
-        assert!(vod_has_game(&vod, "elden ring"));
-        assert!(vod_has_game(&vod, "ELDEN RING"));
-        assert!(!vod_has_game(&vod, "Dark Souls"));
+        assert!(vod.has_game("Elden Ring"));
+        assert!(vod.has_game("elden ring"));
+        assert!(vod.has_game("ELDEN RING"));
+        assert!(!vod.has_game("Dark Souls"));
     }
 
     #[test]
@@ -1472,7 +1421,7 @@ mod tests {
         }
 
         let vod = make_vod("color", "2026-05-20T10:00:00Z", &["Elden Ring"]);
-        let segments = get_chapter_segments(&vod, 3600);
+        let segments = get_chapter_segments(&vod);
 
         assert_eq!(segments[0].color_idx, handoff_color_idx("Elden Ring"));
     }
@@ -1692,7 +1641,7 @@ mod tests {
             },
         ]);
 
-        let segments = get_chapter_segments(&vod, 1000);
+        let segments = get_chapter_segments(&vod);
 
         assert_eq!(
             segments.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),

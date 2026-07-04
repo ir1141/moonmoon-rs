@@ -1,4 +1,4 @@
-use super::{Vod, canonical_youtube_uploads, filter_playable_vods, is_playable_vod};
+use super::{Vod, canonical_youtube_uploads, filter_playable_vods};
 use serde::Deserialize;
 use std::time::Duration;
 
@@ -76,7 +76,7 @@ impl CatalogSnapshot {
             total: vods.len(),
             latest_id: latest.map(|vod| vod.id.clone()),
             latest_updated_at: latest.and_then(|vod| vod.updated_at.clone()),
-            latest_playable: latest.is_some_and(is_playable_vod),
+            latest_playable: latest.is_some_and(|vod| vod.is_playable()),
         }
     }
 
@@ -86,7 +86,7 @@ impl CatalogSnapshot {
             total: resp.meta.total,
             latest_id: latest.map(|vod| vod.id.clone()),
             latest_updated_at: latest.and_then(|vod| vod.updated_at.clone()),
-            latest_playable: latest.is_some_and(is_playable_vod),
+            latest_playable: latest.is_some_and(|vod| vod.is_playable()),
         }
     }
 }
