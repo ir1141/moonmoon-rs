@@ -668,4 +668,100 @@ mod tests {
         assert_eq!(next_refresh_delay(0), EMPTY_RETRY_INTERVAL);
         assert_eq!(next_refresh_delay(1500), REFRESH_INTERVAL);
     }
+
+    /// An in-memory [`VodSource`]: canned snapshot and load, either of which can
+    /// be an error the live archive could never mint. Drives the whole refresh
+    /// decision tree without a network.
+    struct FakeArchive {
+        snapshot: Result<CatalogSnapshot, String>,
+        load: Result<CatalogLoad, String>,
+    }
+
+    impl VodSource for FakeArchive {
+        async fn snapshot(&self) -> Result<CatalogSnapshot, SourceError> {
+            self.snapshot.clone().map_err(Into::into)
+        }
+        async fn load(&self) -> Result<CatalogLoad, SourceError> {
+            self.load.clone().map_err(Into::into)
+        }
+    }
+
+    fn make_snapshot(total: usize, latest_id: &str, latest_playable: bool) -> CatalogSnapshot {
+        CatalogSnapshot {
+            total,
+            latest_id: Some(latest_id.into()),
+            latest_updated_at: Some("2026-05-10T00:00:00.000Z".into()),
+            latest_playable,
+        }
+    }
+
+    #[tokio::test]
+    async fn plan_refresh_reports_unchanged_when_snapshot_matches() {
+        let cached = make_snapshot(10, "1430", true);
+        let source = FakeArchive {
+            snapshot: Ok(cached.clone()),
+            load: Err("load must not be called when unchanged".into()),
+        };
+        assert!(matches!(
+            plan_refresh(&cached, &source).await,
+            RefreshPlan::Unchanged
+        ));
+    }
+
+    #[tokio::test]
+    async fn plan_refresh_fetches_when_snapshot_moves() {
+        let cached = make_snapshot(10, "1430", true);
+        let source = FakeArchive {
+            snapshot: Ok(make_snapshot(11, "1500", true)),
+            load: Ok(CatalogLoad::empty()),
+        };
+        assert!(matches!(
+            plan_refresh(&cached, &source).await,
+            RefreshPlan::Refresh(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn plan_refresh_reingests_when_only_latest_playable_flips() {
+        // Same id/total/updated_at as the cached head VOD — only playability
+        // differs. This is the not-yet-playable head that must re-ingest once
+        // its uploads complete, and it had no coverage before the seam.
+        let cached = make_snapshot(10, "1465", false);
+        let source = FakeArchive {
+            snapshot: Ok(make_snapshot(10, "1465", true)),
+            load: Ok(CatalogLoad::empty()),
+        };
+        assert!(matches!(
+            plan_refresh(&cached, &source).await,
+            RefreshPlan::Refresh(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn plan_refresh_fails_when_snapshot_poll_errors() {
+        let cached = make_snapshot(10, "1430", true);
+        let source = FakeArchive {
+            snapshot: Err("upstream 503".into()),
+            load: Err("load must not be called after a poll failure".into()),
+        };
+        match plan_refresh(&cached, &source).await {
+            RefreshPlan::Failed(msg) => {
+                assert!(msg.contains("failed to check catalog snapshot"), "{msg}")
+            }
+            other => panic!("expected Failed, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn plan_refresh_fails_when_load_errors() {
+        let cached = make_snapshot(10, "1430", true);
+        let source = FakeArchive {
+            snapshot: Ok(make_snapshot(11, "1500", true)),
+            load: Err("connection reset mid-page".into()),
+        };
+        match plan_refresh(&cached, &source).await {
+            RefreshPlan::Failed(msg) => assert!(msg.contains("failed to fetch vods"), "{msg}"),
+            other => panic!("expected Failed, got {other:?}"),
+        }
+    }
 }
