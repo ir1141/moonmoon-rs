@@ -15,7 +15,7 @@ A Rust port of [OP-Archives/MOONMOON-site](https://github.com/OP-Archives/MOONMO
 - **Watch history** — page listing streams saved in your resume state, entirely client-side unless optional sync is enabled.
 - **Light/dark theme toggle** — stored locally per browser.
 - **Cross-device sync (optional)** — generate a token in one browser, paste it in another, and your watch history follows you. Token is the only credential; no accounts, no email.
-- **Synced chat replay with emotes** — chat comments scroll in time with the VOD. Twitch native emotes plus 7TV / BTTV / FFZ (global + channel sets) render inline, with hover tooltips. Emotes are resolved server-side, so the browser never calls the provider APIs directly.
+- **Synced chat replay with emotes** — chat comments scroll in time with the VOD. Twitch native emotes plus 7TV / BTTV / FFZ (global + channel sets) render inline, with hover tooltips. Emotes are resolved server-side, so the browser never calls the provider APIs directly. Newer VODs load a frozen per-VOD emote snapshot up front, so chat renders with the exact set (and stream-time ids) that was live during that stream.
 - **Jump to a game inside a VOD** — if a stream covered multiple games, each chapter is a direct timestamped link.
 - **Random VOD** — `/random` redirects to one at random.
 
@@ -72,6 +72,7 @@ Most `/api/*` and `/history/{resume,vods}` routes are rate-limited (2 rps, burst
 | `/api/chat/{vod_id}` | Proxies upstream chat comments |
 | `/api/emotes/channel` | Prefetched channel + global emote set as JSON |
 | `/api/emotes/lookup/{name}` | On-demand cross-provider emote search (cached) |
+| `/api/emotes/vod/{vod_id}` | Proxies the archive's frozen per-VOD emote snapshot (empty map for old VODs / misses) |
 | `GET /api/sync/{token}` | Fetch a stored sync blob (404 if unknown) |
 | `PUT /api/sync/{token}` | Replace the blob for `token` (256 KiB body cap) |
 | `POST /api/refresh` | Force a catalog re-fetch (no-op if the upstream snapshot is unchanged) |
@@ -100,7 +101,7 @@ src/
     ├── calendar.rs      # /calendar
     ├── history.rs       # /history, /history/vods, /history/resume
     ├── sync.rs          # /api/sync/{token} GET/PUT
-    ├── emotes.rs        # /api/emotes/channel, /api/emotes/lookup/{name}
+    ├── emotes.rs        # /api/emotes/channel, /api/emotes/lookup/{name}, /api/emotes/vod/{id}
     └── api.rs           # /api/chat, /api/refresh
 
 templates/               # Askama templates (compiled into the binary)
@@ -127,6 +128,8 @@ List views pair a full-page template (e.g. `browse.html`) with grid-only partial
 ### Emotes
 
 Emote resolution is server-side so the client never hits provider APIs directly. At boot (and every 24 hours after, via `EMOTE_REFRESH_INTERVAL`) `emotes::fetch` prefetches MOONMOON's channel and global sets from 7TV, BTTV, and FFZ into an `EmoteIndex`; `/api/emotes/channel` serves that map. Names the prefetch didn't cover are resolved on demand by `/api/emotes/lookup/{name}`, which searches all three providers concurrently and caches the result (hit *or* clean miss) in the index. `valid_emote_name` gates input (3–25 chars, alphanumeric + `_`) before any provider is called, and `EmoteProvider` serializes as the canonical `7TV` / `BTTV` / `FFZ` strings.
+
+Newer VODs also carry a frozen per-VOD snapshot — the exact 7TV / BTTV / FFZ set that was live during that stream. `/api/emotes/vod/{vod_id}` (charset-gated like `chat_proxy`, then resolved against the in-memory catalog) proxies the archive's `/vods/{id}/emotes` and normalizes it with `parse::parse_vod_emote_snapshot`, which builds CDN URLs directly from each emote id and absorbs 7TV first so it wins any cross-provider name collision. Unknown ids, upstream 404s (older VODs predate snapshot capture, roughly id < 310), and transport errors all return an empty map (`cache-control` 300s), so the client falls back cleanly to the prefetch + live lookup above. On the player page `loadVodEmotes` (`static/player.js`) fetches the snapshot up front and lets its entries overwrite prefetched channel emotes (snapshot-wins), so since-removed / collision-prone emotes render with their stream-time ids.
 
 ### Cross-device sync
 

@@ -121,6 +121,31 @@ function loadEmotes() {
   });
 }
 
+// Per-VOD emote snapshot. The archive froze the exact emote set active during
+// this stream (newer VODs only); loading it up front turns most chat words
+// into local hits and preserves since-removed / collision-prone emotes with
+// their stream-time ids. Snapshot entries OVERWRITE prefetched ones — see the
+// gap-fill guard in loadEmotes, so the snapshot always wins on overlap
+// regardless of which fetch resolves first. Old VODs / failures return an empty
+// map and fall through to prefetch + lazy lookup.
+function loadVodEmotes() {
+  if (!VOD_ID) return;
+  fetch("/api/emotes/vod/" + encodeURIComponent(VOD_ID))
+    .then(function (res) {
+      return res.ok ? res.json() : { emotes: {} };
+    })
+    .then(function (body) {
+      var emotes = body.emotes || {};
+      var names = Object.keys(emotes);
+      for (var i = 0; i < names.length; i++) {
+        thirdPartyEmotes[names[i]] = emotes[names[i]];
+      }
+    })
+    .catch(function (err) {
+      console.warn("[Emote] vod snapshot fetch failed:", err);
+    });
+}
+
 // ─── Lazy lookup ───
 // Emotes from non-Moonmoon sets (e.g. TANIMURA, owned by another channel)
 // won't appear in the prefetched channel map above. When we see an unknown
@@ -207,6 +232,7 @@ function formatEmoteTooltip(name, emote) {
 }
 
 loadEmotes();
+loadVodEmotes();
 
 // DOM refs
 var chatContainer = document.getElementById("chat-messages");
