@@ -24,6 +24,18 @@ export const RESUME_MIN_SECONDS = 10;
 
 export const SYNC_BLOB_VERSION = 2;
 
+/**
+ * @typedef {{
+ *   state: "in_progress" | "watched",
+ *   updated: number,
+ *   time?: number,
+ *   part?: number,
+ *   localTime?: number,
+ * }} HistoryEntry
+ *
+ * @typedef {Record<string, HistoryEntry>} HistoryStore
+ */
+
 function storageGet(storage, key) {
   if (!storage) return null;
   if (typeof storage.getItem === "function") return storage.getItem(key);
@@ -67,22 +79,28 @@ function normalizeUpdated(value) {
   return Number.isFinite(updated) && updated >= 0 ? updated : null;
 }
 
+/**
+ * @param {unknown} entry
+ * @returns {HistoryEntry | null}
+ */
 export function normalizeHistoryEntry(entry) {
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
-  const updated = normalizeUpdated(entry.updated);
+  const record = /** @type {Record<string, unknown>} */ (entry);
+  const updated = normalizeUpdated(record.updated);
   if (updated === null) return null;
 
-  if (entry.state === "watched") return { state: "watched", updated };
-  if (entry.state !== "in_progress") return null;
+  if (record.state === "watched") return { state: "watched", updated };
+  if (record.state !== "in_progress") return null;
 
-  const time = Number(entry.time);
+  const time = Number(record.time);
+  /** @type {HistoryEntry} */
   const normalized = {
     state: "in_progress",
     time: Number.isFinite(time) && time >= 0 ? Math.floor(time) : 0,
     updated,
   };
-  const part = Number(entry.part);
-  const localTime = Number(entry.localTime);
+  const part = Number(record.part);
+  const localTime = Number(record.localTime);
   if (Number.isInteger(part) && part >= 0) normalized.part = part;
   if (Number.isFinite(localTime) && localTime >= 0) {
     normalized.localTime = localTime;
@@ -90,7 +108,12 @@ export function normalizeHistoryEntry(entry) {
   return normalized;
 }
 
+/**
+ * @param {unknown} store
+ * @returns {HistoryStore}
+ */
 export function normalizeHistoryStore(store) {
+  /** @type {HistoryStore} */
   const next = {};
   if (!store || typeof store !== "object" || Array.isArray(store)) return next;
   for (const [id, entry] of Object.entries(store)) {
