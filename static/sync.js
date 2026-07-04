@@ -1,10 +1,15 @@
-import { RESUME_KEY, WATCHED_KEY } from "./lib/history-state.js";
-import { mergeResume as mergeResumePure } from "./lib/resume.js";
+import {
+  HISTORY_KEY,
+  buildSyncBlob,
+  historyFromBlob,
+  loadHistoryStore,
+  mergeHistory,
+  saveHistoryStore,
+} from "./lib/history-state.js";
 import {
   isValidToken,
   generateToken as generateTokenPure,
 } from "./lib/token.js";
-import { mergeWatched as mergeWatchedPure } from "./lib/watched.js";
 import {
   safeLocalStorage,
   storageGet,
@@ -41,51 +46,22 @@ function generateToken() {
   });
 }
 
-function getResume() {
+function getHistory() {
+  return loadHistoryStore(storage);
+}
+
+function setHistory(store) {
   try {
-    return JSON.parse(storageGet(storage, RESUME_KEY)) || {};
+    saveHistoryStore(storage, store);
+    window.dispatchEvent(new Event("moonmoon:historyChanged"));
   } catch (e) {
-    return {};
+    console.warn("[Sync] history write failed:", e);
   }
 }
 
-function setResume(obj) {
-  try {
-    storageSet(storage, RESUME_KEY, JSON.stringify(obj));
-    window.dispatchEvent(new Event("moonmoon:resumeChanged"));
-  } catch (e) {
-    console.warn("[Sync] resume write failed:", e);
-  }
-}
-
-function getWatched() {
-  try {
-    return JSON.parse(storageGet(storage, WATCHED_KEY)) || {};
-  } catch (e) {
-    return {};
-  }
-}
-
-function setWatched(obj) {
-  try {
-    storageSet(storage, WATCHED_KEY, JSON.stringify(obj));
-    window.dispatchEvent(new Event("moonmoon:watchedChanged"));
-  } catch (e) {
-    console.warn("[Sync] watched write failed:", e);
-  }
-}
-
-function mergeResume(remote) {
-  var local = getResume();
-  var result = mergeResumePure(local, remote);
-  if (result.changed) setResume(result.merged);
-  return result.changed;
-}
-
-function mergeWatched(remote) {
-  var local = getWatched();
-  var result = mergeWatchedPure(local, remote);
-  if (result.changed) setWatched(result.merged);
+function mergeRemoteHistory(remote) {
+  var result = mergeHistory(getHistory(), remote);
+  if (result.changed) setHistory(result.merged);
   return result.changed;
 }
 
@@ -100,11 +76,7 @@ function pull() {
     })
     .then(function (data) {
       if (!data) return null;
-      var remoteResume = (data.blob && data.blob.resume) || {};
-      var remoteWatched = (data.blob && data.blob.watched) || {};
-      var resumeChanged = mergeResume(remoteResume);
-      var watchedChanged = mergeWatched(remoteWatched);
-      var changed = resumeChanged || watchedChanged;
+      var changed = mergeRemoteHistory(historyFromBlob(data.blob));
       try {
         storageSet(
           storage,
@@ -133,8 +105,10 @@ function push() {
   pushTimer = null;
   var token = getToken();
   if (!token) return;
-  var blob = { resume: getResume(), watched: getWatched() };
-  var body = JSON.stringify({ blob: blob, updated_at: Date.now() });
+  var body = JSON.stringify({
+    blob: buildSyncBlob(getHistory()),
+    updated_at: Date.now(),
+  });
   fetch("/api/sync/" + encodeURIComponent(token), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -151,24 +125,24 @@ function schedulePush() {
   pushTimer = setTimeout(push, DEBOUNCE_MS);
 }
 
+// Run the legacy-store migration eagerly — sync.js loads on every page, so
+// this is the one guaranteed migration point even before any history read.
+loadHistoryStore(storage);
+
 // localStorage `storage` events fire on OTHER tabs only, so we also poll
-// the resume key in this tab. 2s is fine — the debounce already coalesces.
-var lastResumeStr = storageGet(storage, RESUME_KEY) || "";
-var lastWatchedStr = storageGet(storage, WATCHED_KEY) || "";
+// the history key in this tab. 2s is fine — the debounce already coalesces.
+var lastHistoryStr = storageGet(storage, HISTORY_KEY) || "";
 setInterval(function () {
-  var cur = storageGet(storage, RESUME_KEY) || "";
-  var watched = storageGet(storage, WATCHED_KEY) || "";
-  if (cur !== lastResumeStr || watched !== lastWatchedStr) {
-    lastResumeStr = cur;
-    lastWatchedStr = watched;
+  var cur = storageGet(storage, HISTORY_KEY) || "";
+  if (cur !== lastHistoryStr) {
+    lastHistoryStr = cur;
     schedulePush();
   }
 }, POLL_MS);
 
 window.addEventListener("storage", function (e) {
-  if (e.key === RESUME_KEY || e.key === WATCHED_KEY) {
-    lastResumeStr = storageGet(storage, RESUME_KEY) || "";
-    lastWatchedStr = storageGet(storage, WATCHED_KEY) || "";
+  if (e.key === HISTORY_KEY) {
+    lastHistoryStr = storageGet(storage, HISTORY_KEY) || "";
     schedulePush();
   }
 });

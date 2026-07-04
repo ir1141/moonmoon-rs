@@ -1,0 +1,7 @@
+{
+  "entries": [
+    { "id": "recent", "state": "watched" },
+    { "id": "resume", "state": "in_progress", "time": 42 }
+  ],
+  "sort": "recent"
+}

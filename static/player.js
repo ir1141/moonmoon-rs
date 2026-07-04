@@ -30,8 +30,14 @@ import {
 } from "./lib/player-feedback.js";
 import { isEmoteCandidate } from "./lib/emote-heuristic.js";
 import { fetchChannelEmotes, lookupEmote } from "./lib/emote-client.js";
-import { RESUME_KEY as STORAGE_KEY, WATCHED_KEY } from "./lib/history-state.js";
-import { markWatchedVod } from "./lib/watched.js";
+import {
+  HISTORY_KEY,
+  RESUME_MIN_SECONDS,
+  loadHistoryStore,
+  markWatched as markWatchedPure,
+  saveHistoryStore,
+  saveResumePosition,
+} from "./lib/history-state.js";
 import { safeLocalStorage, storageGet, storageSet } from "./lib/storage.js";
 import { nextChapterPopoverOpen } from "./lib/chapter-popover.js";
 import {
@@ -69,8 +75,6 @@ var MAX_PART_DURATION = 10800; // 3 hours
 // chat stays aligned. Mirrors the upstream site's `delay`. Unknown part
 // durations are estimated at the 3h cap, matching the playback timeline.
 var CHAT_DELAY = computeChatDelay(VOD_TOTAL_SECS, YOUTUBE_PARTS, MAX_PART_DURATION);
-var MAX_RESUME_ENTRIES = 500;
-var MAX_WATCHED_ENTRIES = 500;
 var PART_DURATIONS_KEY = "moonmoon_part_durations";
 var MAX_PART_DURATION_ENTRIES = 500;
 var MAX_CHAT_DOM_NODES = 2000;
@@ -796,28 +800,24 @@ function savePartDuration(index, duration) {
   }
 }
 
-// ─── Resume (localStorage) ───
+// ─── Watch history (localStorage) ───
 
-// In-memory cache of the parsed resume store. savePosition runs at 1 Hz; a
-// fresh JSON.parse of up to 500 entries every tick is measurable jank.
+// In-memory cache of the parsed history store. savePosition runs at 1 Hz; a
+// fresh JSON.parse of up to 1000 entries every tick is measurable jank.
 // Invalidated when another writer (sync.js merge, another tab) touches the key.
-var resumeStoreCache = null;
+var historyStoreCache = null;
 
-function getResumeStore() {
-  if (resumeStoreCache) return resumeStoreCache;
-  try {
-    resumeStoreCache = JSON.parse(storageGet(storage, STORAGE_KEY)) || {};
-  } catch (e) {
-    resumeStoreCache = {};
-  }
-  return resumeStoreCache;
+function getHistoryStore() {
+  if (historyStoreCache) return historyStoreCache;
+  historyStoreCache = loadHistoryStore(storage);
+  return historyStoreCache;
 }
 
 window.addEventListener("storage", function (e) {
-  if (e.key === STORAGE_KEY) resumeStoreCache = null;
+  if (e.key === HISTORY_KEY) historyStoreCache = null;
 });
-window.addEventListener("moonmoon:resumeChanged", function () {
-  resumeStoreCache = null;
+window.addEventListener("moonmoon:historyChanged", function () {
+  historyStoreCache = null;
 });
 
 function savePosition() {
@@ -825,68 +825,33 @@ function savePosition() {
 
   try {
     if (!player || !player.getCurrentTime) return;
-    var store = getResumeStore();
     var localTime = 0;
     try {
       localTime = player.getCurrentTime();
     } catch (e) {
       /* ignore */
     }
-    store[VOD_ID] = {
+    historyStoreCache = saveResumePosition(getHistoryStore(), VOD_ID, {
       time: getGlobalTime(),
       part: currentPart,
       localTime: localTime,
-      updated: Date.now(),
-    };
-    // Enforce max entries
-    var keys = Object.keys(store);
-    if (keys.length > MAX_RESUME_ENTRIES) {
-      keys.sort(function (a, b) {
-        return (store[a].updated || 0) - (store[b].updated || 0);
-      });
-      while (keys.length > MAX_RESUME_ENTRIES) {
-        delete store[keys.shift()];
-      }
-    }
-    storageSet(storage, STORAGE_KEY, JSON.stringify(store));
+    });
+    saveHistoryStore(storage, historyStoreCache);
   } catch (e) {
     /* quota exceeded or similar */
   }
 }
 
 function getResumePosition() {
-  var store = getResumeStore();
-  return store[VOD_ID] || null;
-}
-
-function clearResume() {
-  try {
-    var store = getResumeStore();
-    delete store[VOD_ID];
-    storageSet(storage, STORAGE_KEY, JSON.stringify(store));
-  } catch (e) {
-    /* ignore */
-  }
-}
-
-function getWatchedStore() {
-  try {
-    return JSON.parse(storageGet(storage, WATCHED_KEY)) || {};
-  } catch (e) {
-    return {};
-  }
+  var entry = getHistoryStore()[VOD_ID];
+  return entry && entry.state === "in_progress" ? entry : null;
 }
 
 function markWatched() {
   try {
-    var next = markWatchedVod(
-      getWatchedStore(),
-      VOD_ID,
-      Date.now(),
-      MAX_WATCHED_ENTRIES,
-    );
-    storageSet(storage, WATCHED_KEY, JSON.stringify(next));
-    window.dispatchEvent(new Event("moonmoon:watchedChanged"));
+    historyStoreCache = markWatchedPure(getHistoryStore(), VOD_ID);
+    saveHistoryStore(storage, historyStoreCache);
+    window.dispatchEvent(new Event("moonmoon:historyChanged"));
   } catch (e) {
     /* quota exceeded or similar */
   }
@@ -895,7 +860,6 @@ function markWatched() {
 function finalizeCurrentVod() {
   if (watchCompleted) return;
   watchCompleted = true;
-  clearResume();
   markWatched();
 }
 
@@ -1424,7 +1388,7 @@ function onPlayerReady() {
   if (deepLinkT > 0) {
     seekToGlobal(deepLinkT);
     initialOffset = deepLinkT;
-  } else if (resume && resume.time > 10) {
+  } else if (resume && resume.time > RESUME_MIN_SECONDS) {
     var hasLocal =
       typeof resume.localTime === "number" &&
       resume.part != null &&

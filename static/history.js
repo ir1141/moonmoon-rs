@@ -1,9 +1,7 @@
 import {
-  RESUME_KEY,
-  WATCHED_KEY,
   buildHistoryEntries,
-  readJsonStore,
-  serializeHistoryRequest,
+  buildHistoryRequest,
+  loadHistoryStore,
 } from "./lib/history-state.js";
 import { readHistorySort, writeHistorySort } from "./lib/history-sort.js";
 import { safeLocalStorage } from "./lib/storage.js";
@@ -45,10 +43,7 @@ function initHistoryPage() {
 
   applySortToControl(readHistorySort());
 
-  const entries = buildHistoryEntries(
-    readJsonStore(storage, RESUME_KEY),
-    readJsonStore(storage, WATCHED_KEY),
-  );
+  const entries = buildHistoryEntries(loadHistoryStore(storage));
 
   if (entries.length === 0) {
     stats.textContent = "No watch history";
@@ -65,9 +60,12 @@ function initHistoryPage() {
 
   function load() {
     const generation = ++loadGeneration;
-    const params = serializeHistoryRequest(entries, sortInput.value);
 
-    fetch(`/history/vods?${params.toString()}`)
+    fetch("/history/vods", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildHistoryRequest(entries, sortInput.value)),
+    })
       .then((response) => {
         if (!response.ok)
           throw new Error(`history fetch failed: HTTP ${response.status}`);
