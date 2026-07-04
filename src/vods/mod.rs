@@ -35,6 +35,117 @@ pub struct Vod {
     pub is_live: bool,
 }
 
+/// A named, clamped chapter span within a single `Vod`.
+///
+/// Produced by [`Vod::chapter_spans`]: `start`/`end` are clamped to
+/// `[0, total_duration]` and spans where `end <= start` are dropped, so every
+/// returned span has a strictly positive length. This is the one home for the
+/// chapter-range math; `dominant_game` and the watch-page chapter bar both
+/// derive from it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChapterSpan<'a> {
+    pub name: &'a str,
+    pub start: i64,
+    pub end: i64,
+}
+
+impl Vod {
+    /// Earliest moment this stream is known to have started: `started_at` when
+    /// the upstream provides it, falling back to `created_at`.
+    pub fn stream_time(&self) -> &str {
+        self.started_at.as_deref().unwrap_or(&self.created_at)
+    }
+
+    /// A VOD is playable when it is not live and has at least one canonical
+    /// YouTube upload to send the viewer to.
+    pub fn is_playable(&self) -> bool {
+        !self.is_live && !canonical_youtube_uploads(self).is_empty()
+    }
+
+    /// Whether any chapter of this VOD is tagged with `name` (case-insensitive).
+    pub fn has_game(&self, game_name: &str) -> bool {
+        self.chapters.as_ref().is_some_and(|chapters| {
+            chapters.iter().any(|ch| {
+                ch.name
+                    .as_deref()
+                    .is_some_and(|n| n.eq_ignore_ascii_case(game_name))
+            })
+        })
+    }
+
+    /// Start offset (seconds) of the first chapter matching `name`, reading
+    /// chapters directly. Not derived from `chapter_spans` — that filters
+    /// degenerate spans, and this must still report a raw start for them.
+    ///
+    /// First-match-wins: like the retired `get_chapter_start`, this returns
+    /// the start of the *first* chapter whose name matches (case-insensitive),
+    /// even when that start is `None` — it does not skip a `None`-start match
+    /// to look for a later chapter with a real start.
+    pub fn chapter_start_for(&self, game_name: &str) -> Option<i64> {
+        let chapters = self.chapters.as_ref()?;
+        for ch in chapters {
+            if let Some(name) = ch.name.as_deref()
+                && name.eq_ignore_ascii_case(game_name)
+            {
+                return ch.start.map(|s| s as i64);
+            }
+        }
+        None
+    }
+
+    /// Clamped, positive-length spans over this VOD's named chapters.
+    ///
+    /// The total duration is read from `self.duration`; a VOD with no duration
+    /// yields no spans. For each named chapter the end is the explicit `end`,
+    /// else `start + duration`, else the next chapter's start, else the total.
+    /// Spans whose final `end <= start` are dropped.
+    pub fn chapter_spans(&self) -> Vec<ChapterSpan<'_>> {
+        let Some(chapters) = self.chapters.as_ref() else {
+            return Vec::new();
+        };
+        if chapters.is_empty() {
+            return Vec::new();
+        }
+        let total_duration = self
+            .duration
+            .as_ref()
+            .map_or(0, |duration| duration.seconds());
+        if total_duration <= 0 {
+            return Vec::new();
+        }
+
+        // (name, start, explicit_end) for chapters with a non-empty name.
+        let mut named: Vec<(&str, i64, Option<i64>)> = Vec::new();
+        for ch in chapters {
+            if let Some(name) = ch.name.as_deref().filter(|n| !n.is_empty()) {
+                let start = ch.start.map(|s| s as i64).unwrap_or(0);
+                let explicit_end = ch
+                    .end
+                    .map(|end| end as i64)
+                    .or_else(|| ch.duration.map(|duration| start + duration as i64));
+                named.push((name, start, explicit_end));
+            }
+        }
+        if named.is_empty() {
+            return Vec::new();
+        }
+
+        let mut out = Vec::with_capacity(named.len());
+        for (k, &(name, start, explicit_end)) in named.iter().enumerate() {
+            let inferred_end = named.get(k + 1).map(|n| n.1).unwrap_or(total_duration);
+            let start = start.clamp(0, total_duration);
+            let end = explicit_end
+                .unwrap_or(inferred_end)
+                .clamp(0, total_duration);
+            if end <= start {
+                continue;
+            }
+            out.push(ChapterSpan { name, start, end });
+        }
+        out
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Chapter {
     pub name: Option<String>,
