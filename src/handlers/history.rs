@@ -92,13 +92,6 @@ impl HistoryEntryState {
             _ => None,
         }
     }
-
-    fn as_str(&self) -> &'static str {
-        match self {
-            Self::InProgress => "in_progress",
-            Self::Watched => "watched",
-        }
-    }
 }
 
 struct HistoryRequestedVod {
@@ -206,34 +199,19 @@ fn build_history_displays(
     };
 
     Listing::build(&entries, Pagination::All, headers, |e| {
-        let mut display = match e.state {
+        let display = match e.state {
             HistoryEntryState::InProgress => {
                 let link_start = if options.resume_links {
                     e.resume_time
                 } else {
                     e.resume_time.or(e.chapter_start)
                 };
-                let mut display =
-                    VodDisplay::from_vod_with(e.vod, link_start, e.game_key.as_deref());
-                if let Some(time) = e.resume_time {
-                    display.status_label =
-                        Some(format!("In progress · {}", format_chapter_start(time)));
-                    display.progress_seconds = Some(time);
-                } else {
-                    display.status_label = Some("In progress".to_string());
-                }
-                display.history_state = Some(e.state.as_str());
-                display
+                VodDisplay::in_progress(e.vod, link_start, e.resume_time, e.game_key.as_deref())
             }
             HistoryEntryState::Watched => {
-                let mut display =
-                    VodDisplay::from_vod_with(e.vod, e.chapter_start, e.game_key.as_deref());
-                display.status_label = Some("Watched".to_string());
-                display.history_state = Some(e.state.as_str());
-                display
+                VodDisplay::watched(e.vod, e.chapter_start, e.game_key.as_deref())
             }
         };
-        display.match_label = None;
         (display, e.game_key.clone())
     })
     .vods
@@ -524,6 +502,24 @@ mod tests {
             Some("In progress · 1:23:20")
         );
         assert_eq!(displays[0].progress_seconds, Some(5000));
+    }
+
+    #[test]
+    fn in_progress_without_resume_time_has_no_progress_or_time_suffix() {
+        let vods = vec![make_history_vod()];
+
+        let displays = build_history_displays(
+            &vods,
+            &[requested("v1", None, HistoryEntryState::InProgress)],
+            None,
+            HistoryDisplayOptions {
+                resume_links: false,
+                show_headers: true,
+            },
+        );
+
+        assert_eq!(displays[0].status_label.as_deref(), Some("In progress"));
+        assert_eq!(displays[0].progress_seconds, None);
     }
 
     #[test]
