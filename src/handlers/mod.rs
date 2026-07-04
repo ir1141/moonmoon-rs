@@ -4,6 +4,7 @@ mod calendar;
 mod emotes;
 mod history;
 mod home;
+mod listing;
 mod sync;
 mod watch;
 
@@ -13,6 +14,7 @@ pub use calendar::calendar_page;
 pub use emotes::{channel_emotes, lookup_emote, vod_emotes};
 pub use history::{continue_resume, history_page, history_vods_grid};
 pub use home::home_page;
+pub(crate) use listing::{Headers, Listing, Pagination};
 pub use sync::{sync_get, sync_put};
 pub use watch::{next_in_period, random_vod, vod_detail, watch_page};
 
@@ -206,9 +208,9 @@ pub(crate) struct VodDisplay {
     pub history_state: Option<&'static str>,
     pub chapter_names: Vec<String>,
     pub duration_seconds: i64,
-    /// Set by exactly one of [`assign_period_headers_seeded`] (for chronological views)
-    /// or [`assign_series_headers`] (for game-grouped views). Do not call both
-    /// on the same display list — the later call overwrites the earlier.
+    /// Set by the listing module's header pass ([`super::listing`]): a Period
+    /// (month) or Series (game) header, never both — the [`Headers`] mode picks
+    /// exactly one.
     pub period_header: Option<String>,
     pub watch_url: String,
 }
@@ -521,6 +523,7 @@ pub(crate) struct VodRefMatch<'a> {
 pub(crate) fn filter_vods_with_metadata<'a>(
     vods: impl Iterator<Item = &'a Vod>,
     params: &ListQuery,
+    sort: &str,
     clear_base_url: &str,
 ) -> (Vec<VodRefMatch<'a>>, ListMetadata) {
     let mut refs: Vec<VodRefMatch<'a>> = vods
@@ -555,7 +558,6 @@ pub(crate) fn filter_vods_with_metadata<'a>(
         refs.retain(|r| vod_date(r.vod) <= to.as_str());
     }
 
-    let sort = params.sort.as_deref().unwrap_or("newest");
     match sort {
         "oldest" => refs.sort_by(|a, b| vod_stream_time(a.vod).cmp(vod_stream_time(b.vod))),
         "longest" => refs.sort_by_key(|r| std::cmp::Reverse(vod_duration_minutes(r.vod))),
@@ -706,51 +708,6 @@ fn build_clear_url(base_url: &str, params: &ListQuery) -> String {
     format!("{base_url}{sep}sort={}", urlencoding::encode(&sort))
 }
 
-/// Insert a calendar-month header (e.g. "March 2026") before the first card of
-/// each new month. Only meaningful when the list is in date order, so it no-ops
-/// unless `sort` is "newest"/"oldest"; callers also skip it when a game filter
-/// is active. The `.vod-period-header` CSS uppercases the label for display.
-/// `prev_stream_time` is the stream time of the card immediately BEFORE this
-/// slice (i.e. the last card of the previous page), so a page that starts
-/// mid-month doesn't repeat the month header.
-pub(crate) fn assign_period_headers_seeded(
-    displays: &mut [VodDisplay],
-    sort: &str,
-    prev_stream_time: Option<&str>,
-) {
-    if sort != "newest" && sort != "oldest" {
-        return;
-    }
-    let mut current: Option<String> = prev_stream_time.map(month_year_long);
-    for display in displays.iter_mut() {
-        let label = month_year_long(&display.created_at);
-        if current.as_deref() != Some(label.as_str()) {
-            display.period_header = Some(label.clone());
-            current = Some(label);
-        }
-    }
-}
-
-pub(crate) fn assign_series_headers(displays: &mut [VodDisplay], keys: &[Option<String>]) {
-    if displays.is_empty() || keys.len() != displays.len() {
-        return;
-    }
-
-    let norm = |p: &Option<String>| p.as_deref().map(|s| s.to_lowercase());
-
-    let mut run_start = 0usize;
-    for i in 1..=displays.len() {
-        let boundary = i == displays.len() || norm(&keys[i]) != norm(&keys[run_start]);
-        if boundary {
-            let count = i - run_start;
-            let label_name = keys[run_start].as_deref().unwrap_or("Untagged").to_string();
-            let noun = if count == 1 { "stream" } else { "streams" };
-            displays[run_start].period_header = Some(format!("{label_name} · {count} {noun}"));
-            run_start = i;
-        }
-    }
-}
-
 /// Picks the chapter containing `time_secs` (the last chapter whose start ≤ time).
 /// Falls back to the first chapter if no time is given or none match. Returns
 /// (chapter_name, chapter_start_seconds) or None if the VOD has no chapters.
@@ -774,35 +731,6 @@ pub(crate) fn resolve_watched_chapter(vod: &Vod, time_secs: Option<i64>) -> Opti
         None => named.first().copied(),
     };
     pick.map(|(n, s)| (n.to_string(), s))
-}
-
-fn month_year_long(created_at: &str) -> String {
-    let Some(date_part) = created_at.get(..10) else {
-        return created_at.to_string();
-    };
-    let parts: Vec<&str> = date_part.split('-').collect();
-    if parts.len() != 3 {
-        return date_part.to_string();
-    }
-    format!("{} {}", month_long(parts[1]), parts[0])
-}
-
-fn month_long(month_part: &str) -> &str {
-    match month_part {
-        "01" => "January",
-        "02" => "February",
-        "03" => "March",
-        "04" => "April",
-        "05" => "May",
-        "06" => "June",
-        "07" => "July",
-        "08" => "August",
-        "09" => "September",
-        "10" => "October",
-        "11" => "November",
-        "12" => "December",
-        other => other,
-    }
 }
 
 pub(crate) fn days_in_month(year: i32, month: u32) -> u32 {
@@ -1275,27 +1203,6 @@ mod tests {
         assert!(!has_more);
     }
 
-    fn make_display(id: &str, created_at: &str) -> VodDisplay {
-        VodDisplay {
-            id: id.into(),
-            display_title: "t".into(),
-            formatted_date: "".into(),
-            formatted_date_short: "".into(),
-            duration: None,
-            thumbnail_url: None,
-            chapter_segments: vec![],
-            created_at: created_at.into(),
-            match_label: None,
-            status_label: None,
-            progress_seconds: None,
-            history_state: None,
-            chapter_names: vec![],
-            duration_seconds: 0,
-            period_header: None,
-            watch_url: format!("/watch/{id}"),
-        }
-    }
-
     #[test]
     fn filter_vods_with_metadata_matches_title_and_chapters() {
         let mut titled = make_vod("title", "2026-05-20T00:00:00Z", &[]);
@@ -1310,7 +1217,7 @@ mod tests {
             ..Default::default()
         };
         let (refs, metadata) =
-            filter_vods_with_metadata(vods.iter(), &params, "/browse?lens=streams");
+            filter_vods_with_metadata(vods.iter(), &params, "newest", "/browse?lens=streams");
         assert_eq!(refs.len(), 2);
         assert_eq!(refs[0].vod.id, "title");
         assert!(refs[0].match_label.is_none());
@@ -1336,7 +1243,7 @@ mod tests {
             to: Some("2026-05-19".into()),
             ..Default::default()
         };
-        let (refs, _) = filter_vods_with_metadata(vods.iter(), &params, "/x");
+        let (refs, _) = filter_vods_with_metadata(vods.iter(), &params, "oldest", "/x");
         assert_eq!(
             refs.iter().map(|r| r.vod.id.as_str()).collect::<Vec<_>>(),
             vec!["same-day"]
@@ -1355,23 +1262,12 @@ mod tests {
             to: Some("".into()),
             ..Default::default()
         };
-        let (refs, metadata) = filter_vods_with_metadata(vods.iter(), &params, "/x");
+        let (refs, metadata) = filter_vods_with_metadata(vods.iter(), &params, "newest", "/x");
         assert_eq!(
             refs.iter().map(|r| r.vod.id.as_str()).collect::<Vec<_>>(),
             vec!["newer", "older"]
         );
         assert!(!metadata.is_filtered);
-    }
-
-    #[test]
-    fn assign_period_headers_seeded_suppresses_repeat_month() {
-        let mut same_month = vec![make_display("1", "2024-03-10T00:00:00Z")];
-        assign_period_headers_seeded(&mut same_month, "newest", Some("2024-03-31T00:00:00Z"));
-        assert!(same_month[0].period_header.is_none());
-
-        let mut new_month = vec![make_display("2", "2024-03-10T00:00:00Z")];
-        assign_period_headers_seeded(&mut new_month, "newest", Some("2024-04-01T00:00:00Z"));
-        assert_eq!(new_month[0].period_header.as_deref(), Some("March 2024"));
     }
 
     #[test]
@@ -1408,34 +1304,6 @@ mod tests {
         let c = parse_ymd_to_days("2025-01-01T00:00:00Z").unwrap();
         assert_eq!(c - a, 366); // 2024 is a leap year
         assert!(parse_ymd_to_days("bogus").is_none());
-    }
-
-    #[test]
-    fn test_assign_period_headers_groups_by_month() {
-        let mut displays = vec![
-            make_display("1", "2024-03-10T00:00:00Z"),
-            make_display("2", "2024-03-05T00:00:00Z"),
-            make_display("3", "2024-01-20T00:00:00Z"),
-            make_display("4", "2024-01-15T00:00:00Z"),
-        ];
-        assign_period_headers_seeded(&mut displays, "newest", None);
-        assert_eq!(displays[0].period_header.as_deref(), Some("March 2024"));
-        assert!(displays[1].period_header.is_none());
-        assert_eq!(displays[2].period_header.as_deref(), Some("January 2024"));
-        assert!(displays[3].period_header.is_none());
-    }
-
-    #[test]
-    fn test_assign_period_headers_splits_consecutive_months() {
-        // Adjacent days across a month boundary get separate headers, unlike
-        // the old gap-based clustering (which kept them in one cluster).
-        let mut displays = vec![
-            make_display("1", "2024-04-01T00:00:00Z"),
-            make_display("2", "2024-03-31T00:00:00Z"),
-        ];
-        assign_period_headers_seeded(&mut displays, "newest", None);
-        assert_eq!(displays[0].period_header.as_deref(), Some("April 2024"));
-        assert_eq!(displays[1].period_header.as_deref(), Some("March 2024"));
     }
 
     #[test]
@@ -1610,128 +1478,6 @@ mod tests {
     }
 
     #[test]
-    fn test_assign_period_headers_single_month_one_header() {
-        let mut displays = vec![
-            make_display("1", "2024-03-10T00:00:00Z"),
-            make_display("2", "2024-03-05T00:00:00Z"),
-            make_display("3", "2024-03-01T00:00:00Z"),
-        ];
-        assign_period_headers_seeded(&mut displays, "newest", None);
-        assert_eq!(displays[0].period_header.as_deref(), Some("March 2024"));
-        assert!(displays[1].period_header.is_none());
-        assert!(displays[2].period_header.is_none());
-    }
-
-    fn display_with_games(id: &str, games: &[&str]) -> VodDisplay {
-        let mut d = make_display(id, "2024-01-01T00:00:00Z");
-        d.chapter_names = games.iter().map(|game| (*game).to_string()).collect();
-        d.chapter_segments = games
-            .iter()
-            .map(|g| ChapterSegment {
-                name: (*g).into(),
-                width_pct: 0.0,
-                watch_url: String::new(),
-                color_idx: 0,
-                start_label: "0:00".into(),
-                start_secs: 0,
-                duration_secs: 0,
-            })
-            .collect();
-        d
-    }
-
-    fn keys_from_first_tag(displays: &[VodDisplay]) -> Vec<Option<String>> {
-        displays
-            .iter()
-            .map(|d| d.chapter_segments.first().map(|s| s.name.clone()))
-            .collect()
-    }
-
-    #[test]
-    fn test_assign_series_headers_groups_consecutive() {
-        let mut displays = vec![
-            display_with_games("1", &["Elden Ring"]),
-            display_with_games("2", &["Elden Ring"]),
-            display_with_games("3", &["Dark Souls"]),
-            display_with_games("4", &["Elden Ring"]),
-        ];
-        let keys = keys_from_first_tag(&displays);
-        assign_series_headers(&mut displays, &keys);
-        assert_eq!(
-            displays[0].period_header.as_deref(),
-            Some("Elden Ring · 2 streams")
-        );
-        assert!(displays[1].period_header.is_none());
-        assert_eq!(
-            displays[2].period_header.as_deref(),
-            Some("Dark Souls · 1 stream")
-        );
-        assert_eq!(
-            displays[3].period_header.as_deref(),
-            Some("Elden Ring · 1 stream")
-        );
-    }
-
-    #[test]
-    fn test_assign_series_headers_handles_untagged() {
-        let mut displays = vec![
-            display_with_games("1", &[]),
-            display_with_games("2", &[]),
-            display_with_games("3", &["Elden Ring"]),
-        ];
-        let keys = keys_from_first_tag(&displays);
-        assign_series_headers(&mut displays, &keys);
-        assert_eq!(
-            displays[0].period_header.as_deref(),
-            Some("Untagged · 2 streams")
-        );
-        assert!(displays[1].period_header.is_none());
-        assert_eq!(
-            displays[2].period_header.as_deref(),
-            Some("Elden Ring · 1 stream")
-        );
-    }
-
-    #[test]
-    fn test_assign_series_headers_case_insensitive() {
-        let mut displays = vec![
-            display_with_games("1", &["Elden Ring"]),
-            display_with_games("2", &["elden ring"]),
-        ];
-        let keys = keys_from_first_tag(&displays);
-        assign_series_headers(&mut displays, &keys);
-        assert_eq!(
-            displays[0].period_header.as_deref(),
-            Some("Elden Ring · 2 streams")
-        );
-        assert!(displays[1].period_header.is_none());
-    }
-
-    #[test]
-    fn test_assign_series_headers_honours_custom_keys() {
-        // Same first-chapter on both VODs, but the resume time puts the user
-        // in a later chapter on one of them — the two VODs should land in
-        // separate groups.
-        let mut displays = vec![
-            display_with_games("1", &["Just Chatting", "Terraria"]),
-            display_with_games("2", &["Just Chatting", "Terraria"]),
-        ];
-        let keys = vec![
-            Some("Just Chatting".to_string()),
-            Some("Terraria".to_string()),
-        ];
-        assign_series_headers(&mut displays, &keys);
-        assert_eq!(
-            displays[0].period_header.as_deref(),
-            Some("Just Chatting · 1 stream")
-        );
-        assert_eq!(
-            displays[1].period_header.as_deref(),
-            Some("Terraria · 1 stream")
-        );
-    }
-
-    #[test]
     fn test_resolve_watched_chapter_picks_containing_chapter() {
         let vod = make_vod("a", "2024-01-01T00:00:00Z", &["Just Chatting", "Terraria"]);
         // make_vod sets all chapter starts to 0.0 — override for this test.
@@ -1770,16 +1516,6 @@ mod tests {
             is_live: false,
         };
         assert!(resolve_watched_chapter(&vod, Some(100)).is_none());
-    }
-
-    #[test]
-    fn test_assign_period_headers_skips_for_non_chronological_sort() {
-        let mut displays = vec![
-            make_display("1", "2024-03-10T00:00:00Z"),
-            make_display("2", "2024-01-01T00:00:00Z"),
-        ];
-        assign_period_headers_seeded(&mut displays, "longest", None);
-        assert!(displays.iter().all(|d| d.period_header.is_none()));
     }
 
     fn make_vod(id: &str, created_at: &str, games: &[&str]) -> Vod {

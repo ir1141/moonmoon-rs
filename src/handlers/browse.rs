@@ -1,9 +1,9 @@
 use super::{
-    GAME_BATCH_SIZE, GamesGridTemplate, ListFilterConfig, ListMetadata, ListQuery, Section,
-    VOD_BATCH_SIZE, VodDisplay, VodsGridTemplate, assign_period_headers_seeded, build_next_url,
-    date_preset_state, filter_games_with_metadata, filter_vods_with_metadata, get_chapter_start,
+    GAME_BATCH_SIZE, GamesGridTemplate, Headers, ListFilterConfig, ListMetadata, ListQuery,
+    Listing, Pagination, Section, VOD_BATCH_SIZE, VodDisplay, VodsGridTemplate, date_preset_state,
+    filter_games_with_metadata, filter_vods_with_metadata, get_chapter_start,
     list_sort_options_grouped, paginate_with_nav, render_template, selected_sort_option,
-    vod_has_game, vod_stream_time,
+    vod_has_game,
 };
 use crate::SharedState;
 use crate::middleware::CspNonce;
@@ -146,32 +146,34 @@ async fn prepare_browse(
                 Some(name) => filter_vods_with_metadata(
                     vods.iter().filter(|v| vod_has_game(v, name)),
                     params,
+                    sort,
                     "/browse?lens=streams",
                 ),
-                None => filter_vods_with_metadata(vods.iter(), params, "/browse?lens=streams"),
+                None => {
+                    filter_vods_with_metadata(vods.iter(), params, sort, "/browse?lens=streams")
+                }
             };
 
-            // Paginate BEFORE building VodDisplays so chapter segments and game
-            // tags are only computed for the cards actually rendered.
-            let total = refs.len();
-            let page = params.page.unwrap_or(0);
-            let start = page.saturating_mul(VOD_BATCH_SIZE);
-            let end = start.saturating_add(VOD_BATCH_SIZE).min(total);
-            let has_more = end < total;
-            let next_url = build_next_url("/browse/grid", page.saturating_add(1), params);
-            let prev_stream_time = start
-                .checked_sub(1)
-                .and_then(|i| refs.get(i))
-                .map(|r| vod_stream_time(r.vod).to_string());
-            let page_refs = if start >= total {
-                &refs[0..0]
+            // Month grouping only makes sense for the unfiltered, chronological
+            // streams view; a game filter or a non-date sort renders a flat grid.
+            let headers = if game.is_none() && matches!(sort, "newest" | "oldest") {
+                Headers::Period
             } else {
-                &refs[start..end]
+                Headers::None
             };
 
-            let mut displays: Vec<VodDisplay> = page_refs
-                .iter()
-                .map(|r| {
+            // The builder paginates before this closure runs, so chapter
+            // segments and tags are only computed for the rendered cards.
+            let listing = Listing::build(
+                &refs,
+                Pagination::Paged {
+                    base: "/browse/grid",
+                    page: params.page.unwrap_or(0),
+                    batch: VOD_BATCH_SIZE,
+                    params,
+                },
+                headers,
+                |r| {
                     let mut display = match game {
                         Some(name) => VodDisplay::from_vod_with(
                             r.vod,
@@ -181,21 +183,16 @@ async fn prepare_browse(
                         None => VodDisplay::from_vod(r.vod),
                     };
                     display.match_label = r.match_label.clone();
-                    display
-                })
-                .collect();
-            // Month grouping only makes sense for the unfiltered, chronological
-            // streams view; a game filter renders a flat grid (no headers).
-            if game.is_none() {
-                assign_period_headers_seeded(&mut displays, sort, prev_stream_time.as_deref());
-            }
+                    (display, None)
+                },
+            );
 
             PreparedBrowse {
                 games: Vec::new(),
-                vods: displays,
+                vods: listing.vods,
                 metadata,
-                has_more,
-                next_url,
+                has_more: listing.has_more,
+                next_url: listing.next_url,
                 archive_min_date,
                 archive_max_date,
                 show_recency: false,
@@ -217,10 +214,11 @@ fn sort_context(is_games: bool) -> (&'static [(&'static str, &'static str, bool)
 }
 
 /// Resolve the game drilldown, lens, `is_games`, and effective sort from the
-/// query, pinning the resolved sort back onto `params`. The pin matters because
-/// `filter_vods_with_metadata` and `build_next_url` read `params.sort` directly,
-/// so without it the grid order and pagination URLs wouldn't see the lens
-/// default that the toolbar displays.
+/// query, pinning the resolved sort back onto `params`. The grid order no longer
+/// depends on the pin — `filter_vods_with_metadata` takes `sort` explicitly — but
+/// the pin still feeds the effective sort into the pagination and clear-filter
+/// URLs (`build_next_url` / `build_clear_url` read `params.sort`), so "load more"
+/// and "clear" preserve the lens default the toolbar displays.
 /// Shared by `browse_page` and `browse_grid` so the two never disagree.
 fn resolve_browse_params(params: &mut ListQuery) -> (Option<String>, Lens, bool, String) {
     let game = params.game.clone().filter(|s| !s.is_empty());
