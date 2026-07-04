@@ -64,7 +64,8 @@ struct ContinueResumeView {
     thumbnail_url: Option<String>,
     resume_url: String,
     start_url: String,
-    progress_pct: String,
+    resume_seconds: i64,
+    duration_seconds: i64,
     subline: String,
 }
 
@@ -210,7 +211,9 @@ fn build_continue_resume_view(
     requested_id: &str,
     resume_time: Option<i64>,
 ) -> Option<ContinueResumeView> {
-    let resume_time = resume_time.filter(|time| *time > 10)?;
+    // Positive-position guard only; the "≤ RESUME_MIN_SECONDS is noise"
+    // policy lives client-side in static/lib/history-state.js.
+    let resume_time = resume_time.filter(|time| *time > 0)?;
     let vod = find_vod_by_id(vods, requested_id)?;
     let resolved_game = resolve_watched_chapter(vod, Some(resume_time));
     let game_name = resolved_game
@@ -219,11 +222,6 @@ fn build_continue_resume_view(
         .unwrap_or_else(|| "Stream".to_string());
     let game_hint = resolved_game.as_ref().map(|(name, _)| name.as_str());
     let display = VodDisplay::from_vod_with(vod, Some(resume_time), game_hint);
-    let progress = if display.duration_seconds > 0 {
-        ((resume_time as f64 / display.duration_seconds as f64) * 100.0).clamp(0.0, 100.0)
-    } else {
-        0.0
-    };
     let resume_at = format!("resumes at {}", format_chapter_start(resume_time));
     let subline = match format_continue_remaining(resume_time, display.duration_seconds) {
         Some(remaining) => format!("{remaining} · {resume_at}"),
@@ -238,7 +236,8 @@ fn build_continue_resume_view(
         thumbnail_url: display.thumbnail_url,
         resume_url: display.watch_url,
         start_url: build_watch_url(&display.id, Some(0), None),
-        progress_pct: format!("{progress:.2}"),
+        resume_seconds: resume_time,
+        duration_seconds: display.duration_seconds,
         subline,
     })
 }
@@ -380,7 +379,8 @@ mod tests {
         assert_eq!(resume.game_name, "Terraria");
         assert_eq!(resume.resume_url, "/watch/v1?t=5000&game=Terraria");
         assert_eq!(resume.start_url, "/watch/v1?t=0");
-        assert_eq!(resume.progress_pct, "69.44");
+        assert_eq!(resume.resume_seconds, 5000);
+        assert_eq!(resume.duration_seconds, 7200);
         assert_eq!(resume.subline, "36m left · resumes at 1:23:20");
     }
 
