@@ -405,6 +405,12 @@
   line-height: 1.5;
 }
 
+/* Barely-there zebra tint on alternating messages. Uses --text, which flips
+   with the theme, so it lightens rows in dark mode and darkens them in light. */
+.chat-msg--alt {
+  background: color-mix(in oklab, var(--text) 6%, transparent);
+}
+
 .chat-timestamp {
   color: var(--text-muted);
   display: inline-block;

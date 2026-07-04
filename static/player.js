@@ -16,6 +16,7 @@ import {
   chatDistanceFromBottom,
   nextChatAutoScrollState,
 } from "./lib/chat-autoscroll.js";
+import { chatStripeClass } from "./lib/chat-stripe.js";
 import {
   shouldFinalizePlaybackAtTick,
   shouldSaveResume,
@@ -1064,7 +1065,7 @@ function renderChat() {
     if (offsetSec > globalTime) break;
 
     var div = document.createElement("div");
-    div.className = "chat-msg";
+    div.className = ("chat-msg " + chatStripeClass(chatIndex)).trim();
 
     div.appendChild(buildChatTimestamp(msg));
 
