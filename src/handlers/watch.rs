@@ -79,11 +79,7 @@ fn youtube_parts_json(vod: &Vod) -> String {
 }
 
 fn chapters_json(vod: &Vod) -> String {
-    let total_duration_secs = vod
-        .duration
-        .as_ref()
-        .map_or(0, |duration| duration.seconds());
-    let chapters: Vec<ChapterPayload> = get_chapter_segments(vod, total_duration_secs)
+    let chapters: Vec<ChapterPayload> = get_chapter_segments(vod)
         .into_iter()
         .map(|seg| ChapterPayload {
             name: seg.name,

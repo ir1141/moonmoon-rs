@@ -1,6 +1,6 @@
 use super::{
     Section, VodDisplay, current_utc_days, date_query_for_days, days_to_civil, format_date,
-    parse_ymd_to_days, render_template, vod_stream_time,
+    parse_ymd_to_days, render_template,
 };
 use crate::SharedState;
 use crate::middleware::CspNonce;
@@ -163,7 +163,7 @@ fn format_thousands(n: usize) -> String {
 fn count_streams_since(vods: &[Vod], from_date: &str) -> usize {
     vods.iter()
         .filter(|vod| {
-            vod_stream_time(vod)
+            vod.stream_time()
                 .get(..10)
                 .is_some_and(|date| date >= from_date)
         })
@@ -173,7 +173,7 @@ fn count_streams_since(vods: &[Vod], from_date: &str) -> usize {
 /// Earliest stream year in the catalog, falling back to a sensible constant.
 fn archive_start_year(vods: &[Vod]) -> i32 {
     vods.iter()
-        .filter_map(|vod| vod_stream_time(vod).get(..4)?.parse::<i32>().ok())
+        .filter_map(|vod| vod.stream_time().get(..4)?.parse::<i32>().ok())
         .min()
         .unwrap_or(FALLBACK_START_YEAR)
 }
@@ -189,7 +189,7 @@ fn find_on_this_day(
 ) -> Option<(usize, i32)> {
     let mut best: Option<(usize, i32, i64)> = None;
     for (idx, vod) in vods.iter().enumerate() {
-        let Some(days) = parse_ymd_to_days(vod_stream_time(vod)) else {
+        let Some(days) = parse_ymd_to_days(vod.stream_time()) else {
             continue;
         };
         let (year, month, day) = days_to_civil(days);
