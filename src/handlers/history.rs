@@ -1,7 +1,7 @@
 use super::{
-    Section, SortOption, VodDisplay, VodsGridTemplate, assign_series_headers, build_watch_url,
-    find_vod_by_id, format_chapter_start, list_sort_options_grouped, render_template,
-    resolve_watched_chapter,
+    Headers, Listing, Pagination, Section, SortOption, VodDisplay, VodsGridTemplate,
+    build_watch_url, find_vod_by_id, format_chapter_start, list_sort_options_grouped,
+    render_template, resolve_watched_chapter, vod_stream_time,
 };
 use crate::SharedState;
 use crate::middleware::CspNonce;
@@ -162,64 +162,81 @@ fn build_history_displays(
         }
     }
 
-    // Build displays in the order of requested IDs (most recently watched first).
-    // For each one, resolve the chapter the user was actually in at resume time
-    // so multi-game streams group by the watched game, not the first chapter.
-    let mut displays = Vec::new();
-    let mut keys: Vec<Option<String>> = Vec::new();
+    // Resolve each requested id to a catalog vod plus the chapter the user was
+    // actually in at resume time (the series-header key), so multi-game streams
+    // group by the watched game, not the first chapter. Kept in request order
+    // (most recently watched first) unless the game sort reorders below.
+    struct Entry<'a> {
+        vod: &'a Vod,
+        resume_time: Option<i64>,
+        state: HistoryEntryState,
+        chapter_start: Option<i64>,
+        game_key: Option<String>,
+    }
+    let mut entries: Vec<Entry> = Vec::new();
     for requested in requested_vods {
         if let Some(&vod) = index.get(requested.id.as_str()) {
-            let (name_opt, start_opt) = resolve_watched_chapter(vod, requested.resume_time).unzip();
-            let mut display = match requested.state {
-                HistoryEntryState::InProgress => {
-                    let link_start = if options.resume_links {
-                        requested.resume_time
-                    } else {
-                        requested.resume_time.or(start_opt)
-                    };
-                    let mut display =
-                        VodDisplay::from_vod_with(vod, link_start, name_opt.as_deref());
-                    if let Some(time) = requested.resume_time {
-                        display.status_label =
-                            Some(format!("In progress · {}", format_chapter_start(time)));
-                        display.progress_seconds = Some(time);
-                    } else {
-                        display.status_label = Some("In progress".to_string());
-                    }
-                    display.history_state = Some(requested.state.as_str());
-                    display
-                }
-                HistoryEntryState::Watched => {
-                    let mut display =
-                        VodDisplay::from_vod_with(vod, start_opt, name_opt.as_deref());
-                    display.status_label = Some("Watched".to_string());
-                    display.history_state = Some(requested.state.as_str());
-                    display
-                }
-            };
-            display.match_label = None;
-            displays.push(display);
-            keys.push(name_opt);
+            let (game_key, chapter_start) =
+                resolve_watched_chapter(vod, requested.resume_time).unzip();
+            entries.push(Entry {
+                vod,
+                resume_time: requested.resume_time,
+                state: requested.state,
+                chapter_start,
+                game_key,
+            });
         }
     }
 
+    // Order refs into their final display order BEFORE the listing builds them,
+    // so the series headers are a plain run-length pass over contiguous games.
     if sort == Some("game") {
-        let mut paired: Vec<(VodDisplay, Option<String>)> =
-            displays.into_iter().zip(keys).collect();
-        paired.sort_by(|a, b| {
-            let ak = a.1.as_deref().unwrap_or("").to_lowercase();
-            let bk = b.1.as_deref().unwrap_or("").to_lowercase();
+        entries.sort_by(|a, b| {
+            let ak = a.game_key.as_deref().unwrap_or("").to_lowercase();
+            let bk = b.game_key.as_deref().unwrap_or("").to_lowercase();
             ak.cmp(&bk)
-                .then_with(|| b.0.created_at.cmp(&a.0.created_at))
+                .then_with(|| vod_stream_time(b.vod).cmp(vod_stream_time(a.vod)))
         });
-        (displays, keys) = paired.into_iter().unzip();
     }
 
-    if options.show_headers {
-        assign_series_headers(&mut displays, &keys);
-    }
+    let headers = if options.show_headers {
+        Headers::Series
+    } else {
+        Headers::None
+    };
 
-    displays
+    Listing::build(&entries, Pagination::All, headers, |e| {
+        let mut display = match e.state {
+            HistoryEntryState::InProgress => {
+                let link_start = if options.resume_links {
+                    e.resume_time
+                } else {
+                    e.resume_time.or(e.chapter_start)
+                };
+                let mut display =
+                    VodDisplay::from_vod_with(e.vod, link_start, e.game_key.as_deref());
+                if let Some(time) = e.resume_time {
+                    display.status_label =
+                        Some(format!("In progress · {}", format_chapter_start(time)));
+                    display.progress_seconds = Some(time);
+                } else {
+                    display.status_label = Some("In progress".to_string());
+                }
+                display.history_state = Some(e.state.as_str());
+                display
+            }
+            HistoryEntryState::Watched => {
+                let mut display =
+                    VodDisplay::from_vod_with(e.vod, e.chapter_start, e.game_key.as_deref());
+                display.status_label = Some("Watched".to_string());
+                display.history_state = Some(e.state.as_str());
+                display
+            }
+        };
+        display.match_label = None;
+        (display, e.game_key.clone())
+    })
+    .vods
 }
 
 fn format_continue_remaining(position: i64, duration: i64) -> Option<String> {
