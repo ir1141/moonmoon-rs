@@ -46,3 +46,24 @@ The run-length game header ("Elden Ring · 3 streams") inserted above each
 contiguous run of the same watched game in a Listing. Requires refs already
 ordered so a game forms one run. The other `Headers` mode. _Avoid_: game group,
 section header.
+
+## Watch history
+
+The per-VOD record of what the viewer watched. Client-owned: one localStorage
+store, `moonmoon_history` (`{ id: { state, time?, updated, part?, localTime? }
+}`), whose shape, normalization, legacy migration, merge (per-id last-write-wins
+on `updated`, local wins ties) and resume policy all live in one contract
+module, `static/lib/history-state.js`. The server touches history in two dumb
+roles only: opaque sync transport (`SyncStore`, whole-blob LWW; v2 blob
+`{ v, history }`, legacy `{ resume, watched }` blobs readable forever) and
+renderer of entries POSTed to `/history/vods` (wire shape pinned on both sides
+by `tests/fixtures/history-request.json`). _Avoid_: resume store, watched store
+(the pre-unification split).
+
+### Resume policy
+
+"A position at or under 10 seconds is noise" — `RESUME_MIN_SECONDS` plus
+`resumePercent`, defined once in `history-state.js` and imported everywhere a
+bar is drawn or a resume offered. The server keeps only a positive-position
+guard on `/history/resume`; it never re-declares the threshold or the percent.
+_Avoid_: duplicating either in Rust or per-caller constants.
