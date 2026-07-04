@@ -2,7 +2,9 @@
   "success": true,
   "data": {
     "vodId": 1414,
-    "ffz_emotes": [],
+    "ffz_emotes": [
+      { "id": 28138, "code": "ZreknarF" }
+    ],
     "bttv_emotes": [
       { "id": "54fa8f1401e468494b85b537", "code": ":tf:" },
       { "id": "566ca04265dbbdab32ec054a", "code": "SOULFUL" }

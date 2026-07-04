@@ -208,7 +208,7 @@ fn absorb_snapshot(
         return;
     };
     for item in items {
-        let id = item.get("id").and_then(|v| v.as_str());
+        let id = json_id_to_string(item.get("id"));
         let name = item
             .get("code")
             .or_else(|| item.get("name"))
@@ -227,6 +227,19 @@ fn absorb_snapshot(
             owner: None,
         });
     }
+}
+
+/// Coerce an emote `id` to a string. The archive serializes ids as JSON strings
+/// for 7TV/BTTV but as integers for FFZ, so accept either representation.
+fn json_id_to_string(value: Option<&serde_json::Value>) -> Option<String> {
+    let value = value?;
+    if let Some(s) = value.as_str() {
+        return Some(s.to_string());
+    }
+    value
+        .as_i64()
+        .map(|n| n.to_string())
+        .or_else(|| value.as_u64().map(|n| n.to_string()))
 }
 
 /// Parse BTTV's `/3/emotes/shared/search?query=...` response (top-level JSON array).
@@ -470,6 +483,17 @@ mod tests {
             soulful.url,
             "https://cdn.betterttv.net/emote/566ca04265dbbdab32ec054a/1x"
         );
+    }
+
+    #[test]
+    fn vod_snapshot_builds_ffz_url_from_numeric_id() {
+        let json = load_fixture("tests/fixtures/emotes/vod_snapshot.json");
+        let map = parse_vod_emote_snapshot(&json["data"]);
+
+        let ffz = map.get("ZreknarF").expect("ZreknarF present");
+        assert_eq!(ffz.provider, EmoteProvider::Ffz);
+        assert_eq!(ffz.url, "https://cdn.frankerfacez.com/emote/28138/1");
+        assert_eq!(ffz.owner, None);
     }
 
     #[test]
