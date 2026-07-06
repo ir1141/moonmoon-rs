@@ -1571,3 +1571,26 @@ document.addEventListener("keydown", function (e) {
     setTheatre(!document.body.classList.contains("theatre-mode"));
   }
 });
+
+// ─── Landscape focus mode ───
+
+var CHAT_COLLAPSED_KEY = "moonmoon_chat_collapsed";
+var chatCollapseBtn = document.getElementById("chat-collapse");
+
+function setChatCollapsed(on) {
+  document.body.classList.toggle("chat-collapsed", on);
+  var label = on ? "Show chat" : "Hide chat";
+  chatCollapseBtn.setAttribute("aria-expanded", on ? "false" : "true");
+  chatCollapseBtn.setAttribute("aria-label", label);
+  chatCollapseBtn.title = label;
+  storageSet(storage, CHAT_COLLAPSED_KEY, on ? "1" : "0");
+  if (!on && chatAutoScroll) scrollChatToBottom();
+}
+
+if (storageGet(storage, CHAT_COLLAPSED_KEY) === "1") {
+  setChatCollapsed(true);
+}
+
+chatCollapseBtn.addEventListener("click", function () {
+  setChatCollapsed(!document.body.classList.contains("chat-collapsed"));
+});
