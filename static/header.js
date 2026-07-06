@@ -2,6 +2,7 @@ import {
   nextSearchOverlayState,
   shouldLockSearchOverlayScroll,
 } from "./lib/header-search.js";
+import { nextHeaderHidden } from "./lib/header-scroll.js";
 
 const searchOverlayMedia = window.matchMedia("(max-width: 768px)");
 
@@ -87,3 +88,37 @@ if (typeof searchOverlayMedia.addEventListener === "function") {
 } else if (typeof searchOverlayMedia.addListener === "function") {
   searchOverlayMedia.addListener(updateBodyOverlayState);
 }
+
+function initScrollAwayHeader(header) {
+  let lastY = window.scrollY;
+  let hidden = false;
+
+  function onScroll() {
+    const y = window.scrollY;
+    if (!searchOverlayMedia.matches) {
+      lastY = y;
+      if (hidden) {
+        hidden = false;
+        header.classList.remove("header-hidden");
+      }
+      return;
+    }
+    const next = nextHeaderHidden({
+      hidden,
+      y,
+      lastY,
+      headerHeight: header.offsetHeight,
+      overlayOpen: document.body.classList.contains("search-overlay-open"),
+    });
+    if (next !== hidden) {
+      hidden = next;
+      header.classList.toggle("header-hidden", hidden);
+    }
+    lastY = y;
+  }
+
+  window.addEventListener("scroll", onScroll, { passive: true });
+}
+
+const header = document.querySelector(".header");
+if (header) initScrollAwayHeader(header);

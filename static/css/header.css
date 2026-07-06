@@ -76,6 +76,12 @@
   background: var(--accent);
 }
 
+/* History joins the pill nav only on small screens, where the icon-only
+   utility link is too small a target and too easy to miss. */
+.nav-link-history {
+  display: none;
+}
+
 .icon-btn,
 .btn-icon {
   background: transparent;
@@ -259,6 +265,31 @@
   .nav-util span {
     display: none;
   }
+  /* Once icon-only, Random and History get the same box treatment as the
+     other icon buttons instead of a bare 15px svg. */
+  .btn-random,
+  .nav-util {
+    width: 34px;
+    height: 34px;
+    justify-content: center;
+    gap: 0;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    transition:
+      background 0.2s,
+      border-color 0.2s,
+      color 0.2s;
+  }
+  .btn-random:hover,
+  .nav-util:hover {
+    background: var(--bg-elevated);
+    border-color: var(--border);
+  }
+  .btn-random:focus-visible,
+  .nav-util:focus-visible {
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -285,6 +316,14 @@
   }
   .nav-group {
     width: 100%;
+  }
+  .nav-link-history {
+    display: block;
+  }
+  /* The pill nav covers History here; drop the redundant icon link. */
+  .nav-util,
+  .header-sep {
+    display: none;
   }
   .nav-link {
     flex: 1 1 0;
@@ -369,5 +408,55 @@
     gap: 7px;
     margin-left: 0;
     width: 100%;
+  }
+
+  /* Scroll-away header: the header is ~1/8 of a phone viewport, so it yields
+     to content on scroll-down and returns on any scroll-up (see header.js). */
+  .header {
+    transition: transform 0.22s ease;
+  }
+  .header.header-hidden {
+    transform: translateY(-100%);
+  }
+  .header.header-hidden:focus-within {
+    transform: none;
+  }
+}
+
+@media (max-width: 374px) {
+  .nav-link {
+    font-size: 10.5px;
+    letter-spacing: 0.4px;
+    padding: 8px 4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header {
+    transition: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .icon-btn,
+  .btn-icon {
+    width: 44px;
+    height: 44px;
+  }
+  .header-right {
+    gap: 6px;
+  }
+  .nav-link {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+}
+
+/* Random/History are only square boxes while icon-only (≤1024). */
+@media (pointer: coarse) and (max-width: 1024px) {
+  .btn-random,
+  .nav-util {
+    width: 44px;
+    height: 44px;
   }
 }
