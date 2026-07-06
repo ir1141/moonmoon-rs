@@ -767,6 +767,14 @@
   }
 }
 
+/* Touch has no hover; acknowledge the press instead. */
+@media (hover: none) {
+  .vod-card:active {
+    border-color: var(--accent);
+    transform: scale(0.985);
+  }
+}
+
 @media (max-width: 768px) {
   .vod-grid {
     grid-template-columns: 1fr;

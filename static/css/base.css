@@ -372,9 +372,11 @@ a {
     transform: translateY(0);
   }
 }
+/* No fill mode: `both` would pin the last keyframe's transform forever,
+   overriding the cards' hover/active transforms. */
 .game-card,
 .vod-card {
-  animation: fadeUp 0.4s ease both;
+  animation: fadeUp 0.4s ease;
 }
 
 @media (max-width: 768px) {
