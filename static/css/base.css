@@ -64,6 +64,9 @@ body {
   font-family: var(--font-body);
   min-height: 100vh;
   overflow-x: hidden;
+  /* One stacking context for the page, so the glow can sit at -1 and the
+     fixed mobile filter overlay (z 500) genuinely covers the header (z 100). */
+  isolation: isolate;
 }
 
 [data-theme="light"] body {
@@ -83,7 +86,7 @@ body::before {
     transparent 72%
   );
   pointer-events: none;
-  z-index: 0;
+  z-index: -1;
 }
 
 a {
@@ -190,7 +193,6 @@ a {
 /* ─── Content ─── */
 .content {
   position: relative;
-  z-index: 1;
   padding: 32px;
   max-width: 1400px;
   margin: 0 auto;
