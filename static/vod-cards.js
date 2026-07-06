@@ -42,7 +42,7 @@ function applyResumeState(card, store) {
 
   if (historyState === "watched") {
     card.classList.remove("has-resume");
-    if (fill) fill.style.width = "0%";
+    if (fill) fill.style.transform = "scaleX(0)";
     return;
   }
 
@@ -54,12 +54,12 @@ function applyResumeState(card, store) {
   ) {
     const percent = resumePercent(time, duration);
     card.classList.add("has-resume");
-    if (fill) fill.style.width = `${percent}%`;
+    if (fill) fill.style.transform = `scaleX(${percent / 100})`;
     return;
   }
 
   card.classList.remove("has-resume");
-  if (fill) fill.style.width = "0%";
+  if (fill) fill.style.transform = "scaleX(0)";
 }
 
 function applyWatchedState(card, store) {

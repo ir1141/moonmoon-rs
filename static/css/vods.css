@@ -143,7 +143,7 @@
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
   display: grid;
   gap: 1px;
-  animation: sortReveal 0.16s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: sortReveal 0.16s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 [data-theme="light"] .sort-menu {
@@ -297,7 +297,7 @@
   align-items: center;
   gap: 7px;
   padding-left: 4px;
-  animation: dateReveal 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: dateReveal 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes dateReveal {
@@ -447,11 +447,13 @@
 }
 .resume-bar-fill {
   height: 100%;
+  width: 100%;
   background: var(--accent);
   border-radius: 0 1px 1px 0;
   box-shadow: 0 0 6px var(--accent-glow);
-  transition: width 0.3s ease;
-  width: 0%;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s ease;
 }
 .vod-card.has-resume .resume-bar {
   display: block;
