@@ -23,6 +23,7 @@ function dispatchInput(input) {
 
 function initSearchOverlay(form) {
   if (!(form instanceof HTMLFormElement) || !form.id) return;
+  if (form.dataset.searchOverlayEnhanced === "true") return;
 
   const input = form.querySelector('input[type="search"]');
   const openButton = document.querySelector(
@@ -32,6 +33,7 @@ function initSearchOverlay(form) {
   const clearButton = form.querySelector("[data-search-overlay-clear]");
 
   if (!(input instanceof HTMLInputElement) || !openButton) return;
+  form.dataset.searchOverlayEnhanced = "true";
   const searchInput = /** @type {HTMLInputElement} */ (input);
   const opener = /** @type {Element} */ (openButton);
 
@@ -79,9 +81,23 @@ function initSearchOverlay(form) {
   });
 }
 
-document
-  .querySelectorAll("[data-search-overlay]")
-  .forEach((form) => initSearchOverlay(form));
+function initSearchOverlays(root) {
+  if (root instanceof Element && root.matches("[data-search-overlay]")) {
+    initSearchOverlay(root);
+  }
+  root
+    .querySelectorAll("[data-search-overlay]")
+    .forEach((form) => initSearchOverlay(form));
+}
+
+initSearchOverlays(document);
+
+// htmx swaps replace the toolbar (form and opener together), so rebind the
+// fresh nodes and drop the body scroll lock if an open overlay went away.
+document.addEventListener("htmx:afterSwap", (event) => {
+  if (event.target instanceof Element) initSearchOverlays(event.target);
+  updateBodyOverlayState();
+});
 
 if (typeof searchOverlayMedia.addEventListener === "function") {
   searchOverlayMedia.addEventListener("change", updateBodyOverlayState);
