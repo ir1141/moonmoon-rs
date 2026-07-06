@@ -393,13 +393,13 @@
   .cal-tg-note {
     margin-top: -0.75rem;
   }
-  /* The day column is gone, so the axis spans the full track width; keep a
-     slim three-tick ruler (12p / 6p / 12a) so block positions stay readable. */
-  .cal-tg-head {
-    grid-template-columns: 1fr;
-  }
-  .cal-tg-head > div:first-child {
-    display: none;
+  /* Keep the single-line row (day beside track) instead of stacking: a
+     stacked track got a skinny 16px bar on its own line. The day column
+     narrows, its labels stack, and the ruler slims to three ticks
+     (12p / 6p / 12a) so block positions stay readable. */
+  .cal-tg-head,
+  .cal-tg-row {
+    grid-template-columns: 56px 1fr;
   }
   .cal-tg-axis span {
     display: none;
@@ -415,17 +415,14 @@
   .cal-tg-axis span:nth-child(7) {
     transform: translateX(-100%);
   }
-  .cal-tg-row {
-    grid-template-columns: 1fr;
-    align-items: stretch;
-    height: 72px;
-    padding: 8px 0;
-  }
   .cal-tg-day {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
     padding-left: 0;
   }
-  .cal-tg-track {
-    height: 34px;
+  .cal-tg-today-tag {
+    align-self: flex-start;
   }
   @container (min-width: 56px) {
     .cal-tg-blocktime {
