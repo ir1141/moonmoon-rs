@@ -373,6 +373,7 @@
 .chat-messages {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 8px 12px;
 }
 
@@ -611,13 +612,26 @@
   justify-content: flex-end;
 }
 
+/* ─── Mobile watch screen ─── */
+/* At <=900px the watch page becomes a full-bleed app screen: the layout is
+   locked to the viewport, chat scrolls internally, and the page never
+   scrolls. The footer lives on every other page. */
 @media (max-width: 900px) {
+  .watch-page .content {
+    padding: 0;
+    max-width: none;
+  }
+  .watch-page .site-footer {
+    display: none;
+  }
   .player-container {
     flex-direction: column;
-    height: auto;
+    height: calc(100vh - 60px);
+    height: calc(100dvh - 60px);
+    margin: 0;
   }
   /* flex: none required: the desktop flex: 1 basis of 0% would override
-     any height here and collapse the player to 0 in the auto-height column. */
+     any height here and collapse the player to 0 in the column layout. */
   .player-main {
     flex: none;
     height: auto;
@@ -633,18 +647,70 @@
   .player-title {
     flex-basis: 100%;
   }
+  .theatre-btn {
+    display: none;
+  }
   .chat-panel {
     width: 100%;
-    height: 400px;
+    flex: 1 1 auto;
+    min-height: 0;
     border-left: none;
     border-top: 1px solid var(--border);
   }
+  .chat-messages {
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
 }
 
-/* .content padding shrinks to 20px 16px at 768px (base.css); keep the
-   full-bleed margins in sync or the player overflows the viewport. */
-@media (max-width: 768px) {
+/* Landscape phones: side-by-side like desktop, chat docked right. */
+@media (max-width: 900px) and (orientation: landscape) {
   .player-container {
-    margin: 0 -16px -20px;
+    flex-direction: row;
+  }
+  .player-main {
+    flex: 1;
+    min-width: 0;
+  }
+  #player-wrap {
+    flex: 1;
+    aspect-ratio: auto;
+  }
+  .player-info {
+    flex-wrap: nowrap;
+  }
+  .player-title {
+    flex-basis: 0;
+    flex-grow: 1;
+  }
+  .chat-panel {
+    width: 280px;
+    flex: none;
+    border-top: none;
+    border-left: 1px solid var(--border);
+  }
+}
+
+/* The <=768px header wraps its nav onto a second row (header.css); on the
+   watch screen keep the single 60px row the locked layout is sized against. */
+@media (max-width: 768px) {
+  .watch-page .header {
+    height: 60px;
+    padding: 0 16px;
+    flex-wrap: nowrap;
+  }
+  .watch-page .header-nav {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .part-btn,
+  .theatre-btn,
+  .wc-chapters-chip {
+    min-height: 44px;
+  }
+  .chat-size-btn {
+    width: 36px;
+    height: 36px;
   }
 }
