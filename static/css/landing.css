@@ -288,6 +288,7 @@ body.lp-page .continue-hero {
   font-weight: 600;
   letter-spacing: 1.2px;
   text-transform: uppercase;
+  white-space: nowrap;
   color: var(--accent-soft);
   cursor: pointer;
   transition:
@@ -455,6 +456,11 @@ body.lp-page .continue-hero {
   .lp-body {
     padding: 12px 18px 32px;
   }
+  /* The section head is title + action on a phone; the hint line is the
+     first thing to go when the row gets cramped. */
+  .lp-section-head .sub {
+    display: none;
+  }
   body.lp-page .continue-hero {
     padding: 0 18px;
   }
@@ -473,6 +479,14 @@ body.lp-page .continue-hero {
   }
   .lp-searchbox .kbd {
     display: none;
+  }
+}
+
+/* The wordmark is nowrap; below ~360px the 38px clamp floor runs it
+   edge-to-edge, so step it down once. */
+@media (max-width: 359px) {
+  .lp-wordmark {
+    font-size: 34px;
   }
 }
 
