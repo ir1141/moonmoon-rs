@@ -1572,25 +1572,25 @@ document.addEventListener("keydown", function (e) {
   }
 });
 
-// ─── Landscape focus mode ───
+// ─── Title bar toggle (mobile) ───
 
-var CHAT_COLLAPSED_KEY = "moonmoon_chat_collapsed";
-var chatCollapseBtn = document.getElementById("chat-collapse");
+var BAR_HIDDEN_KEY = "moonmoon_bar_hidden";
+var barToggleBtn = document.getElementById("bar-toggle");
 
-function setChatCollapsed(on) {
-  document.body.classList.toggle("chat-collapsed", on);
-  var label = on ? "Show chat" : "Hide chat";
-  chatCollapseBtn.setAttribute("aria-expanded", on ? "false" : "true");
-  chatCollapseBtn.setAttribute("aria-label", label);
-  chatCollapseBtn.title = label;
-  storageSet(storage, CHAT_COLLAPSED_KEY, on ? "1" : "0");
-  if (!on && chatAutoScroll) scrollChatToBottom();
+function setBarHidden(on) {
+  document.body.classList.toggle("bar-hidden", on);
+  barToggleBtn.classList.toggle("active", on);
+  var label = on ? "Show title bar" : "Hide title bar";
+  barToggleBtn.setAttribute("aria-pressed", on ? "true" : "false");
+  barToggleBtn.setAttribute("aria-label", label);
+  barToggleBtn.title = label;
+  storageSet(storage, BAR_HIDDEN_KEY, on ? "1" : "0");
 }
 
-if (storageGet(storage, CHAT_COLLAPSED_KEY) === "1") {
-  setChatCollapsed(true);
+if (storageGet(storage, BAR_HIDDEN_KEY) === "1") {
+  setBarHidden(true);
 }
 
-chatCollapseBtn.addEventListener("click", function () {
-  setChatCollapsed(!document.body.classList.contains("chat-collapsed"));
+barToggleBtn.addEventListener("click", function () {
+  setBarHidden(!document.body.classList.contains("bar-hidden"));
 });

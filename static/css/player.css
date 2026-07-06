@@ -338,8 +338,8 @@
   color: #fff;
 }
 
-/* Only mobile landscape offers focus mode (see the landscape media block). */
-.chat-collapse-btn {
+/* Only mobile offers the title-bar toggle (see the mobile media block). */
+.bar-toggle-btn {
   display: none;
 }
 
@@ -655,6 +655,12 @@
   .theatre-btn {
     display: none;
   }
+  .bar-toggle-btn {
+    display: flex;
+  }
+  .watch-page.bar-hidden .player-bar {
+    display: none;
+  }
   .chat-panel {
     width: 100%;
     flex: 1 1 auto;
@@ -692,40 +698,6 @@
     flex: none;
     border-top: none;
     border-left: 1px solid var(--border);
-  }
-
-  /* Focus mode: the video is height-bound in landscape, so collapsing chat
-     only helps if the header and title bar go with it. The chat panel stays
-     as a slim rail so the restore control never leaves the screen. */
-  .chat-collapse-btn {
-    display: flex;
-  }
-  .watch-page.chat-collapsed .header,
-  .watch-page.chat-collapsed .player-bar {
-    display: none;
-  }
-  .watch-page.chat-collapsed .player-container {
-    height: 100vh;
-    height: 100dvh;
-  }
-  .watch-page.chat-collapsed .chat-panel {
-    width: 48px;
-  }
-  .watch-page.chat-collapsed .chat-header {
-    justify-content: center;
-    padding: 8px 0;
-    border-bottom: none;
-  }
-  .watch-page.chat-collapsed .chat-header > span,
-  .watch-page.chat-collapsed .chat-status,
-  .watch-page.chat-collapsed .chat-retry-btn,
-  .watch-page.chat-collapsed .chat-size-btn:not(.chat-collapse-btn),
-  .watch-page.chat-collapsed .chat-messages,
-  .watch-page.chat-collapsed .chat-paused {
-    display: none;
-  }
-  .watch-page.chat-collapsed .chat-collapse-btn svg {
-    transform: rotate(180deg);
   }
 }
 
