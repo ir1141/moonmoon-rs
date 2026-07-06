@@ -37,6 +37,7 @@ struct GuideBlock {
     left_pct: f64,
     width_pct: f64,
     range: String,
+    start_label: String,
     title: String,
     primary_game: String,
     is_live: bool,
@@ -60,6 +61,7 @@ struct GuideLegendItem {
 
 struct TimeGuideView {
     week_label: String,
+    week_label_short: String,
     prev_week: String,
     next_week: String,
     has_next: bool,
@@ -98,6 +100,24 @@ fn month_name(m: u32) -> &'static str {
         10 => "October",
         11 => "November",
         12 => "December",
+        _ => "Unknown",
+    }
+}
+
+fn month_abbr(m: u32) -> &'static str {
+    match m {
+        1 => "Jan",
+        2 => "Feb",
+        3 => "Mar",
+        4 => "Apr",
+        5 => "May",
+        6 => "Jun",
+        7 => "Jul",
+        8 => "Aug",
+        9 => "Sep",
+        10 => "Oct",
+        11 => "Nov",
+        12 => "Dec",
         _ => "Unknown",
     }
 }
@@ -158,6 +178,22 @@ fn format_week_label(week_start: i64) -> String {
             "{} {start_day}, {start_year} - {} {end_day}, {end_year}",
             month_name(start_month),
             month_name(end_month)
+        )
+    }
+}
+
+fn format_week_label_short(week_start: i64) -> String {
+    let week_end = week_start + 6;
+    let (_, start_month, start_day) = days_to_civil(week_start);
+    let (_, end_month, end_day) = days_to_civil(week_end);
+
+    if start_month == end_month {
+        format!("{} {start_day} - {end_day}", month_abbr(start_month))
+    } else {
+        format!(
+            "{} {start_day} - {} {end_day}",
+            month_abbr(start_month),
+            month_abbr(end_month)
         )
     }
 }
@@ -341,6 +377,23 @@ fn format_clock(seconds: i64, include_meridiem: bool) -> String {
     }
 }
 
+// Tick-style clock ("9p", "9:12p") for the tight mobile block labels.
+fn format_clock_compact(seconds: i64) -> String {
+    let minute_of_day = seconds.div_euclid(60).rem_euclid(24 * 60);
+    let hour24 = minute_of_day / 60;
+    let minute = minute_of_day % 60;
+    let hour12 = match hour24 % 12 {
+        0 => 12,
+        hour => hour,
+    };
+    let meridiem = if hour24 < 12 { "a" } else { "p" };
+    if minute == 0 {
+        format!("{hour12}{meridiem}")
+    } else {
+        format!("{hour12}:{minute:02}{meridiem}")
+    }
+}
+
 fn format_time_range(start_seconds: i64, duration_seconds: i64) -> String {
     let end_seconds = start_seconds + duration_seconds.max(0);
     let start_meridiem = start_seconds.div_euclid(3600).rem_euclid(24) < 12;
@@ -394,6 +447,7 @@ fn build_guide_block(session: &RawSession<'_>, current_local: PacificLocalTime) 
         left_pct,
         width_pct,
         range: format_time_range(session.local.seconds_of_day, session.duration_seconds),
+        start_label: format_clock_compact(session.local.seconds_of_day),
         title,
         primary_game,
         is_live,
@@ -459,6 +513,7 @@ fn build_time_guide(
 
     TimeGuideView {
         week_label: format_week_label(week_start),
+        week_label_short: format_week_label_short(week_start),
         prev_week: date_query(week_start - 7),
         next_week: date_query(week_start + 7),
         has_next: week_start < current_week_start,
@@ -533,6 +588,18 @@ mod tests {
 
         assert_eq!(month_name(1), "January");
         assert_eq!(month_name(12), "December");
+
+        assert_eq!(format_clock_compact(21 * 3600), "9p");
+        assert_eq!(format_clock_compact(21 * 3600 + 12 * 60), "9:12p");
+        assert_eq!(format_clock_compact(0), "12a");
+        assert_eq!(format_clock_compact(9 * 3600 + 5 * 60), "9:05a");
+
+        let same_month = week_start_for_days(parse_ymd_to_days("2026-07-05").unwrap());
+        assert_eq!(format_week_label_short(same_month), "Jul 5 - 11");
+        let cross_month = week_start_for_days(parse_ymd_to_days("2026-06-28").unwrap());
+        assert_eq!(format_week_label_short(cross_month), "Jun 28 - Jul 4");
+        let cross_year = week_start_for_days(parse_ymd_to_days("2025-12-29").unwrap());
+        assert_eq!(format_week_label_short(cross_year), "Dec 28 - Jan 3");
     }
 
     fn test_vod(id: &str, started_at: &str, duration_secs: i64, chapters: Vec<Chapter>) -> Vod {

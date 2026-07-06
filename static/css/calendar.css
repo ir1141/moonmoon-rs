@@ -24,6 +24,10 @@
   color: var(--text);
 }
 
+.cal-title-short {
+  display: none;
+}
+
 .cal-nav-btn {
   width: 36px;
   height: 36px;
@@ -128,6 +132,7 @@
   display: flex;
   overflow: hidden;
   min-width: 4px;
+  container-type: inline-size;
   border-radius: 7px;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
   text-decoration: none;
@@ -196,6 +201,25 @@
   .cal-tg-seglbl .t {
     display: block;
   }
+}
+
+/* Start-time chip for the phone layout, where the hour axis alone is too
+   sparse to read a block's position. Hidden until the 480px block below. */
+.cal-tg-blocktime {
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 6px;
+  transform: translateY(-50%);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 9.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.4px;
+  line-height: 1;
+  pointer-events: none;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
 }
 
 .cal-tg-off {
@@ -357,11 +381,39 @@
   .calendar-page {
     padding: 0 0.5rem 2rem;
   }
+  .cal-month-title {
+    font-size: 1.25rem;
+  }
+  .cal-title-long {
+    display: none;
+  }
+  .cal-title-short {
+    display: inline;
+  }
   .cal-tg-note {
     margin-top: -0.75rem;
   }
+  /* The day column is gone, so the axis spans the full track width; keep a
+     slim three-tick ruler (12p / 6p / 12a) so block positions stay readable. */
   .cal-tg-head {
+    grid-template-columns: 1fr;
+  }
+  .cal-tg-head > div:first-child {
     display: none;
+  }
+  .cal-tg-axis span {
+    display: none;
+  }
+  .cal-tg-axis span:nth-child(1),
+  .cal-tg-axis span:nth-child(4),
+  .cal-tg-axis span:nth-child(7) {
+    display: block;
+  }
+  .cal-tg-axis span:nth-child(1) {
+    transform: none;
+  }
+  .cal-tg-axis span:nth-child(7) {
+    transform: translateX(-100%);
   }
   .cal-tg-row {
     grid-template-columns: 1fr;
@@ -375,11 +427,23 @@
   .cal-tg-track {
     height: 34px;
   }
+  @container (min-width: 56px) {
+    .cal-tg-blocktime {
+      display: block;
+    }
+  }
   .cal-nav-btn {
     width: 34px;
     height: 34px;
   }
   .calendar-nav {
     gap: 0.75rem;
+  }
+}
+
+@media (pointer: coarse) {
+  .cal-nav-btn {
+    width: 44px;
+    height: 44px;
   }
 }

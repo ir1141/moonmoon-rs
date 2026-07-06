@@ -10,7 +10,7 @@
     <a href="/calendar?week={{ guide.prev_week }}" class="btn-icon cal-nav-btn" title="Previous week">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg>
     </a>
-    <h2 class="cal-month-title">{{ guide.week_label }}</h2>
+    <h2 class="cal-month-title"><span class="cal-title-long">{{ guide.week_label }}</span><span class="cal-title-short">{{ guide.week_label_short }}</span></h2>
     {% if guide.has_next %}
     <a href="/calendar?week={{ guide.next_week }}" class="btn-icon cal-nav-btn" title="Next week">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M9 18l6-6-6-6"/></svg>
@@ -56,6 +56,7 @@
             <span class="cal-tg-seglbl"><span class="t">{{ seg.range }}</span><b>{{ seg.name }}</b></span>
           </a>
           {% endfor %}
+          <span class="cal-tg-blocktime" aria-hidden="true">{{ block.start_label }}</span>
         </div>
         {% endfor %}
         {% if let Some(now_pct) = day.now_pct %}
