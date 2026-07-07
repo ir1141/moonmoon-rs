@@ -57,11 +57,7 @@ pub async fn lookup_emote(
     let search_name = name.clone();
     let result = index
         .lookup_or_resolve(&name, || async move {
-            match search_all_providers(&client, &search_name).await {
-                SearchOutcome::Hit(record) => Some(ResolvedEntry::Hit(record)),
-                SearchOutcome::CleanMiss => Some(ResolvedEntry::Miss),
-                SearchOutcome::AllFailed => None,
-            }
+            search_all_providers(&client, &search_name).await
         })
         .await;
 
@@ -162,13 +158,9 @@ pub async fn vod_emotes(State(state): State<SharedState>, Path(vod_id): Path<Str
         .into_response()
 }
 
-enum SearchOutcome {
-    Hit(crate::emotes::EmoteRecord),
-    CleanMiss,
-    AllFailed,
-}
-
-async fn search_all_providers(client: &reqwest::Client, name: &str) -> SearchOutcome {
+/// Query all three providers concurrently and combine the answers via
+/// [`ResolvedEntry::from_search_results`]; only the HTTP glue lives here.
+async fn search_all_providers(client: &reqwest::Client, name: &str) -> Option<ResolvedEntry> {
     let encoded = urlencoding::encode(name);
     let seventv_body = serde_json::json!({
         "operationName": "SearchEmotes",
@@ -237,20 +229,7 @@ async fn search_all_providers(client: &reqwest::Client, name: &str) -> SearchOut
 
     let (s, b, f) = tokio::join!(seventv, bttv, ffz);
 
-    let outcomes = [s, b, f];
-    if let Some(hit) = outcomes
-        .iter()
-        .find_map(|o| o.as_ref().and_then(|inner| inner.clone()))
-    {
-        return SearchOutcome::Hit(hit);
-    }
-    // Any provider that returned Some(None) is a clean miss. Treat at-least-one
-    // clean miss as cacheable; treat all-None as transient.
-    if outcomes.iter().any(|o| o.is_some()) {
-        SearchOutcome::CleanMiss
-    } else {
-        SearchOutcome::AllFailed
-    }
+    ResolvedEntry::from_search_results([s, b, f])
 }
 
 #[cfg(test)]

@@ -12,6 +12,25 @@ pub enum ResolvedEntry {
     Miss,
 }
 
+/// One provider's search answer: `None` = provider unreachable,
+/// `Some(None)` = answered with no match, `Some(Some(_))` = hit.
+pub type ProviderSearchResult = Option<Option<EmoteRecord>>;
+
+impl ResolvedEntry {
+    /// Combine per-provider search results, given in provider-preference
+    /// order. The first hit wins; at least one clean miss makes the whole
+    /// search a cacheable [`ResolvedEntry::Miss`]; all-unreachable returns
+    /// `None` so the next lookup retries instead of caching a transient
+    /// failure.
+    pub fn from_search_results(results: [ProviderSearchResult; 3]) -> Option<Self> {
+        let any_answered = results.iter().any(Option::is_some);
+        if let Some(hit) = results.into_iter().flatten().flatten().next() {
+            return Some(ResolvedEntry::Hit(hit));
+        }
+        any_answered.then_some(ResolvedEntry::Miss)
+    }
+}
+
 /// Soft cap on the resolved map. Exceeding it evicts a batch down to
 /// `EVICT_TO` (we keep the prefetched map intact). 50k × ~200 bytes ≈ 10 MB.
 pub const RESOLVED_CAP: usize = 50_000;
@@ -181,6 +200,33 @@ mod tests {
             provider: EmoteProvider::SevenTv,
             owner: None,
         }
+    }
+
+    #[test]
+    fn from_search_results_first_hit_wins_in_provider_order() {
+        let entry = ResolvedEntry::from_search_results([
+            None,
+            Some(Some(rec("bttv"))),
+            Some(Some(rec("ffz"))),
+        ]);
+        assert_eq!(entry, Some(ResolvedEntry::Hit(rec("bttv"))));
+    }
+
+    #[test]
+    fn from_search_results_hit_beats_clean_miss() {
+        let entry = ResolvedEntry::from_search_results([Some(None), None, Some(Some(rec("ffz")))]);
+        assert_eq!(entry, Some(ResolvedEntry::Hit(rec("ffz"))));
+    }
+
+    #[test]
+    fn from_search_results_one_clean_miss_is_cacheable() {
+        let entry = ResolvedEntry::from_search_results([None, Some(None), None]);
+        assert_eq!(entry, Some(ResolvedEntry::Miss));
+    }
+
+    #[test]
+    fn from_search_results_all_unreachable_is_transient() {
+        assert_eq!(ResolvedEntry::from_search_results([None, None, None]), None);
     }
 
     #[test]
