@@ -375,6 +375,126 @@
   outline-offset: 2px;
 }
 
+/* Fetch feedback in the chat body: while no messages are on screen the
+   notice owns the column (skeleton / empty / error) and the message list
+   stays out of the layout. */
+.chat-notice {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-notice:not([hidden]) ~ .chat-messages {
+  display: none;
+}
+
+.chat-notice > [data-variant] {
+  display: none;
+}
+
+.chat-notice[data-variant="loading"] > [data-variant="loading"],
+.chat-notice[data-variant="empty"] > [data-variant="empty"],
+.chat-notice[data-variant="error"] > [data-variant="error"] {
+  display: flex;
+}
+
+.chat-notice-body {
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 24px 28px 40px;
+  text-align: center;
+}
+
+.chat-notice-body svg {
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.chat-notice-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.chat-notice-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  max-width: 30ch;
+}
+
+.chat-notice-retry {
+  margin-top: 12px;
+  min-height: 28px;
+  padding: 0 14px;
+}
+
+.chat-notice-skeleton {
+  flex-direction: column;
+  gap: 13px;
+  padding: 16px 12px;
+}
+
+.chat-skeleton-line {
+  height: 10px;
+  border-radius: 5px;
+  background: color-mix(in oklab, var(--text) 7%, transparent);
+  animation: chatSkeletonPulse 1.3s ease-in-out infinite alternate;
+}
+
+.chat-skeleton-line:nth-child(2) {
+  width: 72%;
+}
+.chat-skeleton-line:nth-child(3) {
+  width: 46%;
+  animation-delay: 0.15s;
+}
+.chat-skeleton-line:nth-child(4) {
+  width: 83%;
+  animation-delay: 0.3s;
+}
+.chat-skeleton-line:nth-child(5) {
+  width: 58%;
+  animation-delay: 0.45s;
+}
+.chat-skeleton-line:nth-child(6) {
+  width: 65%;
+  animation-delay: 0.6s;
+}
+.chat-skeleton-line:nth-child(7) {
+  width: 38%;
+  animation-delay: 0.75s;
+}
+
+@keyframes chatSkeletonPulse {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-skeleton-line {
+    animation: none;
+  }
+}
+
+.chat-notice-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .chat-messages {
   flex: 1;
   overflow-y: auto;

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   chatEmptyStatusText,
   chatErrorStatusText,
+  chatFeedbackView,
   chatLoadStatusText,
   nextPlayerFallbackState,
   playerFallbackText,
@@ -17,6 +18,42 @@ test("empty chat result explains the current timestamp has no messages", () => {
 
 test("chat failure exposes unavailable copy for the retry state", () => {
   expect(chatErrorStatusText()).toBe("Chat unavailable");
+});
+
+test("with no messages the chat body owns loading, empty, and error states", () => {
+  for (const state of ["loading", "empty", "error"]) {
+    expect(chatFeedbackView(state, 0)).toEqual({
+      notice: state,
+      headerText: "",
+      headerRetry: false,
+    });
+  }
+});
+
+test("with messages on screen feedback stays compact in the chat header", () => {
+  expect(chatFeedbackView("loading", 12)).toEqual({
+    notice: null,
+    headerText: "Loading chat...",
+    headerRetry: false,
+  });
+  expect(chatFeedbackView("error", 12)).toEqual({
+    notice: null,
+    headerText: "Chat unavailable",
+    headerRetry: true,
+  });
+});
+
+test("ok state clears both the notice and the header", () => {
+  expect(chatFeedbackView("ok", 0)).toEqual({
+    notice: null,
+    headerText: "",
+    headerRetry: false,
+  });
+  expect(chatFeedbackView("ok", 12)).toEqual({
+    notice: null,
+    headerText: "",
+    headerRetry: false,
+  });
 });
 
 test("player fallback copy distinguishes missing videos and player failures", () => {

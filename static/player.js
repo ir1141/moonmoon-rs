@@ -22,9 +22,7 @@ import {
   shouldSaveResume,
 } from "./lib/player-completion.js";
 import {
-  chatEmptyStatusText,
-  chatErrorStatusText,
-  chatLoadStatusText,
+  chatFeedbackView,
   nextPlayerFallbackState,
   playerFallbackText,
 } from "./lib/player-feedback.js";
@@ -243,6 +241,8 @@ loadVodEmotes();
 var chatContainer = document.getElementById("chat-messages");
 var chatStatus = document.getElementById("chat-status");
 var chatRetry = document.getElementById("chat-retry");
+var chatNotice = document.getElementById("chat-notice");
+var chatNoticeRetry = document.getElementById("chat-notice-retry");
 var chatPaused = document.getElementById("chat-paused");
 var chatTimestampToggle = document.getElementById("chat-timestamp-toggle");
 var partSelector = document.getElementById("part-selector");
@@ -334,9 +334,29 @@ function setChatRetryVisible(visible) {
   if (chatRetry) chatRetry.hidden = !visible;
 }
 
+function applyChatFeedback(state) {
+  var view = chatFeedbackView(state, chatMessages.length);
+  setChatStatus(view.headerText);
+  setChatRetryVisible(view.headerRetry);
+  if (chatNotice) {
+    chatNotice.hidden = !view.notice;
+    if (view.notice) {
+      chatNotice.setAttribute("data-variant", view.notice);
+    } else {
+      chatNotice.removeAttribute("data-variant");
+    }
+  }
+}
+
 if (chatRetry) {
   chatRetry.addEventListener("click", function () {
     setChatRetryVisible(false);
+    loadChat(chatRetryOffset);
+  });
+}
+
+if (chatNoticeRetry) {
+  chatNoticeRetry.addEventListener("click", function () {
     loadChat(chatRetryOffset);
   });
 }
@@ -870,8 +890,7 @@ function loadChat(fromOffset) {
   chatLoading = true;
   var gen = chatGeneration;
   chatRetryOffset = fromOffset;
-  setChatRetryVisible(false);
-  setChatStatus(chatLoadStatusText());
+  applyChatFeedback("loading");
 
   var url;
   if (chatCursor && fromOffset === undefined) {
@@ -894,18 +913,13 @@ function loadChat(fromOffset) {
       }
       chatCursor = data.cursor || null;
       chatLoading = false;
-      if (chatMessages.length === 0) {
-        setChatStatus(chatEmptyStatusText());
-      } else {
-        setChatStatus("");
-      }
+      applyChatFeedback(chatMessages.length === 0 ? "empty" : "ok");
     })
     .catch(function (err) {
       if (gen !== chatGeneration) return;
       console.warn("[Chat] Failed to load:", err);
       chatLoading = false;
-      setChatStatus(chatErrorStatusText());
-      setChatRetryVisible(true);
+      applyChatFeedback("error");
     });
 }
 

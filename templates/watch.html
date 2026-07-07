@@ -36,6 +36,28 @@
         <button class="chat-retry-btn" id="chat-retry" type="button" hidden>Retry</button>
       </div>
     </div>
+    <div class="chat-notice" id="chat-notice" role="status" aria-live="polite" hidden>
+      <div class="chat-notice-skeleton" data-variant="loading">
+        <span class="chat-notice-sr">Loading chat replay</span>
+        <span class="chat-skeleton-line" aria-hidden="true"></span>
+        <span class="chat-skeleton-line" aria-hidden="true"></span>
+        <span class="chat-skeleton-line" aria-hidden="true"></span>
+        <span class="chat-skeleton-line" aria-hidden="true"></span>
+        <span class="chat-skeleton-line" aria-hidden="true"></span>
+        <span class="chat-skeleton-line" aria-hidden="true"></span>
+      </div>
+      <div class="chat-notice-body" data-variant="empty">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <p class="chat-notice-title">No chat replay</p>
+        <p class="chat-notice-hint">Nothing was recorded around this timestamp.</p>
+      </div>
+      <div class="chat-notice-body" data-variant="error">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="12" y1="7" x2="12" y2="11"/><line x1="12" y1="14" x2="12.01" y2="14"/></svg>
+        <p class="chat-notice-title">Chat replay unavailable</p>
+        <p class="chat-notice-hint">Chat for this stream could not be loaded.</p>
+        <button class="chat-retry-btn chat-notice-retry" id="chat-notice-retry" type="button">Retry</button>
+      </div>
+    </div>
     <div class="chat-messages" id="chat-messages"></div>
     <div class="chat-paused" id="chat-paused" style="display:none">Chat Paused (scroll down to resume)</div>
   </div>
