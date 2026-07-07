@@ -117,10 +117,15 @@ a {
     transform 0.08s ease;
 }
 
-.btn-chip:hover {
-  background: var(--button-hover-bg);
-  border-color: var(--border-hover);
-  color: var(--text);
+/* Hover styling is gated to hover-capable devices: on touch, a tap leaves
+   the element in :hover until the next tap elsewhere, which reads as a
+   stuck highlight on chips that stay on screen (e.g. part selector). */
+@media (hover: hover) {
+  .btn-chip:hover {
+    background: var(--button-hover-bg);
+    border-color: var(--border-hover);
+    color: var(--text);
+  }
 }
 
 .btn-chip:active {
@@ -138,10 +143,12 @@ a {
   color: #fff;
 }
 
-.btn-chip.btn-primary:hover {
-  background: var(--accent-soft);
-  border-color: var(--accent-soft);
-  color: #fff;
+@media (hover: hover) {
+  .btn-chip.btn-primary:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent-soft);
+    color: #fff;
+  }
 }
 
 .btn-chip.btn-danger {
@@ -149,10 +156,12 @@ a {
   border-color: #6b3838;
 }
 
-.btn-chip.btn-danger:hover {
-  background: #6b3838;
-  border-color: #a64b4b;
-  color: #fff;
+@media (hover: hover) {
+  .btn-chip.btn-danger:hover {
+    background: #6b3838;
+    border-color: #a64b4b;
+    color: #fff;
+  }
 }
 
 /* ─── Content ─── */

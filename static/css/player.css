@@ -331,11 +331,21 @@
   text-transform: none;
 }
 
-.chat-size-btn:hover,
 .chat-size-btn.active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+
+/* Hover styling is gated to hover-capable devices: on touch, a tap leaves
+   the element in :hover until the next tap elsewhere, which reads as a
+   stuck "selected" state on these toggle buttons. */
+@media (hover: hover) {
+  .chat-size-btn:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
 }
 
 /* Only mobile offers the title-bar toggle (see the mobile media block). */
@@ -364,10 +374,12 @@
   padding: 0 8px;
 }
 
-.chat-retry-btn:hover {
-  background: var(--bg-elevated);
-  border-color: var(--accent);
-  color: var(--text);
+@media (hover: hover) {
+  .chat-retry-btn:hover {
+    background: var(--bg-elevated);
+    border-color: var(--accent);
+    color: var(--text);
+  }
 }
 
 .chat-retry-btn:focus-visible {

@@ -100,11 +100,16 @@
     color 0.2s,
     transform 0.08s ease;
 }
-.icon-btn:hover,
-.btn-icon:hover {
-  background: var(--bg-elevated);
-  border-color: var(--border);
-  color: var(--text);
+/* Hover styling is gated to hover-capable devices: on touch, a tap leaves
+   the element in :hover until the next tap elsewhere, which reads as a
+   stuck highlight on these buttons. */
+@media (hover: hover) {
+  .icon-btn:hover,
+  .btn-icon:hover {
+    background: var(--bg-elevated);
+    border-color: var(--border);
+    color: var(--text);
+  }
 }
 .icon-btn:active,
 .btn-icon:active {
@@ -124,10 +129,12 @@
   color: #6ee7a8;
   border-color: transparent;
 }
-.icon-btn.connected:hover {
-  background: #2f5f47;
-  border-color: #6ee7a8;
-  color: #fff;
+@media (hover: hover) {
+  .icon-btn.connected:hover {
+    background: #2f5f47;
+    border-color: #6ee7a8;
+    color: #fff;
+  }
 }
 
 /* ─── Theme toggle (sun/moon swap) ─── */
@@ -143,11 +150,13 @@
 #theme-btn svg {
   transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
-#theme-btn:hover svg {
-  transform: rotate(28deg);
-}
-[data-theme="light"] #theme-btn:hover svg {
-  transform: rotate(-18deg);
+@media (hover: hover) {
+  #theme-btn:hover svg {
+    transform: rotate(28deg);
+  }
+  [data-theme="light"] #theme-btn:hover svg {
+    transform: rotate(-18deg);
+  }
 }
 
 .header-right {
