@@ -1580,7 +1580,7 @@ var barToggleBtn = document.getElementById("bar-toggle");
 function setBarHidden(on) {
   document.body.classList.toggle("bar-hidden", on);
   barToggleBtn.classList.toggle("active", on);
-  var label = on ? "Show title bar" : "Hide title bar";
+  var label = on ? "Show header and title bar" : "Hide header and title bar";
   barToggleBtn.setAttribute("aria-pressed", on ? "true" : "false");
   barToggleBtn.setAttribute("aria-label", label);
   barToggleBtn.title = label;

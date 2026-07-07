@@ -658,8 +658,13 @@
   .bar-toggle-btn {
     display: flex;
   }
+  .watch-page.bar-hidden .header,
   .watch-page.bar-hidden .player-bar {
     display: none;
+  }
+  .watch-page.bar-hidden .player-container {
+    height: 100vh;
+    height: 100dvh;
   }
   .chat-panel {
     width: 100%;
