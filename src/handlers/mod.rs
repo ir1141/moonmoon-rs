@@ -741,10 +741,10 @@ pub(crate) fn next_vod_in_period(
         .iter()
         .find(|v| v.id == current_id && v.has_game(game_name))?;
     let current_time = current.stream_time();
-    // Earliest stream of the same game strictly after the current one.
+    // Earliest playable stream of the same game strictly after the current one.
     let next = vods
         .iter()
-        .filter(|v| v.id != current_id && v.has_game(game_name))
+        .filter(|v| v.id != current_id && v.is_playable() && v.has_game(game_name))
         .filter(|v| v.stream_time() > current_time)
         .min_by(|a, b| a.stream_time().cmp(b.stream_time()))?;
     let curr_days = parse_ymd_to_days(current_time)?;
@@ -1384,6 +1384,8 @@ mod tests {
         assert!(resolve_watched_chapter(&vod, Some(100)).is_none());
     }
 
+    // Playable like every catalog VOD handlers see (filter_playable_vods runs
+    // before the catalog is swapped in).
     fn make_vod(id: &str, created_at: &str, games: &[&str]) -> Vod {
         Vod {
             id: id.into(),
@@ -1408,7 +1410,16 @@ mod tests {
                     })
                     .collect(),
             ),
-            youtube: None,
+            youtube: Some(vec![crate::vods::YoutubeVideo {
+                row_id: None,
+                id: format!("yt-{id}"),
+                thumbnail_url: None,
+                part: None,
+                duration: None,
+                status: Some("COMPLETED".into()),
+                upload_type: Some("vod".into()),
+                created_at: None,
+            }]),
             is_live: false,
         }
     }
@@ -1490,6 +1501,19 @@ mod tests {
         ];
         let next = next_vod_in_period(&vods, "a", "elden ring").unwrap();
         assert_eq!(next.id, "b");
+    }
+
+    #[test]
+    fn test_next_vod_in_period_skips_unplayable_vods() {
+        let mut unplayable = make_vod("b", "2024-01-03T00:00:00Z", &["Elden Ring"]);
+        unplayable.youtube = None;
+        let vods = vec![
+            make_vod("a", "2024-01-01T00:00:00Z", &["Elden Ring"]),
+            unplayable,
+            make_vod("c", "2024-01-05T00:00:00Z", &["Elden Ring"]),
+        ];
+        let next = next_vod_in_period(&vods, "a", "Elden Ring").unwrap();
+        assert_eq!(next.id, "c");
     }
 
     #[test]

@@ -14,9 +14,10 @@ generation).
 
 ## VOD
 
-One archived stream. An anemic record of mostly-`Option` fields mirroring the
-upstream API; its interpretation (stream time, playability, chapters) lives in
-free functions today. _Avoid_: video, stream (when you mean the record).
+One archived stream. A record of mostly-`Option` fields mirroring the upstream
+API; its interpretation (stream time, playability, game matching, chapter
+spans) lives on `impl Vod` in `vods/mod.rs` - callers use the methods, not
+re-derived copies. _Avoid_: video, stream (when you mean the record).
 
 ## Lens
 
