@@ -1,8 +1,6 @@
-use super::{
-    Section, build_watch_url, days_to_civil, get_chapter_segments, parse_ymd_to_days,
-    render_template,
-};
+use super::{Section, build_watch_url, get_chapter_segments, render_template};
 use crate::SharedState;
+use crate::dates::{days_to_civil, parse_ymd_to_days};
 use crate::middleware::CspNonce;
 use crate::vods::Vod;
 use crate::vods::month_abbr_num;

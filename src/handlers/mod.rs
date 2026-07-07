@@ -18,6 +18,9 @@ pub(crate) use listing::{Headers, Listing, Pagination};
 pub use sync::{sync_get, sync_put};
 pub use watch::{next_in_period, random_vod, vod_detail, watch_page};
 
+use crate::dates::{
+    current_utc_days, date_query_for_days, days_in_month, days_to_civil, parse_ymd_to_days,
+};
 use crate::vods::month_abbr;
 use crate::vods::{Game, Vod};
 use askama::Template;
@@ -420,30 +423,6 @@ fn list_date_filter_is_active(params: &ListQuery) -> bool {
     normalized_filter_value(&params.from).is_some() || normalized_filter_value(&params.to).is_some()
 }
 
-pub(crate) fn archive_date_bounds(vods: &[Vod]) -> (String, String) {
-    let mut dates = vods
-        .iter()
-        .filter_map(|vod| vod.stream_time().get(..10))
-        .filter(|date| parse_ymd_to_days(date).is_some());
-    let Some(first) = dates.next() else {
-        let today = current_utc_days();
-        let date = date_query_for_days(today);
-        return (date.clone(), date);
-    };
-
-    let mut min_date = first.to_string();
-    let mut max_date = first.to_string();
-    for date in dates {
-        if date < min_date.as_str() {
-            min_date = date.to_string();
-        }
-        if date > max_date.as_str() {
-            max_date = date.to_string();
-        }
-    }
-    (min_date, max_date)
-}
-
 pub(crate) fn date_preset_state(
     from: &Option<String>,
     to: &Option<String>,
@@ -506,19 +485,6 @@ fn preset_date_range(
     .clamp(min_days, max_days);
     let end = today.clamp(min_days, max_days);
     (date_query_for_days(start), date_query_for_days(end))
-}
-
-pub(crate) fn current_utc_days() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
-        .div_euclid(86_400) as i64
-}
-
-pub(crate) fn date_query_for_days(days: i64) -> String {
-    let (year, month, day) = days_to_civil(days);
-    format!("{year:04}-{month:02}-{day:02}")
 }
 
 fn vod_matches_date_filter(vod: &Vod, params: &ListQuery) -> bool {
@@ -759,62 +725,6 @@ pub(crate) fn resolve_watched_chapter(vod: &Vod, time_secs: Option<i64>) -> Opti
         None => named.first().copied(),
     };
     pick.map(|(n, s)| (n.to_string(), s))
-}
-
-pub(crate) fn days_in_month(year: i32, month: u32) -> u32 {
-    match month {
-        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-        4 | 6 | 9 | 11 => 30,
-        2 => {
-            if (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 {
-                29
-            } else {
-                28
-            }
-        }
-        _ => 30,
-    }
-}
-
-pub(crate) fn parse_ymd_to_days(created_at: &str) -> Option<i64> {
-    let date_part = created_at.get(..10)?;
-    let parts: Vec<&str> = date_part.split('-').collect();
-    if parts.len() != 3 {
-        return None;
-    }
-    let y: i32 = parts[0].parse().ok()?;
-    let m: u32 = parts[1].parse().ok()?;
-    let d: u32 = parts[2].parse().ok()?;
-    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
-        return None;
-    }
-    Some(civil_to_days(y, m, d))
-}
-
-fn civil_to_days(year: i32, month: u32, day: u32) -> i64 {
-    let y = if month <= 2 { year - 1 } else { year } as i64;
-    let era = y.div_euclid(400);
-    let yoe = y - era * 400;
-    let mp = if month > 2 { month - 3 } else { month + 9 } as i64;
-    let doy = (153 * mp + 2) / 5 + day as i64 - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146097 + doe - 719468
-}
-
-/// Inverse of `civil_to_days`. Howard Hinnant's algorithm.
-/// Input is days since 1970-01-01; returns (year, month, day).
-pub(crate) fn days_to_civil(days: i64) -> (i32, u32, u32) {
-    let z = days + 719468;
-    let era = z.div_euclid(146097);
-    let doe = z - era * 146097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
-    let year = if m <= 2 { y + 1 } else { y } as i32;
-    (year, m, d)
 }
 
 pub(crate) struct NextVod {
@@ -1260,31 +1170,6 @@ mod tests {
 
         assert_eq!(display.formatted_date, "May 9, 2026");
         assert_eq!(display.created_at, "2026-05-09T22:35:39.000Z");
-    }
-
-    #[test]
-    fn test_days_to_civil_roundtrips() {
-        for &(y, m, d) in &[
-            (1970, 1, 1),
-            (2000, 2, 29),
-            (2024, 2, 29),
-            (2025, 3, 1),
-            (2026, 4, 22),
-            (2099, 12, 31),
-        ] {
-            let days = civil_to_days(y, m, d);
-            assert_eq!(days_to_civil(days), (y, m, d));
-        }
-    }
-
-    #[test]
-    fn test_parse_ymd_to_days() {
-        let a = parse_ymd_to_days("2024-01-01T00:00:00Z").unwrap();
-        let b = parse_ymd_to_days("2024-01-15T00:00:00Z").unwrap();
-        assert_eq!(b - a, 14);
-        let c = parse_ymd_to_days("2025-01-01T00:00:00Z").unwrap();
-        assert_eq!(c - a, 366); // 2024 is a leap year
-        assert!(parse_ymd_to_days("bogus").is_none());
     }
 
     #[test]

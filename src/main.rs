@@ -11,6 +11,7 @@ use tower_governor::{
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
+mod dates;
 mod emotes;
 mod handlers;
 mod middleware;
@@ -36,7 +37,7 @@ impl Catalog {
     /// derived from the same `vods` they're stored with.
     pub(crate) fn build(load: vods::CatalogLoad) -> Self {
         let games = vods::build_games(&load.vods);
-        let date_bounds = handlers::archive_date_bounds(&load.vods);
+        let date_bounds = vods::archive_date_bounds(&load.vods);
         Self {
             vods: load.vods,
             games,

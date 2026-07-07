@@ -354,6 +354,31 @@ pub fn filter_playable_vods(vods: &mut Vec<Vod>) {
     vods.retain(|vod| vod.is_playable());
 }
 
+/// (min, max) `YYYY-MM-DD` stream dates across `vods`, for `Catalog::build`.
+/// An empty catalog falls back to today's date for both bounds.
+pub(crate) fn archive_date_bounds(vods: &[Vod]) -> (String, String) {
+    let mut dates = vods
+        .iter()
+        .filter_map(|vod| vod.stream_time().get(..10))
+        .filter(|date| crate::dates::parse_ymd_to_days(date).is_some());
+    let Some(first) = dates.next() else {
+        let date = crate::dates::date_query_for_days(crate::dates::current_utc_days());
+        return (date.clone(), date);
+    };
+
+    let mut min_date = first.to_string();
+    let mut max_date = first.to_string();
+    for date in dates {
+        if date < min_date.as_str() {
+            min_date = date.to_string();
+        }
+        if date > max_date.as_str() {
+            max_date = date.to_string();
+        }
+    }
+    (min_date, max_date)
+}
+
 pub fn canonical_youtube_uploads(vod: &Vod) -> Vec<YoutubeVideo> {
     let Some(uploads) = vod.youtube.as_ref() else {
         return Vec::new();
@@ -806,5 +831,35 @@ mod tests {
 
         assert_eq!(vods.len(), 1);
         assert_eq!(vods[0].id, "1430");
+    }
+
+    #[test]
+    fn test_archive_date_bounds_spans_stream_times() {
+        let vod_at = |id: &str, created_at: &str, started_at: Option<&str>| {
+            let mut vod = vod_with_uploads(vec![]);
+            vod.id = id.into();
+            vod.created_at = created_at.into();
+            vod.started_at = started_at.map(Into::into);
+            vod
+        };
+        let vods = vec![
+            vod_at("mid", "2025-06-01T10:00:00Z", None),
+            // started_at wins over created_at, so this sets the minimum.
+            vod_at("old", "2025-03-01T10:00:00Z", Some("2024-12-31T23:00:00Z")),
+            vod_at("new", "2026-05-10T10:00:00Z", None),
+            vod_at("bogus", "not-a-date", None),
+        ];
+
+        let (min, max) = archive_date_bounds(&vods);
+
+        assert_eq!(min, "2024-12-31");
+        assert_eq!(max, "2026-05-10");
+    }
+
+    #[test]
+    fn test_archive_date_bounds_empty_catalog_falls_back_to_today() {
+        let today = crate::dates::date_query_for_days(crate::dates::current_utc_days());
+
+        assert_eq!(archive_date_bounds(&[]), (today.clone(), today));
     }
 }

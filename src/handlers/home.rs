@@ -1,8 +1,6 @@
-use super::{
-    Section, VodDisplay, current_utc_days, date_query_for_days, days_to_civil, format_date,
-    parse_ymd_to_days, render_template,
-};
+use super::{Section, VodDisplay, format_date, render_template};
 use crate::SharedState;
+use crate::dates::{current_utc_days, date_query_for_days, days_to_civil, parse_ymd_to_days};
 use crate::middleware::CspNonce;
 use crate::vods::{Game, Vod, chapter_color_idx};
 use askama::Template;
