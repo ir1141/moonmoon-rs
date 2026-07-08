@@ -91,6 +91,23 @@ body.lp-page .continue-hero {
   color: var(--text);
   font-weight: 600;
 }
+/* Underlined + accent so it can't be mistaken for the bold stats beside it. */
+.lp-sub a {
+  color: var(--accent-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.2s;
+}
+@media (hover: hover) {
+  .lp-sub a:hover {
+    color: var(--text);
+  }
+}
+.lp-sub a:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 
 .lp-searchbox {
   position: relative;

@@ -191,6 +191,30 @@ a {
   letter-spacing: 0.3px;
 }
 
+.no-results-hint {
+  display: block;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.no-results-hint a {
+  color: var(--accent-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (hover: hover) {
+  .no-results-hint a:hover {
+    color: var(--text);
+  }
+}
+
+.no-results-hint a:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .vod-grid > .no-results,
 .games-grid > .no-results {
   grid-column: 1 / -1;
