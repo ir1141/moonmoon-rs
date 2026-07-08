@@ -254,7 +254,9 @@
   background-color: color-mix(in oklab, var(--accent) 6%, transparent);
 }
 
-.cal-tg-today-tag {
+/* Scoped under .cal-tg-day so it outranks `.cal-tg-day span`, which otherwise
+   wins on specificity and paints this badge --text-muted on --accent (1.38:1). */
+.cal-tg-day .cal-tg-today-tag {
   align-self: center;
   color: #fff;
   background: var(--accent);
@@ -421,7 +423,7 @@
     gap: 2px;
     padding-left: 0;
   }
-  .cal-tg-today-tag {
+  .cal-tg-day .cal-tg-today-tag {
     align-self: flex-start;
   }
   @container (min-width: 56px) {

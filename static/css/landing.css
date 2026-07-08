@@ -70,9 +70,15 @@ body.lp-page .continue-hero {
 .lp-searchbox input::placeholder {
   color: var(--text-muted);
 }
+/* The glow is decoration (it measures 1.16:1 against the page); the outline is
+   the actual focus indicator. Previously `outline: none` left only a 1px border. */
 .lp-searchbox input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 4px var(--accent-glow);
+}
+.lp-searchbox input:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
 }
 .lp-searchbox .kbd {
   position: absolute;
@@ -128,15 +134,19 @@ body.lp-page .continue-hero {
     background 0.2s,
     transform 0.08s;
 }
-.lp-chip:hover {
-  border-color: var(--border-hover);
-  color: var(--text);
+@media (hover: hover) {
+  .lp-chip:hover {
+    border-color: var(--border-hover);
+    color: var(--text);
+  }
 }
 .lp-chip:active {
   transform: scale(0.96);
 }
+/* --text-dim: the chip's --bg-elevated surface is where --text-muted bottoms
+   out at 4.31:1. */
 .lp-chip .c-num {
-  color: var(--text-muted);
+  color: var(--text-dim);
   font-size: 12px;
 }
 
@@ -216,9 +226,11 @@ body.lp-page .continue-hero {
   width: 18px;
   height: 11px;
 }
-.lp-seeall:hover {
-  gap: 11px;
-  color: var(--text);
+@media (hover: hover) {
+  .lp-seeall:hover {
+    gap: 11px;
+    color: var(--text);
+  }
 }
 
 /* A horizontal scroller. The negative margin lets cards bleed into the .lp-body
@@ -316,13 +328,19 @@ body.lp-page .continue-hero {
   color: var(--accent-soft);
   font-weight: 600;
 }
+/* Underlined so it isn't pixel-identical to the <b> game name beside it, which
+   shares --accent-soft at weight 600. */
 .lp-calhook .cal-txt a {
   color: var(--accent-soft);
   font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
   transition: color 0.2s;
 }
-.lp-calhook .cal-txt a:hover {
-  color: var(--text);
+@media (hover: hover) {
+  .lp-calhook .cal-txt a:hover {
+    color: var(--text);
+  }
 }
 
 /* ghost button (the calendar hook CTA) */
@@ -354,16 +372,18 @@ body.lp-page .continue-hero {
   width: 17px;
   height: 17px;
 }
+/* Was a hardcoded rgba per theme; in light it blended to ~1.05:1 against the
+   calhook gradient and read as nothing. --bg-elevated is darker than the card
+   in both themes, so the button always has a body. */
 .lp-btn-ghost {
-  background: rgba(20, 20, 26, 0.55);
+  background: var(--bg-elevated);
   border-color: var(--border);
   color: var(--text);
 }
-[data-theme="light"] .lp-btn-ghost {
-  background: rgba(255, 255, 255, 0.55);
-}
-.lp-btn-ghost:hover {
-  border-color: var(--border-hover);
+@media (hover: hover) {
+  .lp-btn-ghost:hover {
+    border-color: var(--border-hover);
+  }
 }
 
 /* ─── responsive ─── */
@@ -395,6 +415,27 @@ body.lp-page .continue-hero {
   }
   .lp-searchbox .kbd {
     display: none;
+  }
+}
+
+/* Touch targets. Padding grows the hit area; the matching negative margin keeps
+   the element sitting exactly where it did, so nothing reflows on a phone. */
+@media (pointer: coarse) {
+  .lp-chip {
+    padding: 13px 16px;
+  }
+  /* Vertical only: horizontal padding here would push the right edge past the
+     section head it is meant to sit flush against. */
+  .lp-seeall {
+    padding: 15px 0;
+    margin: -15px 0 -15px auto;
+  }
+  /* An inline-block's margin box drives the line box, so the negative margin
+     cancels the padding and the paragraph keeps its height. */
+  .lp-searchhelp a {
+    display: inline-block;
+    padding: 14px 2px;
+    margin: -14px -2px;
   }
 }
 

@@ -10,7 +10,10 @@
   --accent-soft: #a29bfe;
   --text: #e8e6f0;
   --text-dim: #8b8a96;
-  --text-muted: #5c5b66;
+  /* Clears 4.5:1 on --bg-deep (5.22) and --bg-card (4.70). It does NOT clear it
+     on --bg-elevated (4.31), so small text on an elevated surface (chips, the
+     sort value, toolbar placeholders) uses --text-dim instead. */
+  --text-muted: #82818d;
   --header-bg: rgba(8, 8, 10, 0.82);
   --input-bg: #0c0b13;
   --button-hover-bg: #25232f;
@@ -37,7 +40,8 @@
   --accent-soft: #6c5ce7;
   --text: #1a1620;
   --text-dim: #4f4a5c;
-  --text-muted: #6f6a82;
+  /* Clears 4.5:1 on the light --bg-elevated (4.93), the worst light surface. */
+  --text-muted: #635e75;
   --header-bg: rgba(241, 237, 226, 0.82);
   --input-bg: #faf6ec;
   --button-hover-bg: #e2dcc9;
@@ -92,6 +96,21 @@ body::before {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+/* One focus vocabulary for the whole app. Before this, only the components that
+   remembered to declare :focus-visible had a ring; everything else (landing
+   chips, "see all", the calendar CTA, the logo, footer links) fell through to
+   the 1px UA outline. Components needing a different offset override below. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
 }
 
 .btn-chip {
@@ -279,7 +298,7 @@ a {
 
 .filter-chip {
   background: var(--bg-elevated);
-  color: var(--text-muted);
+  color: var(--text-dim);
 }
 
 .filter-clear {

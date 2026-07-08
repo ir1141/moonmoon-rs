@@ -228,13 +228,23 @@ html[data-continue] .continue-hero {
   fill: currentColor;
 }
 
-.continue-btn:hover {
-  border-color: var(--accent);
+/* Gated: on touch, a tap leaves the element in :hover until the next tap
+   elsewhere, which reads as a stuck highlight (see base.css .btn-chip). */
+@media (hover: hover) {
+  .continue-btn:hover {
+    border-color: var(--accent);
+  }
+
+  .continue-btn-primary:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent-soft);
+  }
 }
 
-.continue-btn-primary:hover {
-  background: var(--accent-soft);
-  border-color: var(--accent-soft);
+@media (pointer: coarse) {
+  .continue-btn {
+    min-height: 44px;
+  }
 }
 
 .continue-btn:active {
@@ -308,7 +318,9 @@ a.game-card:focus-visible {
   font-family: var(--font-body);
   font-size: 11px;
   font-weight: 600;
-  color: var(--accent-soft);
+  /* The scrim is a fixed dark rgba in both themes, so the label must not flip
+     with them: --accent-soft drops to 2.83:1 here in light. */
+  color: var(--on-overlay);
   letter-spacing: 0;
 }
 
