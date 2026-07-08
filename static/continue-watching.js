@@ -15,6 +15,15 @@ function fillProgressBar(root) {
   )}%`;
 }
 
+/**
+ * Collapse the skeleton reserved before first paint by the inline script in
+ * continue_watching_block.html. Called on every path that yields no card, so a
+ * failed fetch or a stale reservation can't strand a placeholder on the page.
+ */
+function clearReservation() {
+  document.documentElement.removeAttribute("data-continue");
+}
+
 async function initContinueWatching() {
   const shelf = document.getElementById("continue-watching");
   const hero = document.getElementById("continue-hero");
@@ -23,21 +32,32 @@ async function initContinueWatching() {
   const [entry] = selectContinueWatchingEntries(
     loadHistoryStore(safeLocalStorage()),
   );
-  if (!entry) return;
+  if (!entry) {
+    clearReservation();
+    return;
+  }
 
   try {
     const response = await fetch(buildContinueResumeUrl(entry));
-    if (!response.ok) return;
+    if (!response.ok) {
+      clearReservation();
+      return;
+    }
 
+    // A 204 is `ok` but carries no card (the VOD left the catalog).
     const html = (await response.text()).trim();
-    if (!html) return;
+    if (!html) {
+      clearReservation();
+      return;
+    }
 
     const template = document.createElement("template");
     template.innerHTML = html;
     hero.replaceChildren(template.content);
     fillProgressBar(hero);
-    shelf.hidden = false;
+    hero.setAttribute("aria-busy", "false");
   } catch (error) {
+    clearReservation();
     console.warn("[ContinueWatching] failed to load:", error);
   }
 }

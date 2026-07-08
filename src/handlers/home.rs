@@ -23,7 +23,6 @@ const FALLBACK_START_YEAR: i32 = 2019;
 struct HomePageTemplate {
     total_vods_label: String,
     total_games: usize,
-    new_this_week: usize,
     archive_since: i32,
     recent_vods: Vec<VodDisplay>,
     top_games: Vec<Game>,
@@ -120,7 +119,6 @@ pub async fn home_page(
     render_template(&HomePageTemplate {
         total_vods_label: format_thousands(vods.len()),
         total_games: games.len(),
-        new_this_week,
         archive_since: archive_start_year(vods),
         recent_vods: vods
             .iter()

@@ -3,14 +3,12 @@
    the shared .vod-card / .game-card / .chapter-dot components, and the existing
    header + continue-watching hero. Only landing-specific chrome lives here. */
 
-/* The landing owns its full-bleed layout and its own atmosphere, so it opts out
-   of the shared .content gutter and the global top glow (the hero glow replaces it). */
+/* The landing owns its full-bleed layout, so it opts out of the shared .content
+   gutter. It keeps the global top glow (base.css body::before) like every other
+   page: the landing no longer has a hero of its own to light. */
 body.lp-page .content {
   max-width: none;
   padding: 0;
-}
-body.lp-page::before {
-  display: none;
 }
 
 .lp {
@@ -18,21 +16,16 @@ body.lp-page::before {
   z-index: 1;
 }
 
-/* The continue-watching hero sits between the launcher and the rails. The
-   landing zeroes the shared .content gutter, so give the hero its own gutter
-   (matching .lp-body) instead of letting it bleed edge-to-edge. */
+/* Continue-watching leads the page: for a returning viewer the resume card is
+   the answer, so nothing precedes it. The landing zeroes the shared .content
+   gutter, so give the card its own (matching .lp-body). */
 body.lp-page .continue-hero {
   max-width: 1400px;
-  margin: 10px auto 30px;
+  margin: 28px auto 30px;
   padding: 0 32px;
 }
 
-/* the card replaces the divider when continue-watching is present */
-.lp-launch:has(+ .continue-hero:not([hidden])) {
-  border-bottom-color: transparent;
-}
-
-/* ─── hero: compact search launcher ─── */
+/* ─── search launcher ─── */
 .lp-launch {
   position: relative;
   display: flex;
@@ -40,80 +33,15 @@ body.lp-page .continue-hero {
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 80px 24px 44px;
+  padding: 36px 24px 32px;
   border-bottom: 1px solid var(--border);
-  overflow: hidden;
-}
-.lp-launch-glow {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background: radial-gradient(ellipse 70% 80% at 50% 0%, rgba(108, 92, 231, 0.22), transparent 60%);
-}
-[data-theme="light"] .lp-launch-glow {
-  background: radial-gradient(ellipse 70% 80% at 50% 0%, rgba(91, 75, 209, 0.16), transparent 60%);
-}
-.lp-launch > * {
-  position: relative;
-  z-index: 1;
-}
-
-.lp-eyebrow {
-  font-family: var(--font-display);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 2.4px;
-  text-transform: uppercase;
-  color: var(--accent-soft);
-  margin-bottom: 18px;
-}
-.lp-wordmark {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: clamp(38px, 5.5vw, 60px);
-  line-height: 1.04;
-  letter-spacing: -1px;
-  text-transform: uppercase;
-  margin: 0;
-  color: var(--text);
-  white-space: nowrap;
-}
-.lp-wordmark .moon-b {
-  color: var(--accent-soft);
-}
-.lp-sub {
-  font-size: 15px;
-  color: var(--text-dim);
-  margin-top: 16px;
-}
-.lp-sub b {
-  color: var(--text);
-  font-weight: 600;
-}
-/* Underlined + accent so it can't be mistaken for the bold stats beside it. */
-.lp-sub a {
-  color: var(--accent-soft);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  transition: color 0.2s;
-}
-@media (hover: hover) {
-  .lp-sub a:hover {
-    color: var(--text);
-  }
-}
-.lp-sub a:focus-visible {
-  outline: 2px solid var(--accent-soft);
-  outline-offset: 2px;
-  border-radius: 4px;
 }
 
 .lp-searchbox {
   position: relative;
   width: 100%;
   max-width: 620px;
-  margin: 30px auto 0;
+  margin: 0 auto;
 }
 .lp-searchbox .s-ic {
   position: absolute;
@@ -212,56 +140,28 @@ body.lp-page .continue-hero {
   font-size: 12px;
 }
 
-.lp-launch-stats {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 22px;
-  flex-wrap: wrap;
-  margin-top: 34px;
+/* The one thing the placeholder can't say: dates live in the calendar, not the
+   search index. Wording matches the .no-results-hint on /browse. */
+.lp-searchhelp {
+  margin-top: 18px;
   font-size: 13px;
-  color: var(--text-muted);
-}
-.lp-launch-stats b {
   color: var(--text-dim);
-  font-weight: 600;
 }
-.lp-launch-stats .sep {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--text-muted);
-}
-
-.lp-scrollcue {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 30px;
-  font-family: var(--font-display);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 1.4px;
-  text-transform: uppercase;
-  color: var(--text-muted);
+.lp-searchhelp a {
+  color: var(--accent-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
   transition: color 0.2s;
 }
-.lp-scrollcue:hover {
-  color: var(--text-dim);
-}
-.lp-scrollcue svg {
-  width: 15px;
-  height: 15px;
-  animation: cuebob 1.8s ease-in-out infinite;
-}
-@keyframes cuebob {
-  0%,
-  100% {
-    transform: translateY(0);
+@media (hover: hover) {
+  .lp-searchhelp a:hover {
+    color: var(--text);
   }
-  50% {
-    transform: translateY(3px);
-  }
+}
+.lp-searchhelp a:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* ─── content rails ─── */
@@ -321,6 +221,9 @@ body.lp-page .continue-hero {
   color: var(--text);
 }
 
+/* A horizontal scroller. The negative margin lets cards bleed into the .lp-body
+   gutter; scroll-padding keeps snapping from eating that same gutter, which
+   otherwise parks the first card 32px left of every heading on the page. */
 .rail {
   display: flex;
   gap: 18px;
@@ -329,6 +232,8 @@ body.lp-page .continue-hero {
   padding: 4px 32px 18px;
   margin: 0 -32px;
   scroll-snap-type: x proximity;
+  scroll-padding-left: 32px;
+  scroll-behavior: smooth;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
@@ -352,20 +257,13 @@ body.lp-page .continue-hero {
 .rail-games > * {
   width: 158px;
 }
-.rail-vods > * {
-  width: 330px;
-}
 
-.rail-vods {
+/* Not a rail: the recent VODs are a plain 2D grid and never scroll sideways. */
+.lp-vod-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  overflow: visible;
-  margin: 0;
+  gap: 18px;
   padding: 4px 0 18px;
-  scroll-snap-type: none;
-}
-.rail-vods > * {
-  width: auto;
 }
 
 /* "on this day" calendar hook */
@@ -479,19 +377,20 @@ body.lp-page .continue-hero {
     display: none;
   }
   body.lp-page .continue-hero {
+    margin-top: 18px;
     padding: 0 18px;
   }
   .rail {
     margin: 0 -18px;
     padding: 4px 18px 18px;
+    scroll-padding-left: 18px;
   }
-  .rail-vods {
+  .lp-vod-grid {
     grid-template-columns: repeat(2, 1fr);
-    margin: 0;
-    padding: 4px 0 18px;
   }
+  /* Stays at 16px: iOS Safari zooms the viewport when a focused input is
+     smaller, which on this page means tapping the primary control. */
   .lp-searchbox input {
-    font-size: 15px;
     padding: 16px 18px 16px 50px;
   }
   .lp-searchbox .kbd {
@@ -499,17 +398,9 @@ body.lp-page .continue-hero {
   }
 }
 
-/* The wordmark is nowrap; below ~360px the 38px clamp floor runs it
-   edge-to-edge, so step it down once. */
-@media (max-width: 359px) {
-  .lp-wordmark {
-    font-size: 34px;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .lp-scrollcue svg {
-    animation: none;
+  .rail {
+    scroll-behavior: auto;
   }
   .lp .vod-card,
   .lp .game-card {

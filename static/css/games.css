@@ -17,8 +17,18 @@
 }
 
 /* ─── Continue Watching Hero ─── */
+/* Hidden by default and revealed by the pre-paint inline script in
+   continue_watching_block.html, which sets data-continue when localStorage
+   holds a resumable entry. That way the skeleton's height is reserved in the
+   first paint for returning viewers, and first-time viewers never see a gap.
+   continue-watching.js removes the attribute if no card materialises. */
 .continue-hero {
+  display: none;
   margin-bottom: 30px;
+}
+
+html[data-continue] .continue-hero {
+  display: block;
 }
 
 .continue-resume {
@@ -28,6 +38,42 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   background: linear-gradient(120deg, var(--bg-card), var(--continue-grad-end));
+}
+
+/* Placeholder boxes reuse the real components' geometry (.continue-still keeps
+   its 16/9 aspect-ratio, .continue-actions its auto top margin), so the
+   reserved height tracks the real card at every breakpoint. Deliberately
+   static: the swap lands in a few hundred ms and the page should stay still. */
+.continue-sk-bar {
+  background: var(--bg-elevated);
+  border-radius: 6px;
+}
+
+.continue-sk-title {
+  height: 25px;
+  width: 62%;
+  margin: 8px 0 6px;
+}
+
+.continue-sk-line {
+  height: 16px;
+  width: 44%;
+}
+
+.continue-sk-left {
+  height: 14px;
+  width: 30%;
+  margin-top: 10px;
+}
+
+.continue-sk-btn {
+  height: 38px;
+  width: 116px;
+  border-radius: 9px;
+}
+
+.continue-sk-btn-alt {
+  width: 104px;
 }
 
 .continue-still {

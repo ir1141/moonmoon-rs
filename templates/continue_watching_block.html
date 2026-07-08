@@ -1,4 +1,40 @@
-<section id="continue-watching" class="continue-hero" hidden aria-labelledby="continue-title">
-  <div id="continue-hero" class="continue-resume" aria-live="polite"></div>
+<script nonce="{{ nonce }}">
+(function () {
+  // Runs before the section below is parsed, so the skeleton is reserved (or
+  // not) in the first paint and the async swap in continue-watching.js cannot
+  // shift the page. The predicate mirrors selectContinueWatchingEntries() in
+  // static/lib/continue-watching.js; keep the two in step. If it guesses wrong,
+  // continue-watching.js drops the attribute again.
+  try {
+    var raw = localStorage.getItem('moonmoon_history');
+    if (!raw) return;
+    var store = JSON.parse(raw);
+    if (!store || typeof store !== 'object' || Array.isArray(store)) return;
+    for (var id in store) {
+      var entry = store[id];
+      if (!entry || typeof entry !== 'object') continue;
+      // RESUME_MIN_SECONDS
+      if (entry.state === 'in_progress' && Number(entry.time) > 10 && Number(entry.updated) > 0) {
+        document.documentElement.setAttribute('data-continue', '');
+        return;
+      }
+    }
+  } catch (e) {}
+})();
+</script>
+<section id="continue-watching" class="continue-hero" aria-label="Continue watching">
+  <div id="continue-hero" class="continue-resume" aria-live="polite" aria-busy="true">
+    <div class="continue-still continue-sk-still" aria-hidden="true"></div>
+    <div class="continue-meta" aria-hidden="true">
+      <div class="continue-eyebrow">Continue watching</div>
+      <div class="continue-sk-bar continue-sk-title"></div>
+      <div class="continue-sk-bar continue-sk-line"></div>
+      <div class="continue-sk-bar continue-sk-left"></div>
+      <div class="continue-actions">
+        <div class="continue-sk-bar continue-sk-btn"></div>
+        <div class="continue-sk-bar continue-sk-btn continue-sk-btn-alt"></div>
+      </div>
+    </div>
+  </div>
 </section>
 <script type="module" src="/static/continue-watching.js" nonce="{{ nonce }}"></script>

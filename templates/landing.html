@@ -8,11 +8,9 @@
 
 {% block content %}
 <div class="lp">
+  {% include "continue_watching_block.html" %}
+
   <section class="lp-launch">
-    <div class="lp-launch-glow" aria-hidden="true"></div>
-    <div class="lp-eyebrow">The MOONMOON VOD archive</div>
-    <h1 class="lp-wordmark">Find any <span class="moon-b">stream</span></h1>
-    <p class="lp-sub"><b>{{ total_vods_label }}</b> streams across <b>{{ total_games }}</b> games. Search by title or game, or <a href="/calendar">browse by date</a>.</p>
     <form class="lp-searchbox" action="/browse" method="get" role="search">
       <input type="hidden" name="lens" value="streams">
       <svg class="s-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -29,31 +27,19 @@
       </a>
       {% endfor %}
     </div>
-    <div class="lp-launch-stats">
-      <span><b>{{ new_this_week }}</b> new this week</span>
-      <span class="sep" aria-hidden="true"></span>
-      <span>Archiving since <b>{{ archive_since }}</b></span>
-    </div>
-    <a class="lp-scrollcue" href="#lp-discover">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-        <path d="M6 9l6 6 6-6"/>
-      </svg>
-      Or scroll to explore
-    </a>
+    <p class="lp-searchhelp">Searching by date? Use the <a href="/calendar">calendar</a>.</p>
   </section>
 
-  {% include "continue_watching_block.html" %}
-
-  <div class="lp-body" id="lp-discover">
+  <div class="lp-body">
     <div class="lp-section">
       <div class="lp-section-head">
         <h2>Recently archived</h2>
-        <span class="sub">Fresh off the stream</span>
+        <span class="sub">{{ total_vods_label }} streams since {{ archive_since }}</span>
         <a class="lp-seeall" href="/browse?lens=streams">See all
           <svg viewBox="0 0 24 14" fill="none" aria-hidden="true" focusable="false"><path d="M1 7h20M16 2l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </a>
       </div>
-      <div class="rail rail-vods">
+      <div class="lp-vod-grid">
         {% for vod in recent_vods %}
         {% include "vod_card.html" %}
         {% endfor %}
@@ -68,7 +54,7 @@
           <svg viewBox="0 0 24 14" fill="none" aria-hidden="true" focusable="false"><path d="M1 7h20M16 2l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </a>
       </div>
-      <div class="rail rail-games">
+      <div class="rail rail-games" role="group" aria-label="Most-streamed games">
         {% for game in top_games %}
         {% include "game_card.html" %}
         {% endfor %}
@@ -84,10 +70,10 @@
       <div class="cal-txt">
         {% if let Some(on) = on_this_day %}
         <h3>On this day, {{ on.years_ago_label }}</h3>
-        <p>{{ on.date_label }} — <b>{{ on.game }}</b>{% if let Some(dur) = on.duration %}, a {{ dur }} stream{% endif %}: <a href="{{ on.watch_url }}">{{ on.title }}</a>. The calendar maps every stream day since {{ archive_since }}.</p>
+        <p>{{ on.date_label }} - <b>{{ on.game }}</b>{% if let Some(dur) = on.duration %}, a {{ dur }} stream{% endif %}: <a href="{{ on.watch_url }}">{{ on.title }}</a>. The calendar maps every stream day since {{ archive_since }}.</p>
         {% else %}
         <h3>On this day</h3>
-        <p>Today is <b>{{ today_label }}</b>. The calendar maps every stream day since {{ archive_since }} — explore the archive by date.</p>
+        <p>Today is <b>{{ today_label }}</b>. The calendar maps every stream day since {{ archive_since }} - explore the archive by date.</p>
         {% endif %}
       </div>
       <a class="lp-btn-lg lp-btn-ghost" href="/calendar">
