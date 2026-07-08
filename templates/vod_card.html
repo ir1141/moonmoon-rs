@@ -1,4 +1,4 @@
-<div class="vod-card{% if show_game_tags && !vod.chapter_segments.is_empty() %} has-chapters{% endif %}" data-vod-id="{{ vod.id }}" data-duration-secs="{{ vod.duration_seconds }}"{% if let Some(history_state) = vod.history_state %} data-history-state="{{ history_state }}"{% endif %}{% if let Some(progress) = vod.progress_seconds %} data-progress-seconds="{{ progress }}"{% endif %}>
+<div class="vod-card{% if show_game_tags && vod.chapter_segments.len() > 1 %} has-chapters{% endif %}" data-vod-id="{{ vod.id }}" data-duration-secs="{{ vod.duration_seconds }}"{% if let Some(history_state) = vod.history_state %} data-history-state="{{ history_state }}"{% endif %}{% if let Some(progress) = vod.progress_seconds %} data-progress-seconds="{{ progress }}"{% endif %}>
   <div class="thumb-wrap">
     <a href="{{ vod.watch_url }}" class="thumb-link" aria-label="{{ vod.display_title }}">
       {% if let Some(thumb) = vod.thumbnail_url %}
@@ -10,21 +10,23 @@
       {% if let Some(dur) = vod.duration %}
       <div class="duration-badge">{{ dur }}</div>
       {% endif %}
-      {% if !(show_game_tags && !vod.chapter_segments.is_empty()) && !show_subtitle %}
+      {% if !(show_game_tags && vod.chapter_segments.len() > 1) && !show_subtitle %}
       <div class="date-badge">{{ vod.formatted_date }}</div>
       {% endif %}
       <div class="play-icon">
         <svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>
       </div>
     </a>
-    {% if show_game_tags && !vod.chapter_segments.is_empty() %}
+    {# Only multi-game streams get chapter chrome. A "1 game" chip opened a
+       popover holding one link to the URL the card already links to twice. #}
+    {% if show_game_tags && vod.chapter_segments.len() > 1 %}
     <button class="game-count-chip" type="button" aria-haspopup="true" aria-expanded="false">
       {% for seg in vod.chapter_segments %}
       {% if loop.first %}
       <span class="chapter-dot color-{{ seg.color_idx }}" aria-hidden="true"></span>
       {% endif %}
       {% endfor %}
-      <span>{{ vod.chapter_segments.len() }} {% if vod.chapter_segments.len() == 1 %}game{% else %}games{% endif %}</span>
+      <span>{{ vod.chapter_segments.len() }} games</span>
     </button>
     <div class="chapter-strip">
       {% for seg in vod.chapter_segments %}
@@ -52,7 +54,7 @@
     <div class="vod-status-label">{{ label }}</div>
     {% endif %}
   </a>
-  {% if show_game_tags && !vod.chapter_segments.is_empty() %}
+  {% if show_game_tags && vod.chapter_segments.len() > 1 %}
   <div class="chapter-pop" hidden>
     <div class="chapter-pop-head">Jump to a game</div>
     {% for seg in vod.chapter_segments %}

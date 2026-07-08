@@ -599,13 +599,32 @@
   height: 100%;
   min-width: 2px;
   background-color: var(--chapter-color, var(--accent));
-  background-image: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.14),
-    rgba(0, 0, 0, 0.18)
-  );
   border-radius: 1px;
-  transition: filter 0.15s ease;
+  transition:
+    filter 0.15s ease,
+    opacity 0.15s ease;
+}
+
+/* A single-chapter VOD has nothing to segment: the strip collapses to one
+   full-width, fully saturated bar sitting just above .resume-bar, which is the
+   actual progress indicator. On a thumbnail that reads as "watched to the end",
+   and "have I watched this" is the one thing this audience scans for. Most of
+   the catalog is single-chapter, so most cards were lying. */
+.vod-card:has(.chapter-seg:only-child) .chapter-strip {
+  display: none;
+}
+
+/* Where the strip does carry information, it is a legend, not the subject.
+   Colour resolves on hover. */
+.chapter-strip .chapter-seg {
+  opacity: 0.55;
+}
+
+@media (hover: hover) {
+  .vod-card:hover .chapter-strip .chapter-seg,
+  .chapter-strip:hover .chapter-seg {
+    opacity: 1;
+  }
 }
 :is(.chapter-seg, .chapter-link-marker, .chapter-dot, .cal-leg, .wc-chip-dot, .wc-pop-marker).color-0 {
   --chapter-color: #ef4d5b;

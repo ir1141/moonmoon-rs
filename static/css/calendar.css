@@ -141,15 +141,22 @@
     transform 0.18s ease;
 }
 
+/* The timeline is the only surface where a chapter colour sits behind text, and
+   every hue in the palette failed with a white label: 1.72:1 on the yellow,
+   3.73:1 on the magenta, propped up by nothing but a text-shadow. Darkened
+   toward the page so all eight carry a label (worst is now 5.06:1), without
+   touching the palette the dots and card strips use. The legend swatch takes
+   the same mix so it still matches the bars it explains.
+   The 180deg sheen went with it: it lightened the top of the bar, exactly where
+   the label sits, and it was decoration. */
+.cal-tg-block > .cal-tg-seg,
+.cal-leg i {
+  background-color: color-mix(in oklab, var(--chapter-color, var(--accent)) 58%, #0a0a0d);
+}
+
 .cal-tg-block > .cal-tg-seg {
   height: 100%;
   min-width: 2px;
-  background-color: var(--chapter-color, var(--accent));
-  background-image: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.16),
-    rgba(0, 0, 0, 0.18)
-  );
 }
 
 .cal-tg-seg {
@@ -338,8 +345,6 @@
   width: 11px;
   height: 11px;
   border-radius: 3px;
-  background: var(--chapter-color, var(--accent));
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.18));
 }
 
 .cal-tg-block:hover {
