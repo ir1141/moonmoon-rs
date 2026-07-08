@@ -10,15 +10,20 @@
   --accent-soft: #a29bfe;
   --text: #e8e6f0;
   --text-dim: #8b8a96;
-  /* Clears 4.5:1 on --bg-deep (5.22) and --bg-card (4.70). It does NOT clear it
-     on --bg-elevated (4.31), so small text on an elevated surface (chips, the
-     sort value, toolbar placeholders) uses --text-dim instead. */
-  --text-muted: #82818d;
+  /* The quiet tier: chat timestamps, card dates, sublines, chip counts. It is
+     deliberately below WCAG AA (3.99 / 3.60 / 3.31 on --bg-deep / --bg-card /
+     --bg-elevated); PRODUCT.md sets no formal target and this chrome is meant
+     to recede. Do not lift it toward --text-dim, or the two tiers collapse. */
+  --text-muted: #6f6e7a;
   --header-bg: rgba(8, 8, 10, 0.82);
   --input-bg: #0c0b13;
   --button-hover-bg: #25232f;
   --on-overlay: #e8e6f0;
   --on-overlay-dim: #b8b6c4;
+  /* Accent for text sitting on a fixed dark scrim (badges over artwork). Never
+     redefined per theme: --accent-soft flips light/dark but the scrim doesn't,
+     which silently drops the label to 2.83:1 in the light theme. */
+  --on-overlay-accent: #a29bfe;
   --continue-grad-end: #14131c;
   --grid-line: rgba(255, 255, 255, 0.05);
   --future-hatch: rgba(255, 255, 255, 0.045);
@@ -40,8 +45,8 @@
   --accent-soft: #6c5ce7;
   --text: #1a1620;
   --text-dim: #4f4a5c;
-  /* Clears 4.5:1 on the light --bg-elevated (4.93), the worst light surface. */
-  --text-muted: #635e75;
+  /* Left as-is: light already sat at 4.12-4.79, unlike dark. */
+  --text-muted: #6f6a82;
   --header-bg: rgba(241, 237, 226, 0.82);
   --input-bg: #faf6ec;
   --button-hover-bg: #e2dcc9;
@@ -298,7 +303,7 @@ summary:focus-visible,
 
 .filter-chip {
   background: var(--bg-elevated);
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 
 .filter-clear {

@@ -30,9 +30,8 @@
   width: 220px;
   transition: all 0.25s;
 }
-/* --text-dim, not --text-muted: the input sits on --bg-elevated. */
 .toolbar-search::placeholder {
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 .toolbar-search:focus {
   border-color: var(--accent);
@@ -126,10 +125,8 @@
   font-weight: 500;
 }
 
-/* The chosen sort is the value, not the label: it should read at least as
-   strongly as the "Sort:" beside it. It also sits on --bg-elevated. */
 .sort-label b {
-  color: var(--text);
+  color: var(--text-muted);
   font-weight: 500;
 }
 

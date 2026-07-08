@@ -143,10 +143,8 @@ body.lp-page .continue-hero {
 .lp-chip:active {
   transform: scale(0.96);
 }
-/* --text-dim: the chip's --bg-elevated surface is where --text-muted bottoms
-   out at 4.31:1. */
 .lp-chip .c-num {
-  color: var(--text-dim);
+  color: var(--text-muted);
   font-size: 12px;
 }
 
