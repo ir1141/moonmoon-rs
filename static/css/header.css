@@ -2,7 +2,7 @@
 .header {
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: var(--z-header);
   background: var(--header-bg);
   backdrop-filter: blur(20px) saturate(1.4);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
@@ -147,8 +147,9 @@
 [data-theme="light"] .theme-icon-moon {
   display: inline-block;
 }
+/* 0.22s, not 0.4s: product transitions live in the 150-250ms band. */
 #theme-btn svg {
-  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 @media (hover: hover) {
   #theme-btn:hover svg {
@@ -156,6 +157,15 @@
   }
   [data-theme="light"] #theme-btn:hover svg {
     transform: rotate(-18deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #theme-btn svg {
+    transition: none;
+  }
+  #theme-btn:hover svg,
+  [data-theme="light"] #theme-btn:hover svg {
+    transform: none;
   }
 }
 
@@ -355,7 +365,7 @@
   .games-toolbar[data-search-overlay] {
     position: fixed;
     inset: 0;
-    z-index: 500;
+    z-index: var(--z-scrim);
     display: none;
     align-items: flex-start;
     justify-content: center;

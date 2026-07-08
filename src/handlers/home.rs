@@ -240,6 +240,66 @@ mod tests {
         }
     }
 
+    /// A boot fetch that fails leaves the catalog empty and the refresh ticker
+    /// retrying every 60s, so this page is reachable. It used to render two
+    /// section heads over nothing plus "0 streams across 0 games".
+    #[test]
+    fn landing_renders_a_recovery_state_for_an_empty_catalog() {
+        let html = HomePageTemplate {
+            total_vods_label: "0".into(),
+            total_games: 0,
+            archive_since: FALLBACK_START_YEAR,
+            recent_vods: Vec::new(),
+            top_games: Vec::new(),
+            chips: Vec::new(),
+            on_this_day: None,
+            today_label: "Jul 8, 2026".into(),
+            show_game_tags: true,
+            show_recency: false,
+            show_oldest_recency: false,
+            show_subtitle: true,
+            active_section: Section::Home,
+            nonce: "test".into(),
+        }
+        .render()
+        .expect("empty catalog must still render");
+
+        assert!(html.contains("The archive isn't loaded"));
+        assert!(html.contains("Reload the page"));
+        // None of the rails, their "See all" links into an empty browse, or the
+        // lone "This week 0" chip.
+        assert!(!html.contains("Recently archived"));
+        assert!(!html.contains("Most-streamed games"));
+        assert!(!html.contains("lp-chips"));
+        assert!(!html.contains("On this day"));
+    }
+
+    #[test]
+    fn landing_renders_rails_when_the_catalog_has_vods() {
+        let vods = [vod("a", "2026-07-07T00:00:00Z", "1h", &["Fallout 4"])];
+        let html = HomePageTemplate {
+            total_vods_label: "1".into(),
+            total_games: 1,
+            archive_since: 2021,
+            recent_vods: vods.iter().map(VodDisplay::from_vod).collect(),
+            top_games: Vec::new(),
+            chips: Vec::new(),
+            on_this_day: None,
+            today_label: "Jul 8, 2026".into(),
+            show_game_tags: true,
+            show_recency: false,
+            show_oldest_recency: false,
+            show_subtitle: true,
+            active_section: Section::Home,
+            nonce: "test".into(),
+        }
+        .render()
+        .expect("populated catalog must render");
+
+        assert!(html.contains("Recently archived"));
+        assert!(!html.contains("The archive isn't loaded"));
+    }
+
     #[test]
     fn format_thousands_groups_digits() {
         assert_eq!(format_thousands(0), "0");

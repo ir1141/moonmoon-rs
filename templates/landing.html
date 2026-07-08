@@ -19,6 +19,8 @@
       <input id="lp-search" type="search" name="search" autocomplete="off" placeholder="Search titles and games…" aria-label="Search streams">
       <span class="kbd" aria-hidden="true"><kbd>/</kbd> to focus</span>
     </form>
+    {# With an empty catalog the only chip left is "This week 0". #}
+    {% if total_games > 0 %}
     <div class="lp-chips">
       {% for chip in chips %}
       <a class="lp-chip" href="{{ chip.href }}">
@@ -27,10 +29,21 @@
       </a>
       {% endfor %}
     </div>
+    {% endif %}
     <p class="lp-searchhelp">Searching by date? Use the <a href="/calendar">calendar</a>.</p>
   </section>
 
   <div class="lp-body">
+    {# Reachable: a boot fetch that times out leaves the catalog empty, and the
+       refresh ticker retries every 60s. Without this the page renders two
+       section heads over nothing and "0 streams across 0 games". #}
+    {% if recent_vods.is_empty() %}
+    <div class="lp-empty">
+      <h2>The archive isn't loaded</h2>
+      <p>Nothing came back from the upstream archive. The server keeps retrying every minute.</p>
+      <a class="lp-btn-lg lp-btn-ghost" href="/">Reload the page</a>
+    </div>
+    {% else %}
     <div class="lp-section">
       <div class="lp-section-head">
         <h2>Recently archived</h2>
@@ -76,13 +89,10 @@
         <p>Today is <b>{{ today_label }}</b>. The calendar maps every stream day since {{ archive_since }} - explore the archive by date.</p>
         {% endif %}
       </div>
-      <a class="lp-btn-lg lp-btn-ghost" href="/calendar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-          <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/>
-        </svg>
-        Open calendar
-      </a>
+      {# No icon: the same calendar glyph already anchors this strip 1000px to the left. #}
+      <a class="lp-btn-lg lp-btn-ghost" href="/calendar">Open calendar</a>
     </div>
+    {% endif %}
   </div>
 </div>
 <script nonce="{{ nonce }}">
@@ -96,6 +106,11 @@
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
     e.preventDefault();
     input.focus();
+  });
+  // The way out. `/` focused the field and nothing released it but Tab.
+  input.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    input.blur();
   });
 })();
 </script>

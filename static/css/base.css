@@ -30,6 +30,28 @@
   --tooltip-bg: #1a1a2e;
   --font-display: "Chakra Petch", sans-serif;
   --font-body: "Outfit", sans-serif;
+
+  /* Scrim behind text laid over artwork (thumbnails, box art). Split into
+     channels so each caller keeps its own alpha. */
+  --on-image-scrim-rgb: 8 8 10;
+
+  /* Semantic z-index ladder. Values match what was there before; the names are
+     the point. Nothing should introduce a bare z-index again.
+     glow < content < card chrome < popover < dropdown < header < scrim < tooltip */
+  --z-page-glow: -1;
+  --z-content: 1;
+  --z-card-bar: 2;
+  --z-card-strip: 3;
+  --z-card-chip: 4;
+  --z-popover: 10;
+  --z-dropdown: 50;
+  --z-player-popover: 60;
+  --z-header: 100;
+  --z-scrim: 500;
+  /* Peers today: the up-next overlay and the emote tooltip never co-occur. */
+  --z-overlay: 1000;
+  --z-tooltip: 1000;
+
   color-scheme: dark;
 }
 
@@ -95,7 +117,13 @@ body::before {
     transparent 72%
   );
   pointer-events: none;
-  z-index: -1;
+  z-index: var(--z-page-glow);
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
 }
 
 a {

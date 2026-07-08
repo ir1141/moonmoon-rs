@@ -283,7 +283,7 @@
   bottom: 0;
   width: 2px;
   background: var(--accent-soft);
-  z-index: 4;
+  z-index: var(--z-card-chip);
   box-shadow: 0 0 8px var(--accent-glow);
 }
 

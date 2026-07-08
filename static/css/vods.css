@@ -134,7 +134,7 @@
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  z-index: 50;
+  z-index: var(--z-dropdown);
   min-width: 210px;
   padding: 5px;
   background: var(--bg-card);
@@ -369,7 +369,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2;
+  z-index: var(--z-card-bar);
 }
 .watched-badge svg {
   width: 14px;
@@ -403,14 +403,14 @@
 .vod-card .thumb-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(8, 8, 10, 0.7) 0%, transparent 50%);
+  background: linear-gradient(to top, rgb(var(--on-image-scrim-rgb) / 0.7) 0%, transparent 50%);
   pointer-events: none;
 }
 .vod-card .duration-badge {
   position: absolute;
   bottom: 10px;
   right: 10px;
-  background: rgba(8, 8, 10, 0.88);
+  background: rgb(var(--on-image-scrim-rgb) / 0.88);
   backdrop-filter: blur(6px);
   padding: 4px 10px;
   border-radius: 6px;
@@ -424,7 +424,7 @@
   position: absolute;
   top: 10px;
   left: 10px;
-  background: rgba(8, 8, 10, 0.88);
+  background: rgb(var(--on-image-scrim-rgb) / 0.88);
   backdrop-filter: blur(6px);
   padding: 4px 10px;
   border-radius: 6px;
@@ -442,7 +442,7 @@
   right: 0;
   height: 3px;
   background: rgba(0, 0, 0, 0.4);
-  z-index: 2;
+  z-index: var(--z-card-bar);
   display: none;
 }
 .resume-bar-fill {
@@ -557,11 +557,11 @@
   position: absolute;
   top: 10px;
   left: 10px;
-  z-index: 4;
+  z-index: var(--z-card-chip);
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(8, 8, 10, 0.82);
+  background: rgb(var(--on-image-scrim-rgb) / 0.82);
   backdrop-filter: blur(6px);
   border: 0;
   border-radius: 7px;
@@ -591,7 +591,7 @@
   height: 8px;
   display: flex;
   gap: 1.5px;
-  z-index: 3;
+  z-index: var(--z-card-strip);
   pointer-events: auto;
 }
 .chapter-seg {
@@ -711,7 +711,7 @@
 
 .vod-card.has-chapters .resume-bar {
   background: rgba(0, 0, 0, 0.45);
-  z-index: 3;
+  z-index: var(--z-card-strip);
 }
 
 .chapter-pop {

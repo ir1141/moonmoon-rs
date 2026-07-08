@@ -1,6 +1,8 @@
 <div class="vod-card{% if show_game_tags && vod.chapter_segments.len() > 1 %} has-chapters{% endif %}" data-vod-id="{{ vod.id }}" data-duration-secs="{{ vod.duration_seconds }}"{% if let Some(history_state) = vod.history_state %} data-history-state="{{ history_state }}"{% endif %}{% if let Some(progress) = vod.progress_seconds %} data-progress-seconds="{{ progress }}"{% endif %}>
   <div class="thumb-wrap">
-    <a href="{{ vod.watch_url }}" class="thumb-link" aria-label="{{ vod.display_title }}">
+    {# tabindex="-1": .card-body below is the same href, so this was a second tab
+       stop to the same place on every card. Mouse and screen reader keep it. #}
+    <a href="{{ vod.watch_url }}" class="thumb-link" tabindex="-1" aria-label="{{ vod.display_title }}">
       {% if let Some(thumb) = vod.thumbnail_url %}
       <img src="{{ thumb }}" alt="" class="thumb" loading="lazy">
       {% else %}

@@ -311,7 +311,7 @@ a.game-card:focus-visible {
   position: absolute;
   bottom: 8px;
   right: 8px;
-  background: rgba(8, 8, 10, 0.85);
+  background: rgb(var(--on-image-scrim-rgb) / 0.85);
   backdrop-filter: blur(8px);
   padding: 4px 10px;
   border-radius: 6px;

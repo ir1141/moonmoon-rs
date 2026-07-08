@@ -13,7 +13,7 @@ body.lp-page .content {
 
 .lp {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-content);
 }
 
 /* Continue-watching leads the page: for a returning viewer the resume card is
@@ -178,7 +178,7 @@ body.lp-page .continue-hero {
   margin: 0 auto;
   padding: 12px 32px 40px;
   position: relative;
-  z-index: 1;
+  z-index: var(--z-content);
 }
 .lp-section {
   margin-top: 46px;
@@ -216,18 +216,20 @@ body.lp-page .continue-hero {
   white-space: nowrap;
   color: var(--accent-soft);
   cursor: pointer;
-  transition:
-    gap 0.2s,
-    color 0.2s;
+  transition: color 0.2s;
 }
 .lp-seeall svg {
   width: 18px;
   height: 11px;
+  transition: transform 0.2s;
 }
 @media (hover: hover) {
   .lp-seeall:hover {
-    gap: 11px;
     color: var(--text);
+  }
+  /* transform, not `gap`: animating a layout property reflows the section head. */
+  .lp-seeall:hover svg {
+    transform: translateX(3px);
   }
 }
 
@@ -276,6 +278,30 @@ body.lp-page .continue-hero {
   padding: 4px 0 18px;
 }
 
+.lp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  padding: 90px 20px 110px;
+}
+.lp-empty h2 {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text);
+}
+.lp-empty p {
+  font-size: 14px;
+  color: var(--text-dim);
+  max-width: 46ch;
+  text-wrap: pretty;
+}
+.lp-empty .lp-btn-lg {
+  margin-top: 8px;
+}
+
 /* "on this day" calendar hook */
 .lp-calhook {
   margin-top: 46px;
@@ -321,6 +347,9 @@ body.lp-page .continue-hero {
   color: var(--text-dim);
   margin-top: 5px;
   line-height: 1.5;
+  /* Ran to 115ch at 1440. */
+  max-width: 68ch;
+  text-wrap: pretty;
 }
 .lp-calhook .cal-txt b {
   color: var(--accent-soft);
