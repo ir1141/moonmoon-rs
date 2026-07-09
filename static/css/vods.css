@@ -18,12 +18,18 @@
   flex-wrap: wrap;
 }
 
+.toolbar-search-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
 .toolbar-search {
   font-family: var(--font-body);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 8px 14px;
+  padding: 8px 34px 8px 14px;
   border-radius: 8px;
   font-size: 13px;
   outline: none;
@@ -32,6 +38,38 @@
 }
 .toolbar-search::placeholder {
   color: var(--text-muted);
+}
+
+/* Discoverability for the "/" shortcut (static/header.js). It steps aside the
+   moment the field is in use, and never shows where there is no key to press. */
+.search-kbd {
+  position: absolute;
+  right: 8px;
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-dim);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 7px;
+  transition: opacity 0.15s;
+}
+
+.toolbar-search-wrap:has(.toolbar-search:focus) .search-kbd,
+.toolbar-search-wrap:has(.toolbar-search:not(:placeholder-shown)) .search-kbd {
+  opacity: 0;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .search-kbd {
+    display: none;
+  }
+  .toolbar-search {
+    padding-right: 14px;
+  }
 }
 .toolbar-search:focus {
   border-color: var(--accent);
@@ -810,6 +848,7 @@
   .active-filters {
     justify-content: flex-start;
   }
+  .toolbar-search-wrap,
   .toolbar-search {
     width: 100%;
   }

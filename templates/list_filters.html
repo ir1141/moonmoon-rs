@@ -6,7 +6,7 @@
   {% if let Some(g) = game %}<input type="hidden" name="game" value="{{ g }}">{% endif %}
   <div class="toolbar-overlay-panel">
     <div class="toolbar-mobile-actions">
-      <span>{{ filter.title }}</span>
+      <span id="{{ filter.form_id }}-title">{{ filter.title }}</span>
       <div class="toolbar-mobile-buttons">
         <button type="button" class="btn-chip" data-search-overlay-clear>Clear</button>
         <button type="button" class="icon-btn" data-search-overlay-close aria-label="Close search filters" title="Close">
@@ -16,12 +16,15 @@
         </button>
       </div>
     </div>
-    <input type="search" name="search" class="toolbar-search" placeholder="{{ filter.search_placeholder }}"
-           aria-label="{{ filter.search_label }}"
-           hx-get="{{ filter.hx_get }}" hx-trigger="input changed delay:300ms"
-           hx-select="#{{ filter.results_id }}" hx-target="#{{ filter.results_id }}" hx-swap="outerHTML"
-           hx-push-url="true" hx-include="#{{ filter.form_id }}" hx-indicator="#{{ filter.loading_id }}"
-           {% if let Some(s) = search %}value="{{ s }}"{% endif %}>
+    <div class="toolbar-search-wrap">
+      <input type="search" name="search" class="toolbar-search" placeholder="{{ filter.search_placeholder }}"
+             aria-label="{{ filter.search_label }}"
+             hx-get="{{ filter.hx_get }}" hx-trigger="input changed delay:300ms"
+             hx-select="#{{ filter.results_id }}" hx-target="#{{ filter.results_id }}" hx-swap="outerHTML"
+             hx-push-url="true" hx-include="#{{ filter.form_id }}" hx-indicator="#{{ filter.loading_id }}"
+             {% if let Some(s) = search %}value="{{ s }}"{% endif %}>
+      <kbd class="search-kbd" aria-hidden="true">/</kbd>
+    </div>
     <div class="toolbar-sort-wrap" data-sort-control>
       <input type="hidden" name="sort" class="toolbar-sort-value" value="{{ filter.selected_sort_value }}"
              hx-get="{{ filter.hx_get }}" hx-trigger="change"
@@ -30,6 +33,7 @@
       {% let sort_aria_label = filter.sort_label %}
       {% let selected_sort_label = filter.selected_sort_label %}
       {% let sort_options = filter.sort_options %}
+      {% let sort_menu_id = "browse-sort-menu" %}
       {% include "_sort_control.html" %}
     </div>
     <div class="toolbar-dates">

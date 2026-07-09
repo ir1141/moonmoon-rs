@@ -1,4 +1,11 @@
-import { datePresetForRange, rangeForDatePreset } from "./lib/list-filters.js";
+import {
+  datePresetForRange,
+  nextSortIndex,
+  rangeForDatePreset,
+  typeaheadIndex,
+} from "./lib/list-filters.js";
+
+const TYPEAHEAD_RESET_MS = 500;
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -90,14 +97,92 @@ function initSortControl(control) {
   if (!(button instanceof HTMLButtonElement) || !(menu instanceof HTMLElement)) return;
   if (!(label instanceof HTMLElement)) return;
 
-  button.addEventListener("click", (event) => {
-    event.stopPropagation();
-    const open = menu.hidden;
+  let typeahead = "";
+  let typeaheadAt = 0;
+
+  const options = () =>
+    /** @type {HTMLElement[]} */ (Array.from(menu.querySelectorAll(".sort-item")));
+
+  function focusOption(index) {
+    const target = options()[index];
+    if (target instanceof HTMLElement) target.focus({ preventScroll: true });
+  }
+
+  function selectedIndex() {
+    const found = options().findIndex((item) => item.getAttribute("aria-selected") === "true");
+    return found < 0 ? 0 : found;
+  }
+
+  function openMenu() {
     document.querySelectorAll("[data-sort-control]").forEach((other) => {
       if (other !== control && other instanceof HTMLElement) closeSort(other);
     });
-    menu.hidden = !open;
-    button.setAttribute("aria-expanded", String(open));
+    menu.hidden = false;
+    button.setAttribute("aria-expanded", "true");
+    focusOption(selectedIndex());
+  }
+
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (menu.hidden) openMenu();
+    else closeSort(control);
+  });
+
+  control.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      if (menu.hidden) return;
+      // Without this the mobile filter overlay would close along with the menu.
+      event.stopPropagation();
+      event.preventDefault();
+      closeSort(control);
+      button.focus();
+      return;
+    }
+
+    if (event.target === button) {
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      event.preventDefault();
+      if (menu.hidden) openMenu();
+      else focusOption(selectedIndex());
+      return;
+    }
+
+    if (menu.hidden || !menu.contains(/** @type {Node} */ (event.target))) return;
+
+    const items = options();
+    const current = items.indexOf(/** @type {HTMLElement} */ (document.activeElement));
+
+    const next = nextSortIndex(event.key, current, items.length);
+    if (next !== null) {
+      event.preventDefault();
+      focusOption(next);
+      return;
+    }
+
+    // Space and Enter stay with the native button activation below.
+    if (event.key.length !== 1 || event.key === " ") return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+    const now = Date.now();
+    typeahead = now - typeaheadAt > TYPEAHEAD_RESET_MS ? event.key : typeahead + event.key;
+    typeaheadAt = now;
+    const labels = items.map((item) => item.dataset.label || item.textContent?.trim() || "");
+    const match = typeaheadIndex(labels, typeahead, current);
+    if (match !== null) {
+      event.preventDefault();
+      focusOption(match);
+    }
+  });
+
+  // Keep focus on the option the keyboard put it on: letting mousedown move
+  // focus would fire focusout, hide the menu, and swallow the click.
+  menu.addEventListener("mousedown", (event) => event.preventDefault());
+
+  control.addEventListener("focusout", (event) => {
+    if (menu.hidden) return;
+    const next = event.relatedTarget;
+    if (next instanceof Node && control.contains(next)) return;
+    closeSort(control);
   });
 
   menu.addEventListener("click", (event) => {
@@ -106,13 +191,16 @@ function initSortControl(control) {
     const value = item.dataset.value || "";
     const text = item.dataset.label || item.textContent?.trim() || value;
     input.value = value;
-    label.innerHTML = `<b>Sort:</b> ${text}`;
+    const prefix = document.createElement("b");
+    prefix.textContent = "Sort:";
+    label.replaceChildren(prefix, ` ${text}`);
     menu.querySelectorAll(".sort-item").forEach((option) => {
       const active = option === item;
       option.classList.toggle("is-active", active);
       option.setAttribute("aria-selected", active ? "true" : "false");
     });
     closeSort(control);
+    button.focus();
     triggerChange(input);
   });
 }

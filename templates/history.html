@@ -11,6 +11,7 @@
     <form id="history-filters" class="games-filters" data-list-filters>
       <div class="toolbar-sort-wrap" data-sort-control>
         <input type="hidden" name="sort" class="toolbar-sort-value" id="history-sort" value="recent">
+        {% let sort_menu_id = "history-sort-menu" %}
         {% include "_sort_control.html" %}
       </div>
     </form>

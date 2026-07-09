@@ -1,4 +1,4 @@
-<button type="button" class="toolbar-sort" aria-haspopup="listbox" aria-expanded="false" aria-label="{{ sort_aria_label }}">
+<button type="button" class="toolbar-sort" aria-haspopup="listbox" aria-expanded="false" aria-controls="{{ sort_menu_id }}" aria-label="{{ sort_aria_label }}">
   <svg class="sort-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <path d="M3 6h13"></path><path d="M3 12h9"></path><path d="M3 18h5"></path>
   </svg>
@@ -7,12 +7,14 @@
     <path d="M6 9l6 6 6-6"></path>
   </svg>
 </button>
-<div class="sort-menu" role="listbox" aria-label="{{ sort_aria_label }}" hidden>
+<div class="sort-menu" id="{{ sort_menu_id }}" role="listbox" aria-label="{{ sort_aria_label }}" hidden>
   {% for option in sort_options %}
   {% if option.separator_before %}
   <div class="sort-sep"></div>
   {% endif %}
-  <button type="button" role="option" class="sort-item{% if option.selected %} is-active{% endif %}" data-value="{{ option.value }}" data-label="{{ option.label }}" aria-selected="{% if option.selected %}true{% else %}false{% endif %}">
+  {# tabindex=-1 keeps the trigger as the control's single tab stop; the menu is
+     driven by arrow keys, Home/End, and typeahead (static/list-filters.js). #}
+  <button type="button" role="option" tabindex="-1" class="sort-item{% if option.selected %} is-active{% endif %}" data-value="{{ option.value }}" data-label="{{ option.label }}" aria-selected="{% if option.selected %}true{% else %}false{% endif %}">
     <span>{{ option.label }}</span>
     <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M20 6 9 17l-5-5"></path>

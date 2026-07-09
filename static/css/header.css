@@ -409,6 +409,8 @@
     text-transform: uppercase;
   }
 
+  .vod-toolbar .toolbar-search-wrap,
+  .games-toolbar .toolbar-search-wrap,
   .vod-toolbar .toolbar-search,
   .games-toolbar .toolbar-search,
   .vod-toolbar .toolbar-select,
