@@ -57,7 +57,7 @@
              hx-select="#{{ filter.results_id }}" hx-target="#{{ filter.results_id }}" hx-swap="outerHTML"
              hx-push-url="true" hx-include="#{{ filter.form_id }}" hx-indicator="#{{ filter.loading_id }}"
              {% if let Some(f) = from %}value="{{ f }}"{% endif %}>
-      <span class="date-sep">→</span>
+      <span class="date-sep" aria-hidden="true">→</span>
       <input type="date" name="to" class="toolbar-date" aria-label="Filter to date"
              min="{{ filter.archive_min_date }}" max="{{ filter.archive_max_date }}"
              hx-get="{{ filter.hx_get }}" hx-trigger="change"
@@ -66,5 +66,13 @@
              {% if let Some(t) = to %}value="{{ t }}"{% endif %}>
       </div>
     </div>
+    {# The sheet covers the grid it filters, so the dismiss carries the live
+       count. type=button on purpose: a submit button would give the search
+       field implicit submission and reload the page on Enter. Static label is
+       a fallback; static/list-feedback.js fills in the count. Last in the
+       panel so the focus trap never has to wrap out of a date input. #}
+    <button type="button" class="btn-chip btn-primary toolbar-overlay-apply" data-search-overlay-close>
+      <span data-overlay-apply-label aria-live="polite">Show results</span>
+    </button>
   </div>
 </form>

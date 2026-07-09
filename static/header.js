@@ -57,7 +57,8 @@ function initSearchOverlay(form) {
   const openButton = document.querySelector(
     '[data-search-overlay-open][aria-controls="' + form.id + '"]',
   );
-  const closeButton = form.querySelector("[data-search-overlay-close]");
+  // Two dismiss controls: the header ✕ and the "Show N streams" primary.
+  const closeButtons = form.querySelectorAll("[data-search-overlay-close]");
   const clearButton = form.querySelector("[data-search-overlay-clear]");
 
   if (!(input instanceof HTMLInputElement) || !openButton) return;
@@ -95,9 +96,9 @@ function initSearchOverlay(form) {
 
   opener.addEventListener("click", () => apply({ type: "open" }));
 
-  if (closeButton) {
-    closeButton.addEventListener("click", () => apply({ type: "close" }));
-  }
+  closeButtons.forEach((button) => {
+    button.addEventListener("click", () => apply({ type: "close" }));
+  });
 
   if (clearButton) {
     clearButton.addEventListener("click", () => apply({ type: "clear" }));

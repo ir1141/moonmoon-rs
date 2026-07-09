@@ -35,7 +35,7 @@
     {% include "list_filters.html" %}
 
     <section id="browse-results" class="browse-results" data-list-region aria-busy="false">
-      <div class="list-summary" aria-live="polite" data-filtered-count="{{ metadata.filtered_count }}">
+      <div class="list-summary" aria-live="polite" data-filtered-count="{{ metadata.filtered_count }}" data-result-label="{{ metadata.result_label }}">
         <div class="stats list-count">
           {{ metadata.result_label }}
           {% if metadata.is_filtered %}

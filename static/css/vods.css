@@ -319,10 +319,22 @@
   outline-offset: 2px;
 }
 
+@media (pointer: coarse) {
+  .date-chip {
+    min-height: 44px;
+  }
+}
+
 .date-chip-custom {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
+}
+
+/* Only the mobile filter sheet renders this; see header.css. */
+.toolbar-overlay-apply {
+  display: none;
 }
 
 .date-chip-custom svg {
