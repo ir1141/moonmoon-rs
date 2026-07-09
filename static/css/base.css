@@ -339,7 +339,7 @@ summary:focus-visible,
 
 .filter-chip {
   background: var(--bg-elevated);
-  color: var(--text-muted);
+  color: var(--text-dim);
 }
 
 .filter-clear {

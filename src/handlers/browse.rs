@@ -160,13 +160,7 @@ async fn prepare_browse(
                 metadata.unfiltered_count = vods.len();
             }
 
-            // Month grouping only makes sense for the unfiltered, chronological
-            // streams view; a game filter or a non-date sort renders a flat grid.
-            let headers = if game.is_none() && matches!(sort, "newest" | "oldest") {
-                Headers::Period
-            } else {
-                Headers::None
-            };
+            let headers = headers_for_sort(sort);
 
             // The builder paginates before this closure runs, so chapter
             // segments and tags are only computed for the rendered cards.
@@ -207,6 +201,17 @@ async fn prepare_browse(
                 show_subtitle: game.is_none(),
             }
         }
+    }
+}
+
+/// Month headers whenever the grid is in chronological order, drilldown or not.
+/// A game's streams cluster: ELDEN RING's 71 fall in 8 months, none of them
+/// alone, which is what answers "which run was that".
+fn headers_for_sort(sort: &str) -> Headers {
+    if matches!(sort, "newest" | "oldest") {
+        Headers::Period
+    } else {
+        Headers::None
     }
 }
 
@@ -394,6 +399,14 @@ pub async fn game_redirect(Path(name): Path<String>, RawQuery(query): RawQuery) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn period_headers_follow_chronological_sort_in_drilldowns_too() {
+        assert!(matches!(headers_for_sort("newest"), Headers::Period));
+        assert!(matches!(headers_for_sort("oldest"), Headers::Period));
+        assert!(matches!(headers_for_sort("longest"), Headers::None));
+        assert!(matches!(headers_for_sort("shortest"), Headers::None));
+    }
 
     #[test]
     fn games_lens_defaults_to_most_streams() {

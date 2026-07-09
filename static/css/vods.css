@@ -71,9 +71,11 @@
     padding-right: 14px;
   }
 }
+
+/* No focus glow here: a text input always matches :focus-visible, so the
+   shared outline below would always sit on top of it as a second ring. */
 .toolbar-search:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
   background: var(--bg-card);
 }
 .toolbar-search:focus-visible,
