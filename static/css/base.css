@@ -442,3 +442,13 @@ summary:focus-visible,
     padding: 20px 16px;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .game-card,
+  .vod-card {
+    animation: none;
+  }
+  .btn-chip:active {
+    transform: none;
+  }
+}

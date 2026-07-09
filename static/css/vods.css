@@ -879,3 +879,53 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbar-sort .sort-chev {
+    transition: none;
+  }
+  .sort-menu {
+    animation: none;
+  }
+  .date-custom {
+    animation: none;
+  }
+  .resume-bar-fill {
+    transition: none;
+  }
+  .vod-card {
+    transition:
+      border-color 0.25s,
+      box-shadow 0.25s;
+  }
+  .vod-card .thumb {
+    transition: filter 0.25s;
+  }
+  .vod-card:hover {
+    transform: none;
+  }
+  .vod-card:hover .thumb {
+    transform: none;
+  }
+  /* translate(-50%, -50%) here is centering, not motion: only the scale
+     that animates on hover is dropped. */
+  .vod-card .play-icon,
+  .vod-card:hover .play-icon {
+    transform: translate(-50%, -50%);
+  }
+  .vod-card:active {
+    transform: none;
+  }
+  .chapter-seg-tip,
+  .chapter-seg:hover .chapter-seg-tip {
+    transform: translateX(-50%) translateY(0);
+  }
+  .chapter-seg:first-child .chapter-seg-tip,
+  .chapter-seg:first-child:hover .chapter-seg-tip {
+    transform: translateX(0) translateY(0);
+  }
+  .chapter-seg:last-child:not(:first-child) .chapter-seg-tip,
+  .chapter-seg:last-child:not(:first-child):hover .chapter-seg-tip {
+    transform: translateX(0) translateY(0);
+  }
+}
