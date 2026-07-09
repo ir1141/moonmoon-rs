@@ -38,7 +38,7 @@
       <div class="list-summary" aria-live="polite" data-filtered-count="{{ metadata.filtered_count }}" data-result-label="{{ metadata.result_label }}">
         <div class="stats list-count">
           {{ metadata.result_label }}
-          {% if metadata.is_filtered %}
+          {% if is_filtered %}
           <span class="list-count-total">of {{ metadata.unfiltered_count }} archived</span>
           {% else %}
           <span class="list-count-total">in the archive</span>
@@ -49,8 +49,8 @@
           {% if let Some(g) = game %}
           <span class="filter-chip filter-chip-game">
             <span class="chapter-dot color-{{ game_color_idx }}" aria-hidden="true"></span>
-            {{ g }}
-            <a class="filter-chip-x" href="{{ clear_game_url }}" aria-label="Clear game filter">
+            Game: {{ g }}
+            <a class="filter-chip-x" href="{{ clear_game_url }}" aria-label="Remove {{ g }} filter">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
             </a>
           </span>

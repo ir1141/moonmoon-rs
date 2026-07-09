@@ -141,7 +141,7 @@ async fn prepare_browse(
             }
         }
         Lens::Streams => {
-            let (refs, metadata) = match game {
+            let (refs, mut metadata) = match game {
                 Some(name) => filter_vods_with_metadata(
                     vods.iter().filter(|v| v.has_game(name)),
                     params,
@@ -152,6 +152,13 @@ async fn prepare_browse(
                     filter_vods_with_metadata(vods.iter(), params, sort, "/browse?lens=streams")
                 }
             };
+            if game.is_some() {
+                // The drilldown pre-filters the iterator, so the "unfiltered"
+                // baseline `filter_vods_with_metadata` computed arrives already
+                // narrowed to this game; the count line compares against the
+                // whole archive instead.
+                metadata.unfiltered_count = vods.len();
+            }
 
             // Month grouping only makes sense for the unfiltered, chronological
             // streams view; a game filter or a non-date sort renders a flat grid.
@@ -348,7 +355,7 @@ pub async fn browse_grid(
             next_url: prepared.next_url,
             show_game_tags: prepared.show_game_tags,
             show_subtitle: prepared.show_subtitle,
-            is_filtered: prepared.metadata.is_filtered,
+            is_filtered: game.is_some() || prepared.metadata.is_filtered,
         })
     }
 }
