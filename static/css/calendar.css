@@ -145,16 +145,11 @@
    every hue in the palette failed with a white label: 1.72:1 on the yellow,
    3.73:1 on the magenta, propped up by nothing but a text-shadow. Darkened
    toward the page so all eight carry a label (worst is now 5.06:1), without
-   touching the palette the dots and card strips use. The legend swatch takes
-   the same mix so it still matches the bars it explains.
+   touching the palette the dots and card strips use.
    The 180deg sheen went with it: it lightened the top of the bar, exactly where
    the label sits, and it was decoration. */
-.cal-tg-block > .cal-tg-seg,
-.cal-leg i {
-  background-color: color-mix(in oklab, var(--chapter-color, var(--accent)) 58%, #0a0a0d);
-}
-
 .cal-tg-block > .cal-tg-seg {
+  background-color: color-mix(in oklab, var(--chapter-color, var(--accent)) 58%, #0a0a0d);
   height: 100%;
   min-width: 2px;
 }
@@ -173,7 +168,7 @@
 }
 
 .cal-tg-seglbl {
-  display: flex;
+  display: none;
   gap: 7px;
   align-items: center;
   min-width: 0;
@@ -182,7 +177,6 @@
   font-size: 11px;
   white-space: nowrap;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
-  opacity: 0;
 }
 
 .cal-tg-seglbl .t {
@@ -200,7 +194,7 @@
 
 @container (min-width: 78px) {
   .cal-tg-seglbl {
-    opacity: 1;
+    display: flex;
   }
 }
 
@@ -210,23 +204,43 @@
   }
 }
 
-/* Start-time chip for the phone layout, where the hour axis alone is too
-   sparse to read a block's position. Hidden until the 480px block below. */
-.cal-tg-blocktime {
-  display: none;
-  position: absolute;
-  top: 50%;
-  left: 6px;
-  transform: translateY(-50%);
+/* A narrow segment cannot carry the full desktop label, but it must still
+   expose game identity rather than falling back to an anonymous colour. */
+.cal-tg-narrow-game {
+  display: block;
+  min-width: 0;
+  padding: 0 5px;
+  overflow: hidden;
   color: #fff;
-  font-family: var(--font-display);
   font-size: 9.5px;
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.4px;
   line-height: 1;
-  pointer-events: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+
+.cal-tg-narrow-game .key {
+  display: none;
+}
+
+@container (min-width: 78px) {
+  .cal-tg-narrow-game {
+    display: none;
+  }
+}
+
+@container (max-width: 48px) {
+  .cal-tg-narrow-game {
+    padding-inline: 2px;
+  }
+  .cal-tg-narrow-game .name {
+    display: none;
+  }
+  .cal-tg-narrow-game .key {
+    display: block;
+    font-size: 9px;
+  }
 }
 
 .cal-tg-off {
@@ -314,9 +328,6 @@
 }
 
 .cal-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 18px;
   margin: 22px 2px 0;
   padding-top: 18px;
   border-top: 1px solid var(--border);
@@ -333,6 +344,13 @@
   text-transform: uppercase;
 }
 
+.cal-legend-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  list-style: none;
+}
+
 .cal-leg {
   display: inline-flex;
   align-items: center;
@@ -341,10 +359,19 @@
   font-size: 12.5px;
 }
 
-.cal-leg i {
-  width: 11px;
-  height: 11px;
-  border-radius: 3px;
+.cal-leg-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding-inline: 4px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-dim);
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 700;
 }
 
 .cal-tg-block:hover {
@@ -378,9 +405,6 @@
   }
   .cal-tg-day span {
     font-size: 10px;
-  }
-  .cal-tg-seglbl {
-    display: none;
   }
 }
 
@@ -431,10 +455,22 @@
   .cal-tg-day .cal-tg-today-tag {
     align-self: flex-start;
   }
-  @container (min-width: 56px) {
-    .cal-tg-blocktime {
-      display: block;
-    }
+  .cal-tg-row {
+    height: 64px;
+  }
+  .cal-tg-block {
+    top: 10px;
+    bottom: auto;
+    height: 44px;
+    min-width: 44px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .cal-tg-block::-webkit-scrollbar {
+    display: none;
+  }
+  .cal-tg-block > .cal-tg-seg {
+    min-width: 44px;
   }
   .cal-nav-btn {
     width: 34px;

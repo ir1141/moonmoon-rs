@@ -24,6 +24,7 @@ struct AxisTick {
 
 struct GuideSeg {
     name: String,
+    marker: Option<usize>,
     width_pct: f64,
     color_idx: u8,
     range: String,
@@ -35,7 +36,6 @@ struct GuideBlock {
     left_pct: f64,
     width_pct: f64,
     range: String,
-    start_label: String,
     title: String,
     primary_game: String,
     is_live: bool,
@@ -53,8 +53,8 @@ struct GuideDay {
 }
 
 struct GuideLegendItem {
+    marker: usize,
     name: String,
-    color_idx: u8,
 }
 
 struct TimeGuideView {
@@ -308,6 +308,7 @@ fn fallback_segment(vod: &Vod, start_of_day_seconds: i64, duration_seconds: i64)
         .unwrap_or_else(|| "Stream".to_string());
     GuideSeg {
         color_idx: crate::vods::chapter_color_idx(&name),
+        marker: None,
         label: format!(
             "{name} · {}",
             format_time_range(start_of_day_seconds, duration_seconds)
@@ -340,6 +341,7 @@ fn guide_segments(vod: &Vod, duration_seconds: i64, start_of_day_seconds: i64) -
                 )
             ),
             name: segment.name.clone(),
+            marker: None,
             width_pct: segment.width_pct,
             color_idx: segment.color_idx,
             range: format_time_range(
@@ -372,23 +374,6 @@ fn format_clock(seconds: i64, include_meridiem: bool) -> String {
         format!("{hour12}:{minute:02} {meridiem}")
     } else {
         format!("{hour12}:{minute:02}")
-    }
-}
-
-// Tick-style clock ("9p", "9:12p") for the tight mobile block labels.
-fn format_clock_compact(seconds: i64) -> String {
-    let minute_of_day = seconds.div_euclid(60).rem_euclid(24 * 60);
-    let hour24 = minute_of_day / 60;
-    let minute = minute_of_day % 60;
-    let hour12 = match hour24 % 12 {
-        0 => 12,
-        hour => hour,
-    };
-    let meridiem = if hour24 < 12 { "a" } else { "p" };
-    if minute == 0 {
-        format!("{hour12}{meridiem}")
-    } else {
-        format!("{hour12}:{minute:02}{meridiem}")
     }
 }
 
@@ -445,7 +430,6 @@ fn build_guide_block(session: &RawSession<'_>, current_local: PacificLocalTime) 
         left_pct,
         width_pct,
         range: format_time_range(session.local.seconds_of_day, session.duration_seconds),
-        start_label: format_clock_compact(session.local.seconds_of_day),
         title,
         primary_game,
         is_live,
@@ -482,7 +466,7 @@ fn build_time_guide(
         });
     }
 
-    let days = sessions_by_day
+    let mut days = sessions_by_day
         .into_iter()
         .enumerate()
         .map(|(idx, mut sessions)| {
@@ -506,7 +490,7 @@ fn build_time_guide(
             }
         })
         .collect::<Vec<_>>();
-    let legend = build_guide_legend(&days);
+    let legend = assign_markers_and_build_legend(&mut days);
     let current_week_start = week_start_for_days(current_local.days);
 
     TimeGuideView {
@@ -522,31 +506,30 @@ fn build_time_guide(
     }
 }
 
-fn build_guide_legend(days: &[GuideDay]) -> Vec<GuideLegendItem> {
+fn assign_markers_and_build_legend(days: &mut [GuideDay]) -> Vec<GuideLegendItem> {
     use std::collections::HashMap;
 
-    let mut seen: HashMap<String, GuideLegendItem> = HashMap::new();
+    let mut seen = HashMap::new();
+    let mut items = Vec::new();
     for day in days {
         if day.is_future {
             continue;
         }
-        for block in &day.blocks {
-            for segment in &block.segments {
-                seen.entry(segment.name.to_lowercase())
-                    .or_insert_with(|| GuideLegendItem {
+        for block in &mut day.blocks {
+            for segment in &mut block.segments {
+                let key = segment.name.to_lowercase();
+                let marker = *seen.entry(key).or_insert_with(|| {
+                    let marker = items.len() + 1;
+                    items.push(GuideLegendItem {
+                        marker,
                         name: segment.name.clone(),
-                        color_idx: segment.color_idx,
                     });
+                    marker
+                });
+                segment.marker = Some(marker);
             }
         }
     }
-
-    let mut items = seen.into_values().collect::<Vec<_>>();
-    items.sort_by(|a, b| {
-        a.color_idx
-            .cmp(&b.color_idx)
-            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-    });
     items
 }
 
@@ -586,12 +569,6 @@ mod tests {
 
         assert_eq!(month_name(1), "January");
         assert_eq!(month_name(12), "December");
-
-        assert_eq!(format_clock_compact(21 * 3600), "9p");
-        assert_eq!(format_clock_compact(21 * 3600 + 12 * 60), "9:12p");
-        assert_eq!(format_clock_compact(0), "12a");
-        assert_eq!(format_clock_compact(9 * 3600 + 5 * 60), "9:05a");
-
         let same_month = week_start_for_days(parse_ymd_to_days("2026-07-05").unwrap());
         assert_eq!(format_week_label_short(same_month), "Jul 5 - 11");
         let cross_month = week_start_for_days(parse_ymd_to_days("2026-06-28").unwrap());
@@ -773,6 +750,42 @@ mod tests {
     }
 
     #[test]
+    fn test_time_guide_legend_preserves_first_appearance_order() {
+        let week_start = parse_ymd_to_days("2026-05-24").unwrap();
+        let vod = test_vod(
+            "legend-order",
+            "2026-05-25T19:00:00.000Z",
+            2 * 3600,
+            vec![
+                Chapter {
+                    name: Some("Alpha".into()),
+                    image: None,
+                    start: Some(0.0),
+                    duration: Some(3600.0),
+                    end: None,
+                },
+                Chapter {
+                    name: Some("Bravo".into()),
+                    image: None,
+                    start: Some(3600.0),
+                    duration: Some(3600.0),
+                    end: None,
+                },
+            ],
+        );
+
+        let guide = build_time_guide(&[vod], week_start, current_local(week_start + 7));
+
+        assert_eq!(guide.legend.len(), 2);
+        assert_eq!(guide.legend[0].marker, 1);
+        assert_eq!(guide.legend[0].name, "Alpha");
+        assert_eq!(guide.legend[1].marker, 2);
+        assert_eq!(guide.legend[1].name, "Bravo");
+        assert_eq!(guide.days[1].blocks[0].segments[0].marker, Some(1));
+        assert_eq!(guide.days[1].blocks[0].segments[1].marker, Some(2));
+    }
+
+    #[test]
     fn test_time_guide_multiple_sessions_link_to_each_vod_not_utc_date_filter() {
         let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let first = test_vod(
@@ -862,9 +875,6 @@ mod tests {
         assert!(monday.blocks[0].is_live);
         assert_eq!(guide.legend.len(), 1);
         assert_eq!(guide.legend[0].name, "Ready or Not");
-        assert_eq!(
-            guide.legend[0].color_idx,
-            crate::vods::chapter_color_idx("Ready or Not")
-        );
+        assert_eq!(guide.legend[0].marker, 1);
     }
 }

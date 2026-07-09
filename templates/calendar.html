@@ -54,9 +54,9 @@
              title="{{ block.title }}"
              aria-label="{{ seg.label }}">
             <span class="cal-tg-seglbl"><span class="t">{{ seg.range }}</span><b>{{ seg.name }}</b></span>
+            <span class="cal-tg-narrow-game" aria-hidden="true"><span class="name">{{ seg.name }}</span>{% if let Some(marker) = seg.marker %}<span class="key">{{ marker }}</span>{% endif %}</span>
           </a>
           {% endfor %}
-          <span class="cal-tg-blocktime" aria-hidden="true">{{ block.start_label }}</span>
         </div>
         {% endfor %}
         {% if let Some(now_pct) = day.now_pct %}
@@ -70,9 +70,11 @@
   {% if !guide.legend.is_empty() %}
   <div class="cal-legend" aria-label="Games shown this week">
     <div class="cal-legend-title">This week · games</div>
+    <ul class="cal-legend-list">
     {% for item in guide.legend %}
-    <span class="cal-leg color-{{ item.color_idx }}"><i aria-hidden="true"></i>{{ item.name }}</span>
+      <li class="cal-leg"><span class="cal-leg-key" aria-hidden="true">{{ item.marker }}</span>{{ item.name }}</li>
     {% endfor %}
+    </ul>
   </div>
   {% endif %}
 </div>
