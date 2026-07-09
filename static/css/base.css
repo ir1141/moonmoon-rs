@@ -244,7 +244,7 @@ summary:focus-visible,
 
 .no-results {
   text-align: center;
-  color: var(--text-muted);
+  color: var(--text-dim);
   padding: 80px 20px;
   font-size: 15px;
   font-weight: 400;

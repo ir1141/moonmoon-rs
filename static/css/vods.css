@@ -164,7 +164,7 @@
 }
 
 .sort-label b {
-  color: var(--text-muted);
+  color: var(--text-dim);
   font-weight: 500;
 }
 
@@ -380,7 +380,7 @@
   font-weight: 600;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-dim);
   padding: 12px 0 10px;
   border-bottom: 1px solid var(--border);
   margin-top: 8px;
