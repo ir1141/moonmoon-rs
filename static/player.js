@@ -1370,9 +1370,16 @@ if (typeof YT !== "undefined" && YT && typeof YT.Player === "function") {
   window.onYouTubeIframeAPIReady();
 }
 
-function onPlayerReady() {
+async function onPlayerReady() {
   clearPlayerInitTimeout();
   clearPlayerFallback();
+
+  // The sync module loads before the player and bounds its initial same-origin
+  // pull to three seconds. Wait before choosing the initial seek so a remote
+  // resume cannot arrive just after the player committed to 0:00.
+  if (window.__moonmoonSync && window.__moonmoonSync.ready) {
+    await window.__moonmoonSync.ready;
+  }
 
   // Prefill partDurations from any cached real durations BEFORE any seek
   // logic runs. Without this, multi-part resumes compute global offsets

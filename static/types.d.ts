@@ -60,6 +60,7 @@ declare global {
       isValidToken: (token: unknown) => boolean;
       connect: (token: string) => Promise<boolean>;
       disconnect: () => void;
+      ready: Promise<unknown>;
       pull: () => Promise<unknown>;
       push: () => Promise<unknown>;
       setToken: (token: string) => void;

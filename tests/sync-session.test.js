@@ -173,6 +173,25 @@ describe("Sync session outbound durability", () => {
 });
 
 describe("Sync session inbound freshness", () => {
+  test("a meaningful remote resume repairs newer mobile startup noise", async () => {
+    const storage = createStorage({
+      [TOKEN_KEY]: TOKEN,
+      [HISTORY_KEY]: JSON.stringify({
+        "vod-42": { state: "in_progress", time: 0, updated: 20_000 },
+      }),
+    });
+    const runtime = createRuntime();
+    const transport = createTransport({
+      blob: { v: 2, history: history(937, 10_000) },
+      updated_at: 10_000,
+    });
+    const session = createSyncSession({ storage, runtime, transport });
+    await session.start();
+
+    const local = JSON.parse(storage.getItem(HISTORY_KEY) || "{}");
+    expect(local["vod-42"].time).toBe(937);
+  });
+
   test("an already-open device pulls when it becomes active", async () => {
     const storage = createStorage({ [TOKEN_KEY]: TOKEN });
     const runtime = createRuntime();

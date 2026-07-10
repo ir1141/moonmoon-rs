@@ -9,6 +9,7 @@ import { createSyncSession } from "./lib/sync-session.js";
 // bare module-eval call would abort the whole sync module, so all access
 // goes through the lib/storage.js guards against this handle.
 var storage = safeLocalStorage();
+var INITIAL_PULL_TIMEOUT_MS = 3_000;
 
 function generateToken() {
   return generateTokenPure(function (n) {
@@ -20,11 +21,21 @@ function generateToken() {
 
 var transport = {
   pull: function (token) {
-    return fetch("/api/sync/" + encodeURIComponent(token)).then(function (res) {
-      if (res.status === 404) return null;
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      return res.json();
-    });
+    var controller = new AbortController();
+    var timeout = setTimeout(function () {
+      controller.abort();
+    }, INITIAL_PULL_TIMEOUT_MS);
+    return fetch("/api/sync/" + encodeURIComponent(token), {
+      signal: controller.signal,
+    })
+      .then(function (res) {
+        if (res.status === 404) return null;
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .finally(function () {
+        clearTimeout(timeout);
+      });
   },
   push: function (token, body) {
     return fetch("/api/sync/" + encodeURIComponent(token), {
@@ -90,6 +101,7 @@ var setToken = session.setToken;
 var pull = session.pull;
 var push = session.push;
 
+var ready = session.start();
 window.__moonmoonSync = {
   getToken: getToken,
   setToken: setToken,
@@ -97,11 +109,10 @@ window.__moonmoonSync = {
   generateToken: generateToken,
   connect: session.connect,
   disconnect: session.disconnect,
+  ready: ready,
   pull: pull,
   push: push,
 };
-
-void session.start();
 
 // ─── Settings UI ───
 function el(id) {

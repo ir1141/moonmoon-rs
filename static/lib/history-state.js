@@ -226,15 +226,27 @@ export function saveResumePosition(
 ) {
   const next = normalizeHistoryStore(store);
   if (!id) return next;
+  const time = Number(position && position.time);
+  if (!Number.isFinite(time) || time <= RESUME_MIN_SECONDS) return next;
   const normalized = normalizeHistoryEntry({
     state: "in_progress",
-    time: position && position.time,
+    time,
     part: position && position.part,
     localTime: position && position.localTime,
     updated,
   });
   if (normalized) next[id] = normalized;
   return capEntries(next, maxEntries);
+}
+
+function remoteEntryWins(existing, remote) {
+  if (!existing) return true;
+  if (existing.state === "in_progress" && remote.state === "in_progress") {
+    const existingIsMeaningful = existing.time > RESUME_MIN_SECONDS;
+    const remoteIsMeaningful = remote.time > RESUME_MIN_SECONDS;
+    if (existingIsMeaningful !== remoteIsMeaningful) return remoteIsMeaningful;
+  }
+  return remote.updated > existing.updated;
 }
 
 export function markWatched(
@@ -258,7 +270,7 @@ export function mergeHistory(local, remote, maxEntries = MAX_HISTORY_ENTRIES) {
 
   for (const [id, entry] of Object.entries(normalizeHistoryStore(remote))) {
     const existing = merged[id];
-    if (!existing || entry.updated > existing.updated) {
+    if (remoteEntryWins(existing, entry)) {
       merged[id] = entry;
       changed = true;
     }

@@ -175,6 +175,23 @@ describe("saveResumePosition / markWatched", () => {
     });
   });
 
+  test("startup noise cannot replace meaningful progress", () => {
+    const meaningful = {
+      v1: { state: "in_progress", time: 937, updated: 10_000 },
+    };
+    expect(
+      saveResumePosition(
+        meaningful,
+        "v1",
+        { time: 0, part: 0, localTime: 0 },
+        20_000,
+      ),
+    ).toEqual(meaningful);
+    expect(
+      saveResumePosition({}, "v1", { time: 5, part: 0, localTime: 5 }, 20_000),
+    ).toEqual({});
+  });
+
   test("marking watched drops the position", () => {
     const store = {
       v1: { state: "in_progress", time: 90, updated: 100, part: 1 },
@@ -226,6 +243,20 @@ describe("mergeHistory", () => {
 
     expect(changed).toBe(false);
     expect(merged).toEqual(local);
+  });
+
+  test("meaningful progress beats newer startup noise", () => {
+    const meaningful = { state: "in_progress", time: 937, updated: 10_000 };
+    const noise = { state: "in_progress", time: 0, updated: 20_000 };
+
+    expect(mergeHistory({ v1: noise }, { v1: meaningful })).toEqual({
+      merged: { v1: meaningful },
+      changed: true,
+    });
+    expect(mergeHistory({ v1: meaningful }, { v1: noise })).toEqual({
+      merged: { v1: meaningful },
+      changed: false,
+    });
   });
 
   test("junk remote input changes nothing", () => {
