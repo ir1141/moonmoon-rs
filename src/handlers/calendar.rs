@@ -38,7 +38,9 @@ struct GuideBlock {
     range: String,
     title: String,
     primary_game: String,
+    watch_url: String,
     is_live: bool,
+    continues_past_midnight: bool,
     segments: Vec<GuideSeg>,
 }
 
@@ -82,7 +84,7 @@ const AXIS_END_HOUR: f64 = 24.0;
 const SECONDS_PER_DAY: i64 = 86_400;
 const PACIFIC_STANDARD_OFFSET_SECS: i64 = -8 * 3600;
 const PACIFIC_DAYLIGHT_OFFSET_SECS: i64 = -7 * 3600;
-const TIMEZONE_NOTE: &str = "Times in PT";
+const TIMEZONE_NOTE: &str = "Pacific Time (PT)";
 
 fn month_name(m: u32) -> &'static str {
     match m {
@@ -162,18 +164,18 @@ fn format_week_label(week_start: i64) -> String {
 
     if start_year == end_year && start_month == end_month {
         format!(
-            "{} {start_day} - {end_day}, {start_year}",
+            "{} {start_day}–{end_day}, {start_year}",
             month_name(start_month)
         )
     } else if start_year == end_year {
         format!(
-            "{} {start_day} - {} {end_day}, {start_year}",
+            "{} {start_day}–{} {end_day}, {start_year}",
             month_name(start_month),
             month_name(end_month)
         )
     } else {
         format!(
-            "{} {start_day}, {start_year} - {} {end_day}, {end_year}",
+            "{} {start_day}, {start_year}–{} {end_day}, {end_year}",
             month_name(start_month),
             month_name(end_month)
         )
@@ -182,14 +184,25 @@ fn format_week_label(week_start: i64) -> String {
 
 fn format_week_label_short(week_start: i64) -> String {
     let week_end = week_start + 6;
-    let (_, start_month, start_day) = days_to_civil(week_start);
-    let (_, end_month, end_day) = days_to_civil(week_end);
+    let (start_year, start_month, start_day) = days_to_civil(week_start);
+    let (end_year, end_month, end_day) = days_to_civil(week_end);
+    let start_year_short = start_year.rem_euclid(100);
+    let end_year_short = end_year.rem_euclid(100);
 
-    if start_month == end_month {
-        format!("{} {start_day} - {end_day}", month_abbr(start_month))
+    if start_year == end_year && start_month == end_month {
+        format!(
+            "{} {start_day}–{end_day} ’{end_year_short:02}",
+            month_abbr(start_month)
+        )
+    } else if start_year == end_year {
+        format!(
+            "{} {start_day}–{} {end_day} ’{end_year_short:02}",
+            month_abbr(start_month),
+            month_abbr(end_month)
+        )
     } else {
         format!(
-            "{} {start_day} - {} {end_day}",
+            "{} {start_day} ’{start_year_short:02}–{} {end_day} ’{end_year_short:02}",
             month_abbr(start_month),
             month_abbr(end_month)
         )
@@ -423,6 +436,10 @@ fn build_guide_block(session: &RawSession<'_>, current_local: PacificLocalTime) 
     let (left_pct, width_pct) =
         block_position(session.local.seconds_of_day, session.duration_seconds);
     let session_end = session.local.seconds_of_day + session.duration_seconds;
+    let watch_url = segments
+        .first()
+        .map(|segment| segment.watch_url.clone())
+        .unwrap_or_else(|| build_watch_url(&session.vod.id, None, None));
     let is_live = session.local.days == current_local.days
         && current_local.seconds_of_day >= session.local.seconds_of_day
         && current_local.seconds_of_day < session_end;
@@ -432,7 +449,9 @@ fn build_guide_block(session: &RawSession<'_>, current_local: PacificLocalTime) 
         range: format_time_range(session.local.seconds_of_day, session.duration_seconds),
         title,
         primary_game,
+        watch_url,
         is_live,
+        continues_past_midnight: session_end > (AXIS_END_HOUR * 3600.0) as i64,
         segments,
     }
 }
@@ -570,11 +589,17 @@ mod tests {
         assert_eq!(month_name(1), "January");
         assert_eq!(month_name(12), "December");
         let same_month = week_start_for_days(parse_ymd_to_days("2026-07-05").unwrap());
-        assert_eq!(format_week_label_short(same_month), "Jul 5 - 11");
+        assert_eq!(format_week_label(same_month), "July 5–11, 2026");
+        assert_eq!(format_week_label_short(same_month), "Jul 5–11 ’26");
         let cross_month = week_start_for_days(parse_ymd_to_days("2026-06-28").unwrap());
-        assert_eq!(format_week_label_short(cross_month), "Jun 28 - Jul 4");
+        assert_eq!(format_week_label(cross_month), "June 28–July 4, 2026");
+        assert_eq!(format_week_label_short(cross_month), "Jun 28–Jul 4 ’26");
         let cross_year = week_start_for_days(parse_ymd_to_days("2025-12-29").unwrap());
-        assert_eq!(format_week_label_short(cross_year), "Dec 28 - Jan 3");
+        assert_eq!(
+            format_week_label(cross_year),
+            "December 28, 2025–January 3, 2026"
+        );
+        assert_eq!(format_week_label_short(cross_year), "Dec 28 ’25–Jan 3 ’26");
     }
 
     fn test_vod(id: &str, started_at: &str, duration_secs: i64, chapters: Vec<Chapter>) -> Vod {
@@ -618,11 +643,12 @@ mod tests {
 
         let guide = build_time_guide(&[], week_start, current_local(week_start + 7));
 
-        assert_eq!(guide.week_label, "May 24 - 30, 2026");
+        assert_eq!(guide.week_label, "May 24–30, 2026");
+        assert_eq!(guide.week_label_short, "May 24–30 ’26");
         assert_eq!(guide.prev_week, "2026-05-17");
         assert_eq!(guide.next_week, "2026-05-31");
         assert!(guide.has_next);
-        assert_eq!(guide.timezone_note, "Times in PT");
+        assert_eq!(guide.timezone_note, "Pacific Time (PT)");
         assert_eq!(
             guide
                 .axis_ticks
@@ -654,6 +680,7 @@ mod tests {
         assert_eq!(guide.days[2].now_pct, Some(50.0));
         assert!(guide.days[3].is_future);
         assert!(guide.days[3].is_off);
+        assert!(!guide.has_next);
     }
 
     #[test]
@@ -690,6 +717,8 @@ mod tests {
         assert_eq!(block.range, "1:30 - 7:50 PM");
         assert_eq!(block.title, "Playable Stream");
         assert_eq!(block.primary_game, "Elden Ring");
+        assert_eq!(block.watch_url, "/watch/v1?t=0");
+        assert!(!block.continues_past_midnight);
         assert_eq!(block.segments[0].watch_url, "/watch/v1?t=0");
         assert_close(block.left_pct, 12.5);
         assert_close(block.width_pct, 52.77);
@@ -700,6 +729,31 @@ mod tests {
         assert_eq!(block.segments[1].name, "Schedule I");
         assert_close(block.segments[1].width_pct, 36.84);
         assert_eq!(block.segments[1].range, "5:30 - 7:50 PM");
+    }
+
+    #[test]
+    fn test_time_guide_marks_blocks_that_continue_past_midnight() {
+        let week_start = parse_ymd_to_days("2026-05-24").unwrap();
+        let vod = test_vod(
+            "late",
+            "2026-05-26T06:30:00.000Z",
+            2 * 3600,
+            vec![Chapter {
+                name: Some("After Hours".into()),
+                image: None,
+                start: Some(0.0),
+                duration: Some(2.0 * 3600.0),
+                end: None,
+            }],
+        );
+
+        let guide = build_time_guide(&[vod], week_start, current_local(week_start + 7));
+        let block = &guide.days[1].blocks[0];
+
+        assert_eq!(block.range, "11:30 PM - 1:30 AM");
+        assert!(block.continues_past_midnight);
+        assert_close(block.left_pct, 95.83);
+        assert_close(block.width_pct, 4.16);
     }
 
     #[test]

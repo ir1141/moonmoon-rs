@@ -513,6 +513,15 @@
 }
 
 @media (pointer: coarse) {
+  .header .logo,
+  .nav-link {
+    min-height: 44px;
+  }
+  .nav-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
   .icon-btn,
   .btn-icon {
     width: 44px;
