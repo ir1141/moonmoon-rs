@@ -83,3 +83,23 @@ describe("storage wrapper shadowing tripwire", () => {
     });
   }
 });
+
+describe("watch startup sync ordering", () => {
+  test("sync loads before the watch player chooses its initial position", async () => {
+    const base = await Bun.file(
+      new URL("../templates/base.html", import.meta.url),
+    ).text();
+    const syncScript = base.indexOf('src="/static/sync.js"');
+    const headEnd = base.indexOf("</head>");
+
+    expect(syncScript).toBeGreaterThan(0);
+    expect(syncScript).toBeLessThan(headEnd);
+  });
+
+  test("the player waits for the initial sync pull", async () => {
+    const player = await Bun.file(
+      new URL("../static/player.js", import.meta.url),
+    ).text();
+    expect(player).toMatch(/await\s+window\.__moonmoonSync\.ready/);
+  });
+});

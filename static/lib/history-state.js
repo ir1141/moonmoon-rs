@@ -1,7 +1,8 @@
 // The single client-side contract for watch history: storage key, entry
 // shape, normalization, legacy migration, merging, sync-blob shape, and the
-// resume policy. player.js, sync.js, history.js and vod-cards.js are thin
-// adapters over this module — nothing else may re-declare any of this.
+// resume policy. sync-session.js owns cross-device convergence; player.js,
+// history.js and vod-cards.js are adapters over this module - nothing else may
+// re-declare any of this.
 //
 // Store shape (localStorage, one entry per VOD id):
 //   { <id>: { state: "in_progress", time, updated, part?, localTime? } }
@@ -225,15 +226,27 @@ export function saveResumePosition(
 ) {
   const next = normalizeHistoryStore(store);
   if (!id) return next;
+  const time = Number(position && position.time);
+  if (!Number.isFinite(time) || time <= RESUME_MIN_SECONDS) return next;
   const normalized = normalizeHistoryEntry({
     state: "in_progress",
-    time: position && position.time,
+    time,
     part: position && position.part,
     localTime: position && position.localTime,
     updated,
   });
   if (normalized) next[id] = normalized;
   return capEntries(next, maxEntries);
+}
+
+function remoteEntryWins(existing, remote) {
+  if (!existing) return true;
+  if (existing.state === "in_progress" && remote.state === "in_progress") {
+    const existingIsMeaningful = existing.time > RESUME_MIN_SECONDS;
+    const remoteIsMeaningful = remote.time > RESUME_MIN_SECONDS;
+    if (existingIsMeaningful !== remoteIsMeaningful) return remoteIsMeaningful;
+  }
+  return remote.updated > existing.updated;
 }
 
 export function markWatched(
@@ -257,7 +270,7 @@ export function mergeHistory(local, remote, maxEntries = MAX_HISTORY_ENTRIES) {
 
   for (const [id, entry] of Object.entries(normalizeHistoryStore(remote))) {
     const existing = merged[id];
-    if (!existing || entry.updated > existing.updated) {
+    if (remoteEntryWins(existing, entry)) {
       merged[id] = entry;
       changed = true;
     }
@@ -304,7 +317,9 @@ export function buildHistoryEntries(store) {
         : { id, state: "watched", updated: entry.updated },
     )
     .sort((a, b) =>
-      b.updated === a.updated ? a.id.localeCompare(b.id) : b.updated - a.updated,
+      b.updated === a.updated
+        ? a.id.localeCompare(b.id)
+        : b.updated - a.updated,
     );
 }
 
