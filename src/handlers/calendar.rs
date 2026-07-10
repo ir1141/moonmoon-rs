@@ -754,6 +754,32 @@ mod tests {
         assert!(block.continues_past_midnight);
         assert_close(block.left_pct, 95.83);
         assert_close(block.width_pct, 4.16);
+        // The overrun chevron is pinned to the track's right edge, so an
+        // overrunning block must end exactly at 100% for the cue to sit on it.
+        assert_close(block.left_pct + block.width_pct, 100.0);
+    }
+
+    #[test]
+    fn test_time_guide_block_ending_exactly_at_midnight_does_not_overrun() {
+        let week_start = parse_ymd_to_days("2026-05-24").unwrap();
+        let vod = test_vod(
+            "on-time",
+            "2026-05-26T05:00:00.000Z",
+            2 * 3600,
+            vec![Chapter {
+                name: Some("After Hours".into()),
+                image: None,
+                start: Some(0.0),
+                duration: Some(2.0 * 3600.0),
+                end: None,
+            }],
+        );
+
+        let guide = build_time_guide(&[vod], week_start, current_local(week_start + 7));
+        let block = &guide.days[1].blocks[0];
+
+        assert!(!block.continues_past_midnight);
+        assert_close(block.left_pct + block.width_pct, 100.0);
     }
 
     #[test]
@@ -837,6 +863,143 @@ mod tests {
         assert_eq!(guide.legend[1].name, "Bravo");
         assert_eq!(guide.days[1].blocks[0].segments[0].marker, Some(1));
         assert_eq!(guide.days[1].blocks[0].segments[1].marker, Some(2));
+    }
+
+    #[test]
+    fn test_time_guide_markers_distinguish_games_that_share_a_color() {
+        let week_start = parse_ymd_to_days("2026-05-24").unwrap();
+        let vod = test_vod(
+            "collision",
+            "2026-05-25T19:00:00.000Z",
+            2 * 3600,
+            vec![
+                Chapter {
+                    name: Some("Elden Ring".into()),
+                    image: None,
+                    start: Some(0.0),
+                    duration: Some(3600.0),
+                    end: None,
+                },
+                Chapter {
+                    name: Some("Just Chatting".into()),
+                    image: None,
+                    start: Some(3600.0),
+                    duration: Some(3600.0),
+                    end: None,
+                },
+            ],
+        );
+
+        let guide = build_time_guide(&[vod], week_start, current_local(week_start + 7));
+        let segments = &guide.days[1].blocks[0].segments;
+
+        // Guard: these names must collide in the 8-bucket color hash, or this
+        // test no longer exercises the case markers exist to disambiguate.
+        assert_eq!(segments[0].color_idx, segments[1].color_idx);
+        assert_ne!(segments[0].marker, segments[1].marker);
+        assert_eq!(guide.legend.len(), 2);
+    }
+
+    #[test]
+    fn test_time_guide_marker_stays_stable_when_a_game_returns_on_another_day() {
+        let week_start = parse_ymd_to_days("2026-05-24").unwrap();
+        let monday = test_vod(
+            "mon",
+            "2026-05-25T19:00:00.000Z",
+            3600,
+            vec![Chapter {
+                name: Some("Elden Ring".into()),
+                image: None,
+                start: Some(0.0),
+                duration: Some(3600.0),
+                end: None,
+            }],
+        );
+        let tuesday = test_vod(
+            "tue",
+            "2026-05-26T19:00:00.000Z",
+            3600,
+            vec![Chapter {
+                name: Some("Elden Ring".into()),
+                image: None,
+                start: Some(0.0),
+                duration: Some(3600.0),
+                end: None,
+            }],
+        );
+
+        let guide = build_time_guide(
+            &[monday, tuesday],
+            week_start,
+            current_local(week_start + 7),
+        );
+
+        assert_eq!(guide.days[1].blocks[0].segments[0].marker, Some(1));
+        assert_eq!(guide.days[2].blocks[0].segments[0].marker, Some(1));
+        assert_eq!(guide.legend.len(), 1);
+        assert_eq!(guide.legend[0].name, "Elden Ring");
+    }
+
+    #[test]
+    fn test_time_guide_legend_collapses_case_variants_to_first_seen_casing() {
+        let week_start = parse_ymd_to_days("2026-05-24").unwrap();
+        let vod = test_vod(
+            "casing",
+            "2026-05-25T19:00:00.000Z",
+            2 * 3600,
+            vec![
+                Chapter {
+                    name: Some("Minecraft".into()),
+                    image: None,
+                    start: Some(0.0),
+                    duration: Some(3600.0),
+                    end: None,
+                },
+                Chapter {
+                    name: Some("MINECRAFT".into()),
+                    image: None,
+                    start: Some(3600.0),
+                    duration: Some(3600.0),
+                    end: None,
+                },
+            ],
+        );
+
+        let guide = build_time_guide(&[vod], week_start, current_local(week_start + 7));
+        let segments = &guide.days[1].blocks[0].segments;
+
+        assert_eq!(segments[0].marker, Some(1));
+        assert_eq!(segments[1].marker, Some(1));
+        assert_eq!(guide.legend.len(), 1);
+        assert_eq!(guide.legend[0].name, "Minecraft");
+    }
+
+    #[test]
+    fn test_time_guide_markers_keep_counting_past_the_color_palette() {
+        let week_start = parse_ymd_to_days("2026-05-24").unwrap();
+        let chapters = (1..=9)
+            .map(|i| Chapter {
+                name: Some(format!("Game {i}")),
+                image: None,
+                start: Some((i - 1) as f64 * 3600.0),
+                duration: Some(3600.0),
+                end: None,
+            })
+            .collect();
+        let vod = test_vod("nine", "2026-05-25T19:00:00.000Z", 9 * 3600, chapters);
+
+        let guide = build_time_guide(&[vod], week_start, current_local(week_start + 7));
+
+        assert_eq!(guide.legend.len(), 9);
+        assert_eq!(
+            guide
+                .legend
+                .iter()
+                .map(|item| item.marker)
+                .collect::<Vec<_>>(),
+            (1..=9).collect::<Vec<_>>()
+        );
+        assert_eq!(guide.days[1].blocks[0].segments[8].marker, Some(9));
     }
 
     #[test]

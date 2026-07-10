@@ -264,11 +264,6 @@
   .cal-tg-narrow-game .name {
     display: none;
   }
-  .cal-tg-narrow-game .cal-tg-marker {
-    min-width: 18px;
-    height: 18px;
-    padding-inline: 4px;
-  }
 }
 
 .cal-tg-off {
