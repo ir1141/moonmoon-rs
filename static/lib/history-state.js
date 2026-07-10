@@ -1,7 +1,7 @@
 // The single client-side contract for watch history: storage key, entry
 // shape, normalization, legacy migration, merging, sync-blob shape, and the
 // resume policy. sync-session.js owns cross-device convergence; player.js,
-// history.js and vod-cards.js are adapters over this module — nothing else may
+// history.js and vod-cards.js are adapters over this module - nothing else may
 // re-declare any of this.
 //
 // Store shape (localStorage, one entry per VOD id):
