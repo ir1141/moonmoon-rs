@@ -19,6 +19,7 @@ import {
 import { chatStripeClass } from "./lib/chat-stripe.js";
 import {
   shouldFinalizePlaybackAtTick,
+  shouldSaveOnUnload,
   shouldSaveResume,
 } from "./lib/player-completion.js";
 import {
@@ -72,7 +73,11 @@ var MAX_PART_DURATION = 10800; // 3 hours
 // capture can miss content). This constant gap maps player time → chat time so
 // chat stays aligned. Mirrors the upstream site's `delay`. Unknown part
 // durations are estimated at the 3h cap, matching the playback timeline.
-var CHAT_DELAY = computeChatDelay(VOD_TOTAL_SECS, YOUTUBE_PARTS, MAX_PART_DURATION);
+var CHAT_DELAY = computeChatDelay(
+  VOD_TOTAL_SECS,
+  YOUTUBE_PARTS,
+  MAX_PART_DURATION,
+);
 var PART_DURATIONS_KEY = "moonmoon_part_durations";
 var MAX_PART_DURATION_ENTRIES = 500;
 var MAX_CHAT_DOM_NODES = 2000;
@@ -827,6 +832,10 @@ function savePartDuration(index, duration) {
 // Invalidated when another writer (sync.js merge, another tab) touches the key.
 var historyStoreCache = null;
 
+// Global time of this session's most recent persisted save, or null if the
+// session has never saved. Gates the unload write via shouldSaveOnUnload.
+var lastPlaybackSavedTime = null;
+
 function getHistoryStore() {
   if (historyStoreCache) return historyStoreCache;
   historyStoreCache = loadHistoryStore(storage);
@@ -851,12 +860,14 @@ function savePosition() {
     } catch (e) {
       /* ignore */
     }
+    var globalTime = getGlobalTime();
     historyStoreCache = saveResumePosition(getHistoryStore(), VOD_ID, {
-      time: getGlobalTime(),
+      time: globalTime,
       part: currentPart,
       localTime: localTime,
     });
     saveHistoryStore(storage, historyStoreCache);
+    lastPlaybackSavedTime = globalTime;
   } catch (e) {
     /* quota exceeded or similar */
   }
@@ -1395,7 +1406,11 @@ async function onPlayerReady() {
     // Real durations refine the player timeline, so recompute the chat delay
     // against the same array — otherwise getChatTime maps player time onto the
     // broadcast clock using stale server estimates and chat drifts.
-    CHAT_DELAY = computeChatDelay(VOD_TOTAL_SECS, partDurations, MAX_PART_DURATION);
+    CHAT_DELAY = computeChatDelay(
+      VOD_TOTAL_SECS,
+      partDurations,
+      MAX_PART_DURATION,
+    );
   }
 
   buildPartSelector();
@@ -1557,7 +1572,14 @@ function maybeShowUpNext() {
 // ─── Save on unload ───
 
 window.addEventListener("beforeunload", function () {
-  savePosition();
+  if (
+    shouldSaveOnUnload({
+      lastPlaybackSavedTime: lastPlaybackSavedTime,
+      currentTime: getGlobalTime(),
+    })
+  ) {
+    savePosition();
+  }
   cancelUpNext();
 });
 

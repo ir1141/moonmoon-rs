@@ -24,3 +24,17 @@ export function shouldFinalizePlaybackAtTick(options) {
 export function shouldSaveResume(options) {
   return !(options && options.completed === true);
 }
+
+// The unload write may only record positions the session earned. Playing
+// ticks already persist every second, so a session that never played (or is
+// still parked on its last played save) has nothing to add - writing anyway
+// would re-stamp a restored position as the newest entry and, through
+// last-write-wins sync, erase every other device's progress.
+export function shouldSaveOnUnload(options) {
+  options = options || {};
+  const lastSaved = options.lastPlaybackSavedTime;
+  const currentTime = Number(options.currentTime);
+  if (lastSaved === null || lastSaved === undefined) return false;
+  if (!Number.isFinite(currentTime)) return false;
+  return Math.floor(currentTime) !== Math.floor(Number(lastSaved));
+}
