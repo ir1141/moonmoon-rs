@@ -1,42 +1,14 @@
 import {
-  HISTORY_KEY,
-  buildSyncBlob,
-  historyFromBlob,
-  loadHistoryStore,
-  mergeHistory,
-  saveHistoryStore,
-} from "./lib/history-state.js";
-import {
   isValidToken,
   generateToken as generateTokenPure,
 } from "./lib/token.js";
-import {
-  safeLocalStorage,
-  storageGet,
-  storageRemove,
-  storageSet,
-} from "./lib/storage.js";
-
-var TOKEN_KEY = "moonmoon_sync_token";
-var META_KEY = "moonmoon_sync_meta";
+import { safeLocalStorage } from "./lib/storage.js";
+import { createSyncSession } from "./lib/sync-session.js";
 
 // localStorage access throws SecurityError in storage-blocking browsers; a
 // bare module-eval call would abort the whole sync module, so all access
 // goes through the lib/storage.js guards against this handle.
 var storage = safeLocalStorage();
-
-function getToken() {
-  var t = storageGet(storage, TOKEN_KEY) || "";
-  return isValidToken(t) ? t : "";
-}
-
-function setToken(t) {
-  if (t && isValidToken(t)) {
-    storageSet(storage, TOKEN_KEY, t);
-  } else {
-    storageRemove(storage, TOKEN_KEY);
-  }
-}
 
 function generateToken() {
   return generateTokenPure(function (n) {
@@ -46,126 +18,90 @@ function generateToken() {
   });
 }
 
-function getHistory() {
-  return loadHistoryStore(storage);
-}
-
-function setHistory(store) {
-  try {
-    saveHistoryStore(storage, store);
-    window.dispatchEvent(new Event("moonmoon:historyChanged"));
-  } catch (e) {
-    console.warn("[Sync] history write failed:", e);
-  }
-}
-
-function mergeRemoteHistory(remote) {
-  var result = mergeHistory(getHistory(), remote);
-  if (result.changed) setHistory(result.merged);
-  return result.changed;
-}
-
-function pull() {
-  var token = getToken();
-  if (!token) return Promise.resolve(null);
-  return fetch("/api/sync/" + encodeURIComponent(token))
-    .then(function (res) {
+var transport = {
+  pull: function (token) {
+    return fetch("/api/sync/" + encodeURIComponent(token)).then(function (res) {
       if (res.status === 404) return null;
       if (!res.ok) throw new Error("HTTP " + res.status);
       return res.json();
-    })
-    .then(function (data) {
-      if (!data) return null;
-      var changed = mergeRemoteHistory(historyFromBlob(data.blob));
-      try {
-        storageSet(
-          storage,
-          META_KEY,
-          JSON.stringify({
-            last_pulled_updated_at: data.updated_at || 0,
-            last_pulled_at: Date.now(),
-          }),
-        );
-      } catch (e) {
-        /* ignore */
-      }
-      return { changed: changed, updated_at: data.updated_at };
-    })
-    .catch(function (err) {
-      console.warn("[Sync] pull failed:", err);
-      return null;
     });
-}
+  },
+  push: function (token, body) {
+    return fetch("/api/sync/" + encodeURIComponent(token), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      keepalive: true,
+    }).then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+    });
+  },
+};
 
-var DEBOUNCE_MS = 3000;
-var POLL_MS = 2000;
-var pushTimer = null;
+var runtime = {
+  now: function () {
+    return Date.now();
+  },
+  isVisible: function () {
+    return !document.visibilityState || document.visibilityState !== "hidden";
+  },
+  onWindow: function (type, listener) {
+    window.addEventListener(type, listener);
+    return function () {
+      if (window.removeEventListener)
+        window.removeEventListener(type, listener);
+    };
+  },
+  onDocument: function (type, listener) {
+    if (!document.addEventListener) return function () {};
+    document.addEventListener(type, listener);
+    return function () {
+      if (document.removeEventListener)
+        document.removeEventListener(type, listener);
+    };
+  },
+  dispatchHistoryChanged: function () {
+    window.dispatchEvent(new Event("moonmoon:historyChanged"));
+  },
+  setTimeout: function (listener, delay) {
+    return setTimeout(listener, delay);
+  },
+  clearTimeout: function (id) {
+    clearTimeout(id);
+  },
+  setInterval: function (listener, delay) {
+    return setInterval(listener, delay);
+  },
+  clearInterval: function (id) {
+    clearInterval(id);
+  },
+  warn: function (message, error) {
+    console.warn("[Sync] " + message + ":", error);
+  },
+};
 
-function push() {
-  pushTimer = null;
-  var token = getToken();
-  if (!token) return;
-  var body = JSON.stringify({
-    blob: buildSyncBlob(getHistory()),
-    updated_at: Date.now(),
-  });
-  fetch("/api/sync/" + encodeURIComponent(token), {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: body,
-    keepalive: true,
-  }).catch(function (err) {
-    console.warn("[Sync] push failed:", err);
-  });
-}
-
-function schedulePush() {
-  if (!getToken()) return;
-  if (pushTimer) clearTimeout(pushTimer);
-  pushTimer = setTimeout(push, DEBOUNCE_MS);
-}
-
-// Run the legacy-store migration eagerly — sync.js loads on every page, so
-// this is the one guaranteed migration point even before any history read.
-loadHistoryStore(storage);
-
-// localStorage `storage` events fire on OTHER tabs only, so we also poll
-// the history key in this tab. 2s is fine — the debounce already coalesces.
-var lastHistoryStr = storageGet(storage, HISTORY_KEY) || "";
-setInterval(function () {
-  var cur = storageGet(storage, HISTORY_KEY) || "";
-  if (cur !== lastHistoryStr) {
-    lastHistoryStr = cur;
-    schedulePush();
-  }
-}, POLL_MS);
-
-window.addEventListener("storage", function (e) {
-  if (e.key === HISTORY_KEY) {
-    lastHistoryStr = storageGet(storage, HISTORY_KEY) || "";
-    schedulePush();
-  }
+var session = createSyncSession({
+  storage: storage,
+  transport: transport,
+  runtime: runtime,
 });
-
-// Flush any pending push when the user navigates away. `keepalive: true`
-// on the fetch lets it survive page unload.
-window.addEventListener("beforeunload", function () {
-  if (pushTimer) {
-    clearTimeout(pushTimer);
-    push();
-  }
-});
+var getToken = session.getToken;
+var setToken = session.setToken;
+var pull = session.pull;
+var push = session.push;
 
 window.__moonmoonSync = {
   getToken: getToken,
   setToken: setToken,
   isValidToken: isValidToken,
   generateToken: generateToken,
+  connect: session.connect,
+  disconnect: session.disconnect,
   pull: pull,
   push: push,
 };
 
-pull();
+void session.start();
 
 // ─── Settings UI ───
 function el(id) {
@@ -270,15 +206,15 @@ function initSettingsUi() {
         "Invalid token. Expected 26+ characters of A–Z, 2–7.";
       return;
     }
-    setToken(raw);
+    var connection = session.connect(raw);
     refreshUi();
-    pull().then(function () {
+    connection.then(function () {
       status.textContent = "Connected. Pulled remote history.";
     });
   });
 
   disconnectBtn.addEventListener("click", function () {
-    setToken("");
+    session.disconnect();
     refreshUi();
   });
 

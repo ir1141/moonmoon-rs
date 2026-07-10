@@ -108,12 +108,12 @@ src/
 templates/               # Askama templates (compiled into the binary)
 static/
 ├── player.js            # Player logic, chat sync, emotes, resume, Up Next overlay, game selector
-├── sync.js              # Cross-device sync: token storage, pull/push, settings dialog
+├── sync.js              # Browser/HTTP adapters and cross-device sync settings dialog
 ├── continue-watching.js # Hydrates the landing Continue Watching shelf from resume state
 ├── vod-cards.js         # Resume/watched badges and chapter popovers on VOD cards
 ├── header.js, history.js, list-filters.js, list-feedback.js
-├── lib/                 # Pure JS helpers covered by bun test (emote client/cache/heuristic,
-│                        #   history state/sort, storage/token, player parts, chat autoscroll/stripe/timestamps, …)
+├── lib/                 # Deep browser modules and pure helpers covered by bun test (sync session,
+│                        #   history state, storage/token, player parts, chat helpers, emote helpers, …)
 ├── types.d.ts           # Ambient browser/API types for TypeScript checking
 └── css/                 # Split per concern: base, header, landing, browse, games, vods, calendar, player, sync, footer
 ```
@@ -124,7 +124,7 @@ The router's shared state is `AppState { catalog, http_client, refresh_lock, syn
 
 ### Templates
 
-List views pair a full-page template (e.g. `browse.html`) with grid-only partials (`games_grid.html`, `vods_grid.html`) built from shared card partials (`game_card.html`, `vod_card.html`) and control includes (`list_filters.html`, `_sort_control.html`, `_footer.html`, `continue_resume.html`, `continue_watching_block.html`). htmx swaps selected full-page result regions for filters and grid-only partials for pagination. Watch state lives in `localStorage` as a single unified history store (`moonmoon_history`; older `moonmoon_resume` / `moonmoon_watched` stores are migrated into it on first read) and is reapplied to VOD cards after every `htmx:afterSwap` and on the `moonmoon:historyChanged` event; player-only preferences use additional local keys such as `moonmoon_part_durations`, `moonmoon_chat_size`, `moonmoon_chat_timestamps`, `moonmoon_theatre`, and `moonmoon_history_sort`. The whole history contract - store shape, normalization, legacy migration, merging, the sync-blob shape, and the resume-noise threshold - lives in `static/lib/history-state.js`; `player.js`, `sync.js`, `history.js`, and `vod-cards.js` are thin adapters over it. All localStorage access goes through the guarded helpers in `static/lib/storage.js`, which degrade to no-ops in storage-blocking browsers. Templates are compiled into the binary by Askama, so edits to `templates/*.html` require a rebuild.
+List views pair a full-page template (e.g. `browse.html`) with grid-only partials (`games_grid.html`, `vods_grid.html`) built from shared card partials (`game_card.html`, `vod_card.html`) and control includes (`list_filters.html`, `_sort_control.html`, `_footer.html`, `continue_resume.html`, `continue_watching_block.html`). htmx swaps selected full-page result regions for filters and grid-only partials for pagination. Watch state lives in `localStorage` as a single unified history store (`moonmoon_history`; older `moonmoon_resume` / `moonmoon_watched` stores are migrated into it on first read) and is reapplied to VOD cards after every `htmx:afterSwap` and on the `moonmoon:historyChanged` event; player-only preferences use additional local keys such as `moonmoon_part_durations`, `moonmoon_chat_size`, `moonmoon_chat_timestamps`, `moonmoon_theatre`, and `moonmoon_history_sort`. The whole history contract - store shape, normalization, legacy migration, merging, the sync-blob shape, and the resume-noise threshold - lives in `static/lib/history-state.js`. Cross-device convergence lives in the deep `static/lib/sync-session.js` module; `sync.js` supplies its browser/HTTP adapters and settings UI. `player.js`, `history.js`, and `vod-cards.js` remain adapters over the history contract. All localStorage access goes through the guarded helpers in `static/lib/storage.js`, which degrade to no-ops in storage-blocking browsers. Templates are compiled into the binary by Askama, so edits to `templates/*.html` require a rebuild.
 
 ### Emotes
 
@@ -137,7 +137,7 @@ Newer VODs also carry a frozen per-VOD snapshot — the exact 7TV / BTTV / FFZ s
 Click the ⟳ icon in the top-right of any page to open the sync dialog.
 
 - **Generate new token** creates a 26-character base32 token, stores it in this device's `localStorage`, and immediately uploads your current watch history.
-- **Use existing token** lets a second device paste the same token and pull the history down. After that, both devices push debounced updates whenever `moonmoon_history` changes.
+- **Use existing token** lets a second device paste the same token and pull the history down. Local changes push immediately, then continuous playback is coalesced behind a fixed five-second deadline so a hard power-off cannot postpone every write. Connected pages pull on startup and whenever they become active, plus every 15 seconds while visible.
 - **Disconnect this device** removes the token from this browser. Your local history stays put; the remote copy is untouched.
 
 The token is the only credential — anyone holding it can read and overwrite the history. Treat it like a password. Tokens (26–32 char uppercase base32) never expire on the server. The server stores opaque JSON blobs at `$SYNC_STORE_PATH` (default `./sync.json`, gitignored), behind the existing API rate limiter (2 req/s, burst 20, per IP), with bodies capped at 256 KiB. Whole-blob conflict resolution is last-write-wins by the client-supplied `updated_at`; the server stamps its own `stored_at` and uses it as the eviction key, capping the store at 10,000 tokens (oldest evicted first). The blob itself is a versioned `{ v: 2, history: { <id>: entry } }` payload (reads still accept the old `{ resume, watched }` split shape), and per-VOD merging is the client's job (`static/lib/history-state.js`), so two devices watching different VODs won't clobber each other.

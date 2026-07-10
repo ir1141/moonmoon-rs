@@ -1,7 +1,8 @@
 // The single client-side contract for watch history: storage key, entry
 // shape, normalization, legacy migration, merging, sync-blob shape, and the
-// resume policy. player.js, sync.js, history.js and vod-cards.js are thin
-// adapters over this module — nothing else may re-declare any of this.
+// resume policy. sync-session.js owns cross-device convergence; player.js,
+// history.js and vod-cards.js are adapters over this module — nothing else may
+// re-declare any of this.
 //
 // Store shape (localStorage, one entry per VOD id):
 //   { <id>: { state: "in_progress", time, updated, part?, localTime? } }
@@ -304,7 +305,9 @@ export function buildHistoryEntries(store) {
         : { id, state: "watched", updated: entry.updated },
     )
     .sort((a, b) =>
-      b.updated === a.updated ? a.id.localeCompare(b.id) : b.updated - a.updated,
+      b.updated === a.updated
+        ? a.id.localeCompare(b.id)
+        : b.updated - a.updated,
     );
 }
 

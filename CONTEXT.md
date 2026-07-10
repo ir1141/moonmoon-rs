@@ -68,3 +68,10 @@ by `tests/fixtures/history-request.json`). _Avoid_: resume store, watched store
 bar is drawn or a resume offered. The server keeps only a positive-position
 guard on `/history/resume`; it never re-declares the threshold or the percent.
 _Avoid_: duplicating either in Rust or per-caller constants.
+
+### Sync session
+
+One browser device's connected participation in cross-device Watch history:
+local changes become remotely durable within a bounded time, and remote changes
+are reconciled whenever the device becomes active. _Avoid_: sync UI, SyncStore
+(the server's opaque persistence role).

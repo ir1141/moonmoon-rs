@@ -58,8 +58,10 @@ declare global {
       generateToken: () => string;
       getToken: () => string;
       isValidToken: (token: unknown) => boolean;
+      connect: (token: string) => Promise<boolean>;
+      disconnect: () => void;
       pull: () => Promise<unknown>;
-      push: () => void;
+      push: () => Promise<unknown>;
       setToken: (token: string) => void;
     };
     onYouTubeIframeAPIReady?: () => void;
