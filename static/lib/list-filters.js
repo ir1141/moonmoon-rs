@@ -78,3 +78,40 @@ export function datePresetForRange(from, to, todayIso, minIso, maxIso) {
   }
   return "custom";
 }
+
+/**
+ * Index to focus after `key` inside an open sort listbox, or null when the key
+ * is not part of the pattern. `current` is -1 when focus is not on an option.
+ */
+export function nextSortIndex(key, current, count) {
+  if (count <= 0) return null;
+  switch (key) {
+    case "ArrowDown":
+      return current < 0 ? 0 : (current + 1) % count;
+    case "ArrowUp":
+      return current < 0 ? count - 1 : (current - 1 + count) % count;
+    case "Home":
+      return 0;
+    case "End":
+      return count - 1;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Listbox typeahead. A single-character query moves to the next match after
+ * `from` so repeated presses cycle; a longer buffer re-tests `from` first so
+ * refining the query keeps the option it already matched.
+ */
+export function typeaheadIndex(labels, query, from) {
+  const needle = query.toLowerCase();
+  const count = labels.length;
+  if (!needle || count === 0) return null;
+  const start = needle.length > 1 ? 0 : 1;
+  for (let offset = start; offset <= count; offset++) {
+    const index = (((from + offset) % count) + count) % count;
+    if (labels[index].toLowerCase().startsWith(needle)) return index;
+  }
+  return null;
+}

@@ -1,4 +1,7 @@
-import { pruneEmptyListParameters as pruneEmptyParameters } from "./lib/list-feedback.js";
+import {
+  overlayApplyState,
+  pruneEmptyListParameters as pruneEmptyParameters,
+} from "./lib/list-feedback.js";
 
 function listRegionFromEvent(event) {
   const detailTarget = event.detail && event.detail.target;
@@ -85,8 +88,29 @@ function pruneEmptyRequestParameters(event) {
   pruneEmptyParameters((event.detail || {}).parameters);
 }
 
+// The filter sheet hides the grid behind it, and aria-modal hides the summary's
+// live region from screen readers while it is open, so the count is republished
+// on the sheet's own dismiss button.
+function syncOverlayApplyLabel() {
+  const summary = document.querySelector("[data-list-region] .list-summary[data-result-label]");
+  const label = document.querySelector("[data-overlay-apply-label]");
+  if (!(summary instanceof HTMLElement) || !(label instanceof HTMLElement)) return;
+
+  const state = overlayApplyState(summary.dataset.resultLabel);
+  if (label.textContent !== state.label) label.textContent = state.label;
+
+  const button = label.closest(".toolbar-overlay-apply");
+  if (button instanceof HTMLElement) button.dataset.empty = String(state.empty);
+}
+
+function onListSettled() {
+  clearListBusy();
+  syncOverlayApplyLabel();
+}
+
 document.body.addEventListener("htmx:configRequest", pruneEmptyRequestParameters);
 document.body.addEventListener("htmx:beforeRequest", setListBusyFromEvent);
-document.body.addEventListener("htmx:afterSettle", clearListBusy);
+document.body.addEventListener("htmx:afterSettle", onListSettled);
 document.body.addEventListener("htmx:responseError", showListError);
 document.body.addEventListener("htmx:sendError", showListError);
+document.addEventListener("DOMContentLoaded", syncOverlayApplyLabel);

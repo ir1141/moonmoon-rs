@@ -9,33 +9,36 @@
   <div id="browse-main">
     <div class="browse-head">
       <h1 class="browse-title">Browse</h1>
-      <div class="lens-toggle" role="tablist" aria-label="Browse lens">
-        <a class="lens-btn{% if is_games_lens %} active{% endif %}" role="tab"
-           aria-selected="{% if is_games_lens %}true{% else %}false{% endif %}"
+      {# Links to two URLs, not tabs over one panel: the borrowed tablist role
+         announced a keyboard contract (arrow keys, one tab stop) that neither
+         the markup nor the htmx swap ever implemented. #}
+      <nav class="lens-toggle" aria-label="Browse lens">
+        <a class="lens-btn{% if is_games_lens %} active{% endif %}"
+           {% if is_games_lens %}aria-current="page"{% endif %}
            href="{{ lens_games_url }}"
            hx-get="{{ lens_games_url }}" hx-select="#browse-main" hx-target="#browse-main"
            hx-swap="outerHTML" hx-push-url="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
           Games
         </a>
-        <a class="lens-btn{% if !is_games_lens %} active{% endif %}" role="tab"
-           aria-selected="{% if !is_games_lens %}true{% else %}false{% endif %}"
+        <a class="lens-btn{% if !is_games_lens %} active{% endif %}"
+           {% if !is_games_lens %}aria-current="page"{% endif %}
            href="{{ lens_streams_url }}"
            hx-get="{{ lens_streams_url }}" hx-select="#browse-main" hx-target="#browse-main"
            hx-swap="outerHTML" hx-push-url="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="15" width="18" height="5" rx="1.5"/></svg>
           Streams
         </a>
-      </div>
+      </nav>
     </div>
 
     {% include "list_filters.html" %}
 
     <section id="browse-results" class="browse-results" data-list-region aria-busy="false">
-      <div class="list-summary" aria-live="polite" data-filtered-count="{{ metadata.filtered_count }}">
+      <div class="list-summary" aria-live="polite" data-filtered-count="{{ metadata.filtered_count }}" data-result-label="{{ metadata.result_label }}">
         <div class="stats list-count">
           {{ metadata.result_label }}
-          {% if metadata.is_filtered %}
+          {% if is_filtered %}
           <span class="list-count-total">of {{ metadata.unfiltered_count }} archived</span>
           {% else %}
           <span class="list-count-total">in the archive</span>
@@ -46,8 +49,8 @@
           {% if let Some(g) = game %}
           <span class="filter-chip filter-chip-game">
             <span class="chapter-dot color-{{ game_color_idx }}" aria-hidden="true"></span>
-            {{ g }}
-            <a class="filter-chip-x" href="{{ clear_game_url }}" aria-label="Clear game filter">
+            Game: {{ g }}
+            <a class="filter-chip-x" href="{{ clear_game_url }}" aria-label="Remove {{ g }} filter">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
             </a>
           </span>

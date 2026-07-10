@@ -7,16 +7,24 @@
 {% block content %}
 <div class="calendar-page">
   <div class="calendar-nav">
-    <a href="/calendar?week={{ guide.prev_week }}" class="btn-icon cal-nav-btn" title="Previous week">
+    <a href="/calendar?week={{ guide.prev_week }}" class="btn-icon cal-nav-btn" title="Previous week" aria-label="Previous week">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg>
     </a>
-    <h2 class="cal-month-title"><span class="cal-title-long">{{ guide.week_label }}</span><span class="cal-title-short">{{ guide.week_label_short }}</span></h2>
+    <h1 class="cal-month-title"><span class="cal-title-long">{{ guide.week_label }}</span><span class="cal-title-short">{{ guide.week_label_short }}</span></h1>
     {% if guide.has_next %}
-    <a href="/calendar?week={{ guide.next_week }}" class="btn-icon cal-nav-btn" title="Next week">
+    <a href="/calendar?week={{ guide.next_week }}" class="btn-icon cal-nav-btn" title="Next week" aria-label="Next week">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M9 18l6-6-6-6"/></svg>
     </a>
+    <a href="/calendar" class="btn-chip cal-this-week">This week</a>
     {% else %}
-    <span class="btn-icon cal-nav-btn disabled"></span>
+    <button type="button"
+            class="btn-icon cal-nav-btn disabled"
+            disabled
+            aria-disabled="true"
+            aria-label="Next week unavailable because this is the current week"
+            title="Next week unavailable because this is the current week">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+    </button>
     {% endif %}
   </div>
   <p class="cal-tg-note">{{ guide.timezone_note }}</p>
@@ -43,36 +51,56 @@
         <span class="cal-tg-off">No stream</span>
         {% else %}
         {% for block in day.blocks %}
-        <div class="cal-tg-block{% if block.is_live %} is-live{% endif %}"
+        <div class="cal-tg-block{% if block.is_live %} is-live{% endif %}{% if block.continues_past_midnight %} continues-past-midnight{% endif %}"
              style="left: {{ block.left_pct }}%; width: {{ block.width_pct }}%"
              title="{{ block.title }}"
-             aria-label="{{ day.weekday }} {{ day.date_label }} stream, {{ block.range }}, {{ block.primary_game }}">
+             role="group"
+             aria-label="{{ day.weekday }} {{ day.date_label }} stream, {{ block.range }}, {{ block.title }}, {{ block.primary_game }}{% if block.continues_past_midnight %}, continues after midnight{% endif %}">
           {% for seg in block.segments %}
           <a href="{{ seg.watch_url }}"
              class="cal-tg-seg chapter-seg color-{{ seg.color_idx }}"
              style="flex-basis: {{ seg.width_pct }}%; flex-grow: 0"
              title="{{ block.title }}"
-             aria-label="{{ seg.label }}">
-            <span class="cal-tg-seglbl"><span class="t">{{ seg.range }}</span><b>{{ seg.name }}</b></span>
+             aria-label="{{ block.title }} · {{ seg.label }}{% if block.continues_past_midnight %} · continues after midnight{% endif %}">
+            <span class="cal-tg-seglbl">{% if let Some(marker) = seg.marker %}<span class="cal-tg-marker" aria-hidden="true">{{ marker }}</span>{% endif %}<span class="t">{{ seg.range }}</span><b>{{ seg.name }}</b></span>
+            <span class="cal-tg-narrow-game" aria-hidden="true">{% if let Some(marker) = seg.marker %}<span class="cal-tg-marker">{{ marker }}</span>{% endif %}<span class="name">{{ seg.name }}</span></span>
           </a>
           {% endfor %}
-          <span class="cal-tg-blocktime" aria-hidden="true">{{ block.start_label }}</span>
         </div>
+        {% if block.continues_past_midnight %}<span class="cal-tg-overrun-cue" aria-hidden="true"></span>{% endif %}
         {% endfor %}
         {% if let Some(now_pct) = day.now_pct %}
         <div class="cal-tg-now" style="left: {{ now_pct }}%"></div>
         {% endif %}
         {% endif %}
       </div>
+      {% if !day.is_future && !day.is_off %}
+      <details class="cal-tg-mobile-streams">
+        <summary>Full stream titles</summary>
+        <ul class="cal-tg-mobile-stream-list" aria-label="Streams for {{ day.weekday }} {{ day.date_label }}">
+        {% for block in day.blocks %}
+        <li>
+          <a href="{{ block.watch_url }}" class="cal-tg-mobile-stream">
+            <span class="cal-tg-mobile-stream-range">{{ block.range }}</span>
+            <span class="cal-tg-mobile-stream-title">{{ block.title }}</span>
+            {% if block.continues_past_midnight %}<span class="sr-only">Continues after midnight</span>{% endif %}
+          </a>
+        </li>
+        {% endfor %}
+        </ul>
+      </details>
+      {% endif %}
     </div>
     {% endfor %}
   </div>
   {% if !guide.legend.is_empty() %}
   <div class="cal-legend" aria-label="Games shown this week">
     <div class="cal-legend-title">This week · games</div>
+    <ul class="cal-legend-list">
     {% for item in guide.legend %}
-    <span class="cal-leg color-{{ item.color_idx }}"><i aria-hidden="true"></i>{{ item.name }}</span>
+      <li class="cal-leg"><span class="cal-leg-key" aria-hidden="true">{{ item.marker }}</span>{{ item.name }}</li>
     {% endfor %}
+    </ul>
   </div>
   {% endif %}
 </div>

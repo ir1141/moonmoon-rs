@@ -409,14 +409,14 @@
     text-transform: uppercase;
   }
 
+  .vod-toolbar .toolbar-search-wrap,
+  .games-toolbar .toolbar-search-wrap,
   .vod-toolbar .toolbar-search,
   .games-toolbar .toolbar-search,
   .vod-toolbar .toolbar-select,
   .games-toolbar .toolbar-select,
   .vod-toolbar .toolbar-sort,
-  .games-toolbar .toolbar-sort,
-  .vod-toolbar .toolbar-date,
-  .games-toolbar .toolbar-date {
+  .games-toolbar .toolbar-sort {
     width: 100%;
   }
 
@@ -427,6 +427,62 @@
     gap: 7px;
     margin-left: 0;
     width: 100%;
+  }
+
+  .vod-toolbar .date-custom,
+  .games-toolbar .date-custom {
+    display: flex;
+    width: 100%;
+    padding-left: 0;
+  }
+
+  .vod-toolbar .toolbar-date,
+  .games-toolbar .toolbar-date {
+    /* Flex items default to min-width: auto and won't shrink below their
+       content width without this, which is what causes the overflow. */
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+  }
+
+  /* Five presets never fit one row at 390px, and wrapping orphaned "Custom" on
+     a second line inside the pill. Six tracks let row one split in thirds and
+     row two in halves, so both rows stay even instead of ragged. */
+  .vod-toolbar .date-presets,
+  .games-toolbar .date-presets {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .vod-toolbar .date-chip,
+  .games-toolbar .date-chip {
+    grid-column: span 2;
+    padding-inline: 8px;
+  }
+
+  .vod-toolbar .date-chip[data-preset="year"],
+  .games-toolbar .date-chip[data-preset="year"],
+  .vod-toolbar .date-chip-custom,
+  .games-toolbar .date-chip-custom {
+    grid-column: span 3;
+  }
+
+  .vod-toolbar .toolbar-overlay-apply,
+  .games-toolbar .toolbar-overlay-apply {
+    display: inline-flex;
+    width: 100%;
+    min-height: 44px;
+    margin-top: 4px;
+    font-size: 13px;
+  }
+
+  /* Nothing to show: stop looking like the thing to press. */
+  .toolbar-overlay-apply[data-empty="true"],
+  .toolbar-overlay-apply[data-empty="true"]:hover {
+    background: var(--bg-elevated);
+    border-color: var(--border);
+    color: var(--text-dim);
   }
 
   /* Scroll-away header: the header is ~1/8 of a phone viewport, so it yields
@@ -457,6 +513,15 @@
 }
 
 @media (pointer: coarse) {
+  .header .logo,
+  .nav-link {
+    min-height: 44px;
+  }
+  .nav-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
   .icon-btn,
   .btn-icon {
     width: 44px;

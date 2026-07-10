@@ -425,3 +425,24 @@ a.game-card:focus-visible {
     gap: 10px;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .game-card {
+    transition: box-shadow 0.3s;
+  }
+  .game-card .art {
+    transition: none;
+  }
+  .game-card:hover {
+    transform: none;
+  }
+  .game-card:hover .art {
+    transform: none;
+  }
+  .game-card:active {
+    transform: none;
+  }
+  .continue-btn:active {
+    transform: none;
+  }
+}

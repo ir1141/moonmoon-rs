@@ -189,6 +189,14 @@ summary:focus-visible,
   outline-offset: 2px;
 }
 
+/* Same 44px floor icon-btn and continue-btn already get. The 30px default is a
+   pointer size, not a thumb size. */
+@media (pointer: coarse) {
+  .btn-chip {
+    min-height: 44px;
+  }
+}
+
 .btn-chip.btn-primary {
   background: var(--accent);
   border-color: var(--accent);
@@ -236,7 +244,7 @@ summary:focus-visible,
 
 .no-results {
   text-align: center;
-  color: var(--text-muted);
+  color: var(--text-dim);
   padding: 80px 20px;
   font-size: 15px;
   font-weight: 400;
@@ -331,7 +339,7 @@ summary:focus-visible,
 
 .filter-chip {
   background: var(--bg-elevated);
-  color: var(--text-muted);
+  color: var(--text-dim);
 }
 
 .filter-clear {
@@ -432,5 +440,15 @@ summary:focus-visible,
 @media (max-width: 768px) {
   .content {
     padding: 20px 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-card,
+  .vod-card {
+    animation: none;
+  }
+  .btn-chip:active {
+    transform: none;
   }
 }

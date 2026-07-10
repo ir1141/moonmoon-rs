@@ -18,12 +18,18 @@
   flex-wrap: wrap;
 }
 
+.toolbar-search-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
 .toolbar-search {
   font-family: var(--font-body);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 8px 14px;
+  padding: 8px 34px 8px 14px;
   border-radius: 8px;
   font-size: 13px;
   outline: none;
@@ -33,9 +39,43 @@
 .toolbar-search::placeholder {
   color: var(--text-muted);
 }
+
+/* Discoverability for the "/" shortcut (static/header.js). It steps aside the
+   moment the field is in use, and never shows where there is no key to press. */
+.search-kbd {
+  position: absolute;
+  right: 8px;
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-dim);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 7px;
+  transition: opacity 0.15s;
+}
+
+.toolbar-search-wrap:has(.toolbar-search:focus) .search-kbd,
+.toolbar-search-wrap:has(.toolbar-search:not(:placeholder-shown)) .search-kbd {
+  opacity: 0;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .search-kbd {
+    display: none;
+  }
+  .toolbar-search {
+    padding-right: 14px;
+  }
+}
+
+/* No focus glow here: a text input always matches :focus-visible, so the
+   shared outline below would always sit on top of it as a second ring. */
 .toolbar-search:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
   background: var(--bg-card);
 }
 .toolbar-search:focus-visible,
@@ -126,7 +166,7 @@
 }
 
 .sort-label b {
-  color: var(--text-muted);
+  color: var(--text-dim);
   font-weight: 500;
 }
 
@@ -281,10 +321,22 @@
   outline-offset: 2px;
 }
 
+@media (pointer: coarse) {
+  .date-chip {
+    min-height: 44px;
+  }
+}
+
 .date-chip-custom {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
+}
+
+/* Only the mobile filter sheet renders this; see header.css. */
+.toolbar-overlay-apply {
+  display: none;
 }
 
 .date-chip-custom svg {
@@ -330,7 +382,7 @@
   font-weight: 600;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-dim);
   padding: 12px 0 10px;
   border-bottom: 1px solid var(--border);
   margin-top: 8px;
@@ -810,6 +862,7 @@
   .active-filters {
     justify-content: flex-start;
   }
+  .toolbar-search-wrap,
   .toolbar-search {
     width: 100%;
   }
@@ -826,5 +879,55 @@
 @media (max-width: 480px) {
   .vod-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbar-sort .sort-chev {
+    transition: none;
+  }
+  .sort-menu {
+    animation: none;
+  }
+  .date-custom {
+    animation: none;
+  }
+  .resume-bar-fill {
+    transition: none;
+  }
+  .vod-card {
+    transition:
+      border-color 0.25s,
+      box-shadow 0.25s;
+  }
+  .vod-card .thumb {
+    transition: filter 0.25s;
+  }
+  .vod-card:hover {
+    transform: none;
+  }
+  .vod-card:hover .thumb {
+    transform: none;
+  }
+  /* translate(-50%, -50%) here is centering, not motion: only the scale
+     that animates on hover is dropped. */
+  .vod-card .play-icon,
+  .vod-card:hover .play-icon {
+    transform: translate(-50%, -50%);
+  }
+  .vod-card:active {
+    transform: none;
+  }
+  .chapter-seg-tip,
+  .chapter-seg:hover .chapter-seg-tip {
+    transform: translateX(-50%) translateY(0);
+  }
+  .chapter-seg:first-child .chapter-seg-tip,
+  .chapter-seg:first-child:hover .chapter-seg-tip {
+    transform: translateX(0) translateY(0);
+  }
+  .chapter-seg:last-child:not(:first-child) .chapter-seg-tip,
+  .chapter-seg:last-child:not(:first-child):hover .chapter-seg-tip {
+    transform: translateX(0) translateY(0);
   }
 }

@@ -6,7 +6,7 @@
   {% if let Some(g) = game %}<input type="hidden" name="game" value="{{ g }}">{% endif %}
   <div class="toolbar-overlay-panel">
     <div class="toolbar-mobile-actions">
-      <span>{{ filter.title }}</span>
+      <span id="{{ filter.form_id }}-title">{{ filter.title }}</span>
       <div class="toolbar-mobile-buttons">
         <button type="button" class="btn-chip" data-search-overlay-clear>Clear</button>
         <button type="button" class="icon-btn" data-search-overlay-close aria-label="Close search filters" title="Close">
@@ -16,12 +16,15 @@
         </button>
       </div>
     </div>
-    <input type="search" name="search" class="toolbar-search" placeholder="{{ filter.search_placeholder }}"
-           aria-label="{{ filter.search_label }}"
-           hx-get="{{ filter.hx_get }}" hx-trigger="input changed delay:300ms"
-           hx-select="#{{ filter.results_id }}" hx-target="#{{ filter.results_id }}" hx-swap="outerHTML"
-           hx-push-url="true" hx-include="#{{ filter.form_id }}" hx-indicator="#{{ filter.loading_id }}"
-           {% if let Some(s) = search %}value="{{ s }}"{% endif %}>
+    <div class="toolbar-search-wrap">
+      <input type="search" name="search" class="toolbar-search" placeholder="{{ filter.search_placeholder }}"
+             aria-label="{{ filter.search_label }}"
+             hx-get="{{ filter.hx_get }}" hx-trigger="input changed delay:300ms"
+             hx-select="#{{ filter.results_id }}" hx-target="#{{ filter.results_id }}" hx-swap="outerHTML"
+             hx-push-url="true" hx-include="#{{ filter.form_id }}" hx-indicator="#{{ filter.loading_id }}"
+             {% if let Some(s) = search %}value="{{ s }}"{% endif %}>
+      <kbd class="search-kbd" aria-hidden="true">/</kbd>
+    </div>
     <div class="toolbar-sort-wrap" data-sort-control>
       <input type="hidden" name="sort" class="toolbar-sort-value" value="{{ filter.selected_sort_value }}"
              hx-get="{{ filter.hx_get }}" hx-trigger="change"
@@ -30,6 +33,7 @@
       {% let sort_aria_label = filter.sort_label %}
       {% let selected_sort_label = filter.selected_sort_label %}
       {% let sort_options = filter.sort_options %}
+      {% let sort_menu_id = "browse-sort-menu" %}
       {% include "_sort_control.html" %}
     </div>
     <div class="toolbar-dates">
@@ -53,7 +57,7 @@
              hx-select="#{{ filter.results_id }}" hx-target="#{{ filter.results_id }}" hx-swap="outerHTML"
              hx-push-url="true" hx-include="#{{ filter.form_id }}" hx-indicator="#{{ filter.loading_id }}"
              {% if let Some(f) = from %}value="{{ f }}"{% endif %}>
-      <span class="date-sep">→</span>
+      <span class="date-sep" aria-hidden="true">→</span>
       <input type="date" name="to" class="toolbar-date" aria-label="Filter to date"
              min="{{ filter.archive_min_date }}" max="{{ filter.archive_max_date }}"
              hx-get="{{ filter.hx_get }}" hx-trigger="change"
@@ -62,5 +66,13 @@
              {% if let Some(t) = to %}value="{{ t }}"{% endif %}>
       </div>
     </div>
+    {# The sheet covers the grid it filters, so the dismiss carries the live
+       count. type=button on purpose: a submit button would give the search
+       field implicit submission and reload the page on Enter. Static label is
+       a fallback; static/list-feedback.js fills in the count. Last in the
+       panel so the focus trap never has to wrap out of a date input. #}
+    <button type="button" class="btn-chip btn-primary toolbar-overlay-apply" data-search-overlay-close>
+      <span data-overlay-apply-label aria-live="polite">Show results</span>
+    </button>
   </div>
 </form>
