@@ -1,0 +1,14 @@
+# Build artifacts & vendored dirs
+node_modules
+target
+.playwright-mcp
+
+# Lockfiles & generated
+bun.lock
+Cargo.lock
+
+# Askama templates use {% %}/{{ }} syntax that prettier's HTML parser mangles
+templates
+
+# Markdown follows a one-sentence-per-line convention, not prettier's prose wrap
+*.md
