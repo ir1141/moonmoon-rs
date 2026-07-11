@@ -910,7 +910,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_vod_display_preserves_numeric_api_duration_seconds() {
+    fn vod_display_preserves_numeric_api_duration_seconds() {
         let vod: Vod = serde_json::from_str(
             r#"{
                 "id": 1430,
@@ -935,7 +935,7 @@ mod tests {
     }
 
     #[test]
-    fn test_vod_matches_platform_vod_id() {
+    fn vod_matches_id_accepts_platform_vod_id() {
         let mut vod = make_vod("1430", "2024-01-01T00:00:00Z", &["HITMAN"]);
         vod.platform_vod_id = Some("2768249708".into());
 
@@ -945,25 +945,25 @@ mod tests {
     }
 
     #[test]
-    fn test_format_date() {
+    fn format_date_renders_month_day_year() {
         assert_eq!(format_date("2025-01-15T00:00:00Z"), "Jan 15, 2025");
         assert_eq!(format_date("2025-12-01T12:30:00Z"), "Dec 1, 2025");
     }
 
     #[test]
-    fn test_format_date_short_drops_year() {
+    fn format_date_short_drops_year() {
         assert_eq!(format_date_short("2025-01-15T00:00:00Z"), "Jan 15");
         assert_eq!(format_date_short("2025-12-01T12:30:00Z"), "Dec 1");
         assert_eq!(format_date_short("éééééé"), "éééééé");
     }
 
     #[test]
-    fn test_format_date_handles_non_ascii_without_panicking() {
+    fn format_date_handles_non_ascii_without_panicking() {
         assert_eq!(format_date("éééééé"), "éééééé");
     }
 
     #[test]
-    fn test_get_game_tags() {
+    fn game_tags_deduplicate_repeated_chapters() {
         let vod = Vod {
             id: "1".into(),
             platform: None,
@@ -1006,7 +1006,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_game_tags_case_insensitive() {
+    fn game_tags_merge_case_variants() {
         let vod = Vod {
             id: "1".into(),
             platform: None,
@@ -1042,7 +1042,7 @@ mod tests {
     }
 
     #[test]
-    fn test_vod_has_game() {
+    fn has_game_matches_chapters_case_insensitively() {
         let vod = Vod {
             id: "1".into(),
             platform: None,
@@ -1071,7 +1071,7 @@ mod tests {
     }
 
     #[test]
-    fn test_paginate() {
+    fn paginate_slices_by_page_and_batch() {
         let items: Vec<i32> = (0..100).collect();
         let page0 = paginate(items.clone(), 0, 36);
         assert_eq!(page0.len(), 36);
@@ -1085,7 +1085,7 @@ mod tests {
     }
 
     #[test]
-    fn test_paginate_handles_huge_page_without_overflow() {
+    fn paginate_handles_huge_page_without_overflow() {
         let items: Vec<i32> = (0..10).collect();
         assert!(paginate(items.clone(), usize::MAX, 36).is_empty());
         let params = ListQuery {
@@ -1165,7 +1165,7 @@ mod tests {
     }
 
     #[test]
-    fn test_vod_display_uses_started_at_for_stream_date() {
+    fn vod_display_uses_started_at_for_stream_date() {
         let mut vod = make_vod("started", "2026-05-10T23:05:44.967Z", &["HITMAN"]);
         vod.started_at = Some("2026-05-09T22:35:39.000Z".into());
 
@@ -1347,7 +1347,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_watched_chapter_picks_containing_chapter() {
+    fn resolve_watched_chapter_picks_containing_chapter() {
         let vod = make_vod("a", "2024-01-01T00:00:00Z", &["Just Chatting", "Terraria"]);
         // make_vod sets all chapter starts to 0.0 — override for this test.
         let mut vod = vod;
@@ -1368,7 +1368,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_watched_chapter_none_for_empty() {
+    fn resolve_watched_chapter_is_none_without_chapters() {
         let vod = Vod {
             id: "x".into(),
             platform: None,
@@ -1462,7 +1462,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_vod_in_period_within_gap() {
+    fn next_vod_in_period_returns_next_within_gap() {
         let vods = vec![
             make_vod("a", "2024-01-01T00:00:00Z", &["Elden Ring"]),
             make_vod("b", "2024-01-05T00:00:00Z", &["Elden Ring"]),
@@ -1473,7 +1473,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_vod_in_period_beyond_gap_returns_none() {
+    fn next_vod_in_period_beyond_gap_returns_none() {
         let vods = vec![
             make_vod("a", "2024-01-01T00:00:00Z", &["Elden Ring"]),
             make_vod("b", "2024-03-01T00:00:00Z", &["Elden Ring"]),
@@ -1482,7 +1482,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_vod_in_period_last_in_period_returns_none() {
+    fn next_vod_in_period_last_in_period_returns_none() {
         let vods = vec![
             make_vod("a", "2024-01-01T00:00:00Z", &["Elden Ring"]),
             make_vod("b", "2024-01-05T00:00:00Z", &["Elden Ring"]),
@@ -1491,13 +1491,13 @@ mod tests {
     }
 
     #[test]
-    fn test_next_vod_in_period_game_not_in_vod_returns_none() {
+    fn next_vod_in_period_game_not_in_vod_returns_none() {
         let vods = vec![make_vod("a", "2024-01-01T00:00:00Z", &["Dark Souls"])];
         assert!(next_vod_in_period(&vods, "a", "Elden Ring").is_none());
     }
 
     #[test]
-    fn test_next_vod_in_period_is_case_insensitive() {
+    fn next_vod_in_period_is_case_insensitive() {
         let vods = vec![
             make_vod("a", "2024-01-01T00:00:00Z", &["Elden Ring"]),
             make_vod("b", "2024-01-05T00:00:00Z", &["ELDEN RING"]),
@@ -1507,7 +1507,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_vod_in_period_skips_unplayable_vods() {
+    fn next_vod_in_period_skips_unplayable_vods() {
         let mut unplayable = make_vod("b", "2024-01-03T00:00:00Z", &["Elden Ring"]);
         unplayable.youtube = None;
         let vods = vec![
@@ -1520,7 +1520,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_vod_in_period_filters_out_other_games() {
+    fn next_vod_in_period_filters_out_other_games() {
         let vods = vec![
             make_vod("a", "2024-01-01T00:00:00Z", &["Elden Ring"]),
             make_vod("b", "2024-01-03T00:00:00Z", &["Dark Souls"]),
@@ -1531,7 +1531,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_vod_in_period_uses_started_at_for_gap() {
+    fn next_vod_in_period_uses_started_at_for_gap() {
         let mut a = make_vod("a", "2024-03-01T00:00:00Z", &["Elden Ring"]);
         a.started_at = Some("2024-01-01T00:00:00Z".into());
         let mut b = make_vod("b", "2024-03-02T00:00:00Z", &["Elden Ring"]);
@@ -1544,7 +1544,7 @@ mod tests {
     }
 
     #[test]
-    fn test_chapter_segments_use_explicit_timing_and_clamp_invalid_ranges() {
+    fn chapter_segments_use_explicit_timing_and_clamp_invalid_ranges() {
         let mut vod = make_vod("chapters", "2024-01-01T00:00:00Z", &[]);
         vod.duration = Some(crate::vods::VodDuration::from_seconds(1000));
         vod.chapters = Some(vec![
@@ -1601,7 +1601,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_watch_url() {
+    fn build_watch_url_encodes_time_and_game() {
         assert_eq!(build_watch_url("abc", None, None), "/watch/abc");
         assert_eq!(build_watch_url("abc", Some(42), None), "/watch/abc?t=42");
         assert_eq!(
@@ -1616,7 +1616,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_next_url() {
+    fn build_next_url_includes_page_and_filters() {
         let params = ListQuery {
             search: Some("test".into()),
             sort: Some("most".into()),
@@ -1633,7 +1633,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_next_url_includes_lens_and_game() {
+    fn build_next_url_includes_lens_and_game() {
         let params = ListQuery {
             sort: Some("newest".into()),
             lens: Some("streams".into()),
@@ -1647,7 +1647,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_clear_url_appends_with_ampersand_when_base_has_query() {
+    fn build_clear_url_appends_with_ampersand_when_base_has_query() {
         let params = ListQuery {
             sort: Some("newest".into()),
             ..Default::default()

@@ -141,7 +141,7 @@ mod tests {
     }
 
     #[test]
-    fn test_canonical_chat_vod_id_accepts_internal_id() {
+    fn canonical_chat_vod_id_accepts_internal_id() {
         let vods = vec![make_vod("1430", Some("2768249708"))];
 
         assert_eq!(
@@ -151,7 +151,7 @@ mod tests {
     }
 
     #[test]
-    fn test_canonical_chat_vod_id_accepts_platform_vod_id() {
+    fn canonical_chat_vod_id_accepts_platform_vod_id() {
         let vods = vec![make_vod("1430", Some("2768249708"))];
 
         assert_eq!(
@@ -161,7 +161,7 @@ mod tests {
     }
 
     #[test]
-    fn test_canonical_chat_vod_id_rejects_unknown_id() {
+    fn canonical_chat_vod_id_rejects_unknown_id() {
         let vods = vec![make_vod("1430", Some("2768249708"))];
 
         assert_eq!(canonical_chat_vod_id(&vods, "missing"), None);

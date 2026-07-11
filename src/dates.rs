@@ -76,7 +76,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_days_to_civil_roundtrips() {
+    fn days_to_civil_roundtrips() {
         for &(y, m, d) in &[
             (1970, 1, 1),
             (2000, 2, 29),
@@ -91,7 +91,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_ymd_to_days() {
+    fn parse_ymd_to_days_counts_days_and_rejects_garbage() {
         let a = parse_ymd_to_days("2024-01-01T00:00:00Z").unwrap();
         let b = parse_ymd_to_days("2024-01-15T00:00:00Z").unwrap();
         assert_eq!(b - a, 14);

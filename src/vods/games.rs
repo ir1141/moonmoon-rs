@@ -247,14 +247,14 @@ mod tests {
     }
 
     #[test]
-    fn test_month_abbr_num() {
+    fn month_abbr_num_maps_months_and_falls_back() {
         assert_eq!(month_abbr_num(1), "Jan");
         assert_eq!(month_abbr_num(12), "Dec");
         assert_eq!(month_abbr_num(13), "???");
     }
 
     #[test]
-    fn test_build_games_deduplicates() {
+    fn build_games_deduplicates_chapters_within_a_vod() {
         let vods = vec![Vod {
             id: "1".into(),
             platform: None,
@@ -297,7 +297,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_games_case_insensitive() {
+    fn build_games_merges_case_variants() {
         let vods = vec![
             Vod {
                 id: "1".into(),

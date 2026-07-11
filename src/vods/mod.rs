@@ -503,7 +503,7 @@ mod tests {
     }
 
     #[test]
-    fn test_vod_deserialize_new_api_fields() {
+    fn vod_deserializes_new_api_fields() {
         let json = r#"{
             "id": 1430,
             "platform": "twitch",
@@ -551,7 +551,7 @@ mod tests {
     }
 
     #[test]
-    fn test_canonical_youtube_uploads_prefers_completed_vod_set() {
+    fn canonical_uploads_prefer_completed_vod_set() {
         let vod = vod_with_uploads(vec![
             upload(
                 "live-1",
@@ -574,7 +574,7 @@ mod tests {
     }
 
     #[test]
-    fn test_canonical_youtube_uploads_falls_back_to_live_when_vod_set_is_incomplete() {
+    fn canonical_uploads_fall_back_to_live_when_vod_set_is_incomplete() {
         let vod = vod_with_uploads(vec![
             upload(
                 "live-1",
@@ -624,7 +624,7 @@ mod tests {
     }
 
     #[test]
-    fn test_canonical_youtube_uploads_uses_live_when_no_vod_set() {
+    fn canonical_uploads_use_live_when_no_vod_set() {
         let vod = vod_with_uploads(vec![
             upload("live-2", Some(2), None, Some("COMPLETED"), Some("live")),
             upload("live-1", Some(1), None, Some("COMPLETED"), Some("live")),
@@ -639,7 +639,7 @@ mod tests {
     }
 
     #[test]
-    fn test_canonical_youtube_uploads_sorts_missing_parts_last_stably() {
+    fn canonical_uploads_sort_missing_parts_last_stably() {
         let vod = vod_with_uploads(vec![
             upload("missing-a", None, None, Some("COMPLETED"), Some("vod")),
             upload("part-1", Some(1), None, Some("COMPLETED"), Some("vod")),
@@ -655,7 +655,7 @@ mod tests {
     }
 
     #[test]
-    fn test_canonical_youtube_uploads_falls_back_when_no_completed_uploads() {
+    fn canonical_uploads_fall_back_when_none_completed() {
         let vod = vod_with_uploads(vec![
             upload(
                 "processing-vod",
@@ -683,7 +683,7 @@ mod tests {
     }
 
     #[test]
-    fn test_canonical_youtube_uploads_empty_uploads_are_not_playable() {
+    fn empty_upload_list_is_not_playable() {
         let vod = vod_with_uploads(vec![]);
 
         assert!(canonical_youtube_uploads(&vod).is_empty());
@@ -691,7 +691,7 @@ mod tests {
     }
 
     #[test]
-    fn test_vod_deserialize_string_fields() {
+    fn vod_deserializes_string_fields() {
         let json = r#"{"id":"abc123","platform_vod_id":"2237432794","title":"Test Stream","created_at":"2025-01-15T00:00:00Z","duration":"3h 20m","thumbnail_url":"https://example.com/thumb.jpg","chapters":[{"name":"Elden Ring","image":"https://example.com/40x53.jpg"}]}"#;
         let vod: Vod = serde_json::from_str(json).unwrap();
         assert_eq!(vod.id, "abc123");
@@ -702,7 +702,7 @@ mod tests {
     }
 
     #[test]
-    fn test_format_duration_hm() {
+    fn format_duration_hm_renders_compact_labels() {
         assert_eq!(format_duration_hm(25194), "6h 59m");
         assert_eq!(format_duration_hm(3600), "1h");
         assert_eq!(format_duration_hm(2700), "45m");
@@ -711,14 +711,14 @@ mod tests {
     }
 
     #[test]
-    fn test_vod_duration_parses_string_fallbacks() {
+    fn vod_duration_parses_string_fallbacks() {
         assert_eq!(VodDuration::from("07:02:52").seconds(), 25372);
         assert_eq!(VodDuration::from("3h 20m").seconds(), 12000);
         assert_eq!(VodDuration::from("").seconds(), 0);
     }
 
     #[test]
-    fn test_upscale_chapter_image_placeholder() {
+    fn upscale_chapter_image_replaces_placeholder_sizes() {
         assert_eq!(
             upscale_chapter_image("https://x.tv/foo_{width}x{height}.jpg"),
             "https://x.tv/foo_285x380.jpg"
@@ -730,7 +730,7 @@ mod tests {
     }
 
     #[test]
-    fn test_live_empty_upload_row_is_not_playable() {
+    fn live_row_with_empty_uploads_is_not_playable() {
         let vod = Vod {
             id: "live".into(),
             platform: None,
@@ -751,7 +751,7 @@ mod tests {
     }
 
     #[test]
-    fn test_non_live_row_with_uploads_is_playable() {
+    fn non_live_row_with_uploads_is_playable() {
         let vod = Vod {
             id: "1430".into(),
             platform: None,
@@ -781,7 +781,7 @@ mod tests {
     }
 
     #[test]
-    fn test_filter_playable_vods_removes_live_empty_upload_rows() {
+    fn filter_playable_vods_removes_live_empty_upload_rows() {
         let mut vods = vec![
             Vod {
                 id: "live".into(),
@@ -831,7 +831,7 @@ mod tests {
     }
 
     #[test]
-    fn test_archive_date_bounds_spans_stream_times() {
+    fn archive_date_bounds_span_stream_times() {
         let vod_at = |id: &str, created_at: &str, started_at: Option<&str>| {
             let mut vod = vod_with_uploads(vec![]);
             vod.id = id.into();
@@ -854,7 +854,7 @@ mod tests {
     }
 
     #[test]
-    fn test_archive_date_bounds_empty_catalog_falls_back_to_today() {
+    fn archive_date_bounds_fall_back_to_today_for_empty_catalog() {
         let today = crate::dates::date_query_for_days(crate::dates::current_utc_days());
 
         assert_eq!(archive_date_bounds(&[]), (today.clone(), today));

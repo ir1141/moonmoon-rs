@@ -373,7 +373,7 @@ mod tests {
     use crate::vods::{VodDuration, YoutubeVideo};
 
     #[test]
-    fn test_api_response_skips_malformed_rows() {
+    fn api_response_skips_malformed_rows() {
         let json = r#"{"meta":{"total":2},"data":[
             {"id":1,"title":"good","created_at":"2026-01-01T00:00:00Z"},
             {"title":"missing id and created_at"}
@@ -384,7 +384,7 @@ mod tests {
     }
 
     #[test]
-    fn test_api_response_rejects_page_where_every_row_is_malformed() {
+    fn api_response_rejects_page_where_every_row_is_malformed() {
         // Every row failing to parse means upstream schema drift, not a few
         // bad rows — treating it as a successful empty page would let a
         // refresh wipe a healthy catalog.
@@ -396,14 +396,14 @@ mod tests {
     }
 
     #[test]
-    fn test_api_response_accepts_genuinely_empty_page() {
+    fn api_response_accepts_genuinely_empty_page() {
         let json = r#"{"meta":{"total":0},"data":[]}"#;
         let resp: ApiResponse = serde_json::from_str(json).unwrap();
         assert!(resp.data.is_empty());
     }
 
     #[test]
-    fn test_vod_deserialize_int_fields() {
+    fn vod_deserializes_int_fields_and_backfills_thumbnail() {
         let json = r#"{
             "id": 1430,
             "platform_vod_id": "2768249708",
@@ -432,14 +432,14 @@ mod tests {
     }
 
     #[test]
-    fn test_backoff_delay_grows() {
+    fn backoff_delay_grows_exponentially() {
         assert_eq!(backoff_delay(0), Duration::from_millis(250));
         assert_eq!(backoff_delay(1), Duration::from_millis(500));
         assert_eq!(backoff_delay(2), Duration::from_millis(1000));
     }
 
     #[test]
-    fn test_jittered_stays_in_band() {
+    fn jittered_delay_stays_in_band() {
         let base = Duration::from_millis(1000);
         for _ in 0..100 {
             let d = jittered(base);
@@ -451,20 +451,20 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_retry_after_seconds() {
+    fn parse_retry_after_reads_seconds() {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(reqwest::header::RETRY_AFTER, "3".parse().unwrap());
         assert_eq!(parse_retry_after(&headers), Some(Duration::from_secs(3)));
     }
 
     #[test]
-    fn test_parse_retry_after_missing() {
+    fn parse_retry_after_is_none_without_header() {
         let headers = reqwest::header::HeaderMap::new();
         assert_eq!(parse_retry_after(&headers), None);
     }
 
     #[test]
-    fn test_parse_retry_after_non_numeric() {
+    fn parse_retry_after_is_none_for_http_dates() {
         // HTTP-date format is valid per spec but we don't handle it; should
         // gracefully fall through to our exponential backoff instead of panicking.
         let mut headers = reqwest::header::HeaderMap::new();
@@ -476,7 +476,7 @@ mod tests {
     }
 
     #[test]
-    fn test_page_url_includes_required_params() {
+    fn page_url_includes_required_params() {
         let url = page_url(3);
         assert!(url.starts_with("https://archive.overpowered.tv/api/v1/moonmoon/vods?"));
         assert!(url.contains("page=3"), "missing page=3: {url}");
@@ -489,7 +489,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pages_handles_edges() {
+    fn pages_handles_boundary_totals() {
         assert_eq!(pages(0), 0);
         assert_eq!(pages(1), 1);
         assert_eq!(pages(50), 1);
@@ -499,7 +499,7 @@ mod tests {
     }
 
     #[test]
-    fn test_catalog_snapshot_includes_latest_id_and_updated_at() {
+    fn snapshot_includes_latest_id_and_updated_at() {
         let vods = vec![Vod {
             id: "1430".into(),
             platform: None,
@@ -536,7 +536,7 @@ mod tests {
     }
 
     #[test]
-    fn test_catalog_snapshot_detects_same_count_updated_at_changes() {
+    fn snapshot_detects_updated_at_change_with_same_count() {
         let cached = CatalogSnapshot {
             total: 1,
             latest_id: Some("1430".into()),
@@ -554,7 +554,7 @@ mod tests {
     }
 
     #[test]
-    fn test_catalog_load_keeps_raw_snapshot_when_latest_row_is_not_playable() {
+    fn catalog_load_keeps_raw_snapshot_when_latest_row_is_not_playable() {
         let first = ApiResponse {
             meta: ApiMeta { total: 2 },
             data: vec![
@@ -617,7 +617,7 @@ mod tests {
     }
 
     #[test]
-    fn test_snapshot_changes_when_latest_row_becomes_playable() {
+    fn snapshot_changes_when_latest_row_becomes_playable() {
         // The newest VOD while still live and the same VOD once its uploads have
         // completed share id/total/updated_at — only playability differs. The
         // snapshot must distinguish them, otherwise the refresh never re-ingests
@@ -665,7 +665,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_refresh_delay_retries_fast_when_empty() {
+    fn next_refresh_delay_retries_fast_when_empty() {
         assert_eq!(next_refresh_delay(0), EMPTY_RETRY_INTERVAL);
         assert_eq!(next_refresh_delay(1500), REFRESH_INTERVAL);
     }

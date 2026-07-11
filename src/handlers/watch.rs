@@ -155,7 +155,7 @@ mod tests {
     use crate::vods::{Chapter, Vod, VodDuration, YoutubeVideo};
 
     #[test]
-    fn test_youtube_parts_json_uses_canonical_ids_and_durations() {
+    fn youtube_parts_json_uses_canonical_ids_and_durations() {
         let vod = Vod {
             id: "1430".into(),
             platform: Some("twitch".into()),
@@ -249,7 +249,7 @@ mod tests {
     }
 
     #[test]
-    fn test_chapters_json_maps_segments_to_name_color_start() {
+    fn chapters_json_maps_segments_to_name_color_start() {
         let vod = vod_with_chapters(
             Some(10000),
             vec![chapter("Alpha", 0.0), chapter("Bravo", 3600.0)],
@@ -267,7 +267,7 @@ mod tests {
     }
 
     #[test]
-    fn test_chapters_json_is_empty_array_without_duration() {
+    fn chapters_json_is_empty_array_without_duration() {
         // No total duration → no resolvable segments → an empty (not malformed) payload.
         let vod = vod_with_chapters(None, vec![chapter("Alpha", 0.0)]);
         assert_eq!(chapters_json(&vod), "[]");

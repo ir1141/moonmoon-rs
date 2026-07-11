@@ -581,25 +581,37 @@ mod tests {
     use crate::vods::{Chapter, Vod, VodDuration};
 
     #[test]
-    fn test_calendar_helpers() {
+    fn day_of_week_matches_known_dates() {
         assert_eq!(day_of_week(2025, 1, 1), 3);
         assert_eq!(day_of_week(2025, 3, 1), 6);
         assert_eq!(day_of_week(2024, 1, 1), 1);
+    }
 
+    #[test]
+    fn month_name_maps_month_numbers() {
         assert_eq!(month_name(1), "January");
         assert_eq!(month_name(12), "December");
-        let same_month = week_start_for_days(parse_ymd_to_days("2026-07-05").unwrap());
-        assert_eq!(format_week_label(same_month), "July 5–11, 2026");
-        assert_eq!(format_week_label_short(same_month), "Jul 5–11 ’26");
-        let cross_month = week_start_for_days(parse_ymd_to_days("2026-06-28").unwrap());
-        assert_eq!(format_week_label(cross_month), "June 28–July 4, 2026");
-        assert_eq!(format_week_label_short(cross_month), "Jun 28–Jul 4 ’26");
-        let cross_year = week_start_for_days(parse_ymd_to_days("2025-12-29").unwrap());
-        assert_eq!(
-            format_week_label(cross_year),
-            "December 28, 2025–January 3, 2026"
-        );
-        assert_eq!(format_week_label_short(cross_year), "Dec 28 ’25–Jan 3 ’26");
+    }
+
+    #[test]
+    fn week_labels_within_a_single_month() {
+        let week = week_start_for_days(parse_ymd_to_days("2026-07-05").unwrap());
+        assert_eq!(format_week_label(week), "July 5–11, 2026");
+        assert_eq!(format_week_label_short(week), "Jul 5–11 ’26");
+    }
+
+    #[test]
+    fn week_labels_across_a_month_boundary() {
+        let week = week_start_for_days(parse_ymd_to_days("2026-06-28").unwrap());
+        assert_eq!(format_week_label(week), "June 28–July 4, 2026");
+        assert_eq!(format_week_label_short(week), "Jun 28–Jul 4 ’26");
+    }
+
+    #[test]
+    fn week_labels_across_a_year_boundary() {
+        let week = week_start_for_days(parse_ymd_to_days("2025-12-29").unwrap());
+        assert_eq!(format_week_label(week), "December 28, 2025–January 3, 2026");
+        assert_eq!(format_week_label_short(week), "Dec 28 ’25–Jan 3 ’26");
     }
 
     fn test_vod(id: &str, started_at: &str, duration_secs: i64, chapters: Vec<Chapter>) -> Vod {
@@ -635,7 +647,7 @@ mod tests {
     }
 
     #[test]
-    fn test_time_guide_uses_existing_sunday_week_start() {
+    fn time_guide_uses_existing_sunday_week_start() {
         let selected = parse_ymd_to_days("2026-05-26").unwrap();
         let week_start = week_start_for_days(selected);
 
@@ -663,7 +675,7 @@ mod tests {
     }
 
     #[test]
-    fn test_time_guide_marks_today_and_future_days_distinctly() {
+    fn time_guide_marks_today_and_future_days_distinctly() {
         let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let guide = build_time_guide(
             &[],
@@ -684,7 +696,7 @@ mod tests {
     }
 
     #[test]
-    fn test_time_guide_places_utc_streams_on_pt_axis_with_segments() {
+    fn time_guide_places_utc_streams_on_pt_axis_with_segments() {
         let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let vod = test_vod(
             "v1",
@@ -732,7 +744,7 @@ mod tests {
     }
 
     #[test]
-    fn test_time_guide_marks_blocks_that_continue_past_midnight() {
+    fn time_guide_marks_blocks_that_continue_past_midnight() {
         let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let vod = test_vod(
             "late",
@@ -760,7 +772,7 @@ mod tests {
     }
 
     #[test]
-    fn test_time_guide_block_ending_exactly_at_midnight_does_not_overrun() {
+    fn time_guide_block_ending_exactly_at_midnight_does_not_overrun() {
         let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let vod = test_vod(
             "on-time",
@@ -783,7 +795,7 @@ mod tests {
     }
 
     #[test]
-    fn test_time_guide_segments_link_to_chapter_offsets_and_expose_hover_labels() {
+    fn time_guide_segments_link_to_chapter_offsets_and_expose_hover_labels() {
         let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let vod = test_vod(
             "segmented",
@@ -830,7 +842,7 @@ mod tests {
     }
 
     #[test]
-    fn test_time_guide_legend_preserves_first_appearance_order() {
+    fn time_guide_legend_preserves_first_appearance_order() {
         let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let vod = test_vod(
             "legend-order",
@@ -866,7 +878,7 @@ mod tests {
     }
 
     #[test]
-    fn test_time_guide_markers_distinguish_games_that_share_a_color() {
+    fn time_guide_markers_distinguish_games_that_share_a_color() {
         let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let vod = test_vod(
             "collision",
@@ -901,7 +913,7 @@ mod tests {
     }
 
     #[test]
-    fn test_time_guide_marker_stays_stable_when_a_game_returns_on_another_day() {
+    fn time_guide_marker_stays_stable_when_a_game_returns_on_another_day() {
         let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let monday = test_vod(
             "mon",
@@ -941,7 +953,7 @@ mod tests {
     }
 
     #[test]
-    fn test_time_guide_legend_collapses_case_variants_to_first_seen_casing() {
+    fn time_guide_legend_collapses_case_variants_to_first_seen_casing() {
         let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let vod = test_vod(
             "casing",
@@ -975,7 +987,7 @@ mod tests {
     }
 
     #[test]
-    fn test_time_guide_markers_keep_counting_past_the_color_palette() {
+    fn time_guide_markers_keep_counting_past_the_color_palette() {
         let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let chapters = (1..=9)
             .map(|i| Chapter {
@@ -1003,7 +1015,7 @@ mod tests {
     }
 
     #[test]
-    fn test_time_guide_multiple_sessions_link_to_each_vod_not_utc_date_filter() {
+    fn time_guide_multiple_sessions_link_to_each_vod_not_utc_date_filter() {
         let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let first = test_vod(
             "v1",
@@ -1039,7 +1051,7 @@ mod tests {
     }
 
     #[test]
-    fn test_single_game_segment_range_matches_block_range() {
+    fn single_game_segment_range_matches_block_range() {
         let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let vod = test_vod(
             "v2",
@@ -1063,7 +1075,7 @@ mod tests {
     }
 
     #[test]
-    fn test_time_guide_marks_in_progress_block_live_and_builds_legend() {
+    fn time_guide_marks_in_progress_block_live_and_builds_legend() {
         let week_start = parse_ymd_to_days("2026-05-24").unwrap();
         let vod = test_vod(
             "live",
