@@ -379,7 +379,7 @@ pub(crate) fn archive_date_bounds(vods: &[Vod]) -> (String, String) {
     (min_date, max_date)
 }
 
-pub fn canonical_youtube_uploads(vod: &Vod) -> Vec<YoutubeVideo> {
+pub fn canonical_youtube_uploads(vod: &Vod) -> Vec<&YoutubeVideo> {
     let Some(uploads) = vod.youtube.as_ref() else {
         return Vec::new();
     };
@@ -440,10 +440,7 @@ pub fn canonical_youtube_uploads(vod: &Vod) -> Vec<YoutubeVideo> {
             (None, None) => left_idx.cmp(right_idx),
         },
     );
-    selected
-        .into_iter()
-        .map(|(_, upload)| upload.clone())
-        .collect()
+    selected.into_iter().map(|(_, upload)| upload).collect()
 }
 
 fn upload_set_covers_stream(uploads: &[(usize, &YoutubeVideo)], vod: &Vod) -> Option<bool> {
@@ -570,7 +567,7 @@ mod tests {
 
         let ids: Vec<_> = canonical_youtube_uploads(&vod)
             .into_iter()
-            .map(|u| u.id)
+            .map(|u| u.id.as_str())
             .collect();
 
         assert_eq!(ids, vec!["vod-1", "vod-2"]);
@@ -620,7 +617,7 @@ mod tests {
 
         let ids: Vec<_> = canonical_youtube_uploads(&vod)
             .into_iter()
-            .map(|u| u.id)
+            .map(|u| u.id.as_str())
             .collect();
 
         assert_eq!(ids, vec!["live-1", "live-2", "live-3"]);
@@ -635,7 +632,7 @@ mod tests {
 
         let ids: Vec<_> = canonical_youtube_uploads(&vod)
             .into_iter()
-            .map(|u| u.id)
+            .map(|u| u.id.as_str())
             .collect();
 
         assert_eq!(ids, vec!["live-1", "live-2"]);
@@ -651,7 +648,7 @@ mod tests {
 
         let ids: Vec<_> = canonical_youtube_uploads(&vod)
             .into_iter()
-            .map(|u| u.id)
+            .map(|u| u.id.as_str())
             .collect();
 
         assert_eq!(ids, vec!["part-1", "missing-a", "missing-b"]);
@@ -678,7 +675,7 @@ mod tests {
 
         let ids: Vec<_> = canonical_youtube_uploads(&vod)
             .into_iter()
-            .map(|u| u.id)
+            .map(|u| u.id.as_str())
             .collect();
 
         assert_eq!(ids, vec!["processing-live", "processing-vod"]);

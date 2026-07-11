@@ -283,10 +283,10 @@ fn backfill_thumbnails(vods: &mut [Vod]) {
         if vod.thumbnail_url.is_some() {
             continue;
         }
-        if let Some(thumb) = canonical_youtube_uploads(vod)
+        let thumb = canonical_youtube_uploads(vod)
             .iter()
-            .find_map(|u| u.thumbnail_url.clone())
-        {
+            .find_map(|u| u.thumbnail_url.clone());
+        if let Some(thumb) = thumb {
             vod.thumbnail_url = Some(thumb);
         }
     }

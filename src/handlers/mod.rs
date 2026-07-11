@@ -147,8 +147,11 @@ pub(crate) struct DatePresetState {
     pub show_custom: bool,
 }
 
-pub(crate) struct FilteredGames {
-    pub games: Vec<Game>,
+/// Filtered games ready for pagination. The common (no date filter) path
+/// borrows straight from the catalog's game list; only the rendered page is
+/// cloned by the caller. The date-filtered path owns its freshly rebuilt games.
+pub(crate) struct FilteredGames<'a> {
+    pub games: Vec<std::borrow::Cow<'a, Game>>,
     pub metadata: ListMetadata,
 }
 
@@ -334,26 +337,28 @@ pub(crate) fn render_template(tmpl: &impl Template) -> axum::response::Response 
 
 // ─── Helpers ───
 
-pub(crate) fn filter_games_with_metadata(
-    games: &[Game],
+pub(crate) fn filter_games_with_metadata<'a>(
+    games: &'a [Game],
     vods: &[Vod],
     params: &ListQuery,
     clear_base_url: &str,
     sort: &str,
-) -> FilteredGames {
+) -> FilteredGames<'a> {
+    use std::borrow::Cow;
+
     let unfiltered_count = games.len();
-    let filtered = if list_date_filter_is_active(params) {
-        filter_and_sort_games(
-            crate::vods::build_dominant_games(
-                vods.iter()
-                    .filter(|vod| vod_matches_date_filter(vod, params)),
-            ),
-            &params.search,
-            sort,
+    let candidates: Vec<Cow<'a, Game>> = if list_date_filter_is_active(params) {
+        crate::vods::build_dominant_games(
+            vods.iter()
+                .filter(|vod| vod_matches_date_filter(vod, params)),
         )
+        .into_iter()
+        .map(Cow::Owned)
+        .collect()
     } else {
-        filter_and_sort_games(games.to_vec(), &params.search, sort)
+        games.iter().map(Cow::Borrowed).collect()
     };
+    let filtered = filter_and_sort_games(candidates, &params.search, sort);
 
     let filtered_count = filtered.len();
     let metadata = build_list_metadata_for_kind(
@@ -371,21 +376,21 @@ pub(crate) fn filter_games_with_metadata(
     }
 }
 
-fn filter_and_sort_games(
-    mut filtered: Vec<Game>,
+fn filter_and_sort_games<'a>(
+    mut filtered: Vec<std::borrow::Cow<'a, Game>>,
     search: &Option<String>,
     sort: &str,
-) -> Vec<Game> {
+) -> Vec<std::borrow::Cow<'a, Game>> {
     if let Some(search) = normalized_filter_value(search) {
         let search_lower = search.to_lowercase();
         filtered.retain(|g| g.name.to_lowercase().contains(&search_lower));
     }
 
     match sort {
-        "fewest" | "streams_asc" => filtered.sort_by_key(|a| a.vod_count),
-        "most" | "streams_desc" => filtered.sort_by_key(|a| std::cmp::Reverse(a.vod_count)),
-        "az" => filtered.sort_by_key(|a| a.name.to_lowercase()),
-        "za" => filtered.sort_by_key(|a| std::cmp::Reverse(a.name.to_lowercase())),
+        "fewest" | "streams_asc" => filtered.sort_by_key(|g| g.vod_count),
+        "most" | "streams_desc" => filtered.sort_by_key(|g| std::cmp::Reverse(g.vod_count)),
+        "az" => filtered.sort_by_cached_key(|g| g.name.to_lowercase()),
+        "za" => filtered.sort_by_cached_key(|g| std::cmp::Reverse(g.name.to_lowercase())),
         "oldest" => sort_games_by_first_streamed(&mut filtered),
         _ => sort_games_by_latest_streamed(&mut filtered),
     }
@@ -393,30 +398,28 @@ fn filter_and_sort_games(
     filtered
 }
 
-fn sort_games_by_latest_streamed(games: &mut [Game]) {
-    games.sort_by(
-        |a, b| match (a.last_streamed.as_ref(), b.last_streamed.as_ref()) {
-            (Some(left), Some(right)) => right
-                .cmp(left)
-                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
-            (Some(_), None) => std::cmp::Ordering::Less,
-            (None, Some(_)) => std::cmp::Ordering::Greater,
-            (None, None) => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        },
-    );
+/// Latest stream first, games that never had a dominant stream last, ties by
+/// name. The `is_none` leg keeps `None` last (`Reverse("")` would sort first).
+fn sort_games_by_latest_streamed(games: &mut [std::borrow::Cow<'_, Game>]) {
+    games.sort_by_cached_key(|g| {
+        (
+            g.last_streamed.is_none(),
+            std::cmp::Reverse(g.last_streamed.clone().unwrap_or_default()),
+            g.name.to_lowercase(),
+        )
+    });
 }
 
-fn sort_games_by_first_streamed(games: &mut [Game]) {
-    games.sort_by(
-        |a, b| match (a.first_streamed.as_ref(), b.first_streamed.as_ref()) {
-            (Some(left), Some(right)) => left
-                .cmp(right)
-                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
-            (Some(_), None) => std::cmp::Ordering::Less,
-            (None, Some(_)) => std::cmp::Ordering::Greater,
-            (None, None) => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        },
-    );
+/// Earliest stream first, games that never had a dominant stream last, ties by
+/// name.
+fn sort_games_by_first_streamed(games: &mut [std::borrow::Cow<'_, Game>]) {
+    games.sort_by_cached_key(|g| {
+        (
+            g.first_streamed.is_none(),
+            g.first_streamed.clone().unwrap_or_default(),
+            g.name.to_lowercase(),
+        )
+    });
 }
 
 fn list_date_filter_is_active(params: &ListQuery) -> bool {

@@ -71,7 +71,7 @@ fn youtube_parts_json(vod: &Vod) -> String {
     let parts: Vec<YoutubePartPayload> = canonical_youtube_uploads(vod)
         .into_iter()
         .map(|upload| YoutubePartPayload {
-            id: upload.id,
+            id: upload.id.clone(),
             duration: upload.duration.filter(|duration| *duration > 0),
         })
         .collect();

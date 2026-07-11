@@ -127,7 +127,10 @@ async fn prepare_browse(
             let (paged, has_more, next_url) =
                 paginate_with_nav(filtered.games, "/browse/grid", GAME_BATCH_SIZE, params);
             PreparedBrowse {
-                games: paged,
+                games: paged
+                    .into_iter()
+                    .map(std::borrow::Cow::into_owned)
+                    .collect(),
                 vods: Vec::new(),
                 metadata: filtered.metadata,
                 has_more,
