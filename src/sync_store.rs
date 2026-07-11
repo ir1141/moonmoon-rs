@@ -120,7 +120,7 @@ impl SyncStore {
     }
 
     #[cfg(test)]
-    pub async fn len(&self) -> usize {
+    pub(crate) async fn len(&self) -> usize {
         self.inner.lock().await.len()
     }
 

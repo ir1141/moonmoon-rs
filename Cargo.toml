@@ -27,3 +27,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 urlencoding = "2"
 rand = "0.9"
 tower_governor = "0.8"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

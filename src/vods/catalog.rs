@@ -93,13 +93,14 @@ impl CatalogSnapshot {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct CatalogLoad {
+pub struct CatalogLoad {
     pub(crate) vods: Vec<Vod>,
     pub(crate) snapshot: CatalogSnapshot,
 }
 
 impl CatalogLoad {
-    pub(crate) fn empty() -> Self {
+    /// A zero-vod load, used for failed boots and headless tests.
+    pub fn empty() -> Self {
         Self {
             vods: Vec::new(),
             snapshot: CatalogSnapshot {

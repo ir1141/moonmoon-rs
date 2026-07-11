@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 mod catalog;
 mod games;
 
-pub(crate) use catalog::{CatalogLoad, CatalogSnapshot, next_refresh_delay};
+pub use catalog::CatalogLoad;
+pub(crate) use catalog::{CatalogSnapshot, next_refresh_delay};
 pub use catalog::{RefreshOutcome, load_catalog, refresh_in_place};
 pub use games::{Game, build_dominant_games, build_games};
 pub(crate) use games::{chapter_color_idx, month_abbr, month_abbr_num};
