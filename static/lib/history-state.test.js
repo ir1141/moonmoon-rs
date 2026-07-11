@@ -81,7 +81,13 @@ describe("migrateLegacyStores", () => {
     );
 
     expect(migrated).toEqual({
-      v1: { state: "in_progress", time: 123, updated: 200, part: 1, localTime: 7.5 },
+      v1: {
+        state: "in_progress",
+        time: 123,
+        updated: 200,
+        part: 1,
+        localTime: 7.5,
+      },
       v2: { state: "watched", updated: 0 },
       v3: { state: "watched", updated: 400 },
       v4: { state: "watched", updated: 500 },
@@ -108,9 +114,7 @@ describe("migrateLegacyStores", () => {
   });
 
   test("drops junk on both sides", () => {
-    expect(migrateLegacyStores({ v1: null, v2: 7 }, { v3: false })).toEqual(
-      {},
-    );
+    expect(migrateLegacyStores({ v1: null, v2: 7 }, { v3: false })).toEqual({});
   });
 });
 

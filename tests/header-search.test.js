@@ -150,10 +150,18 @@ describe("isSearchShortcut", () => {
 
   test("ctrl/cmd-k fires even from inside a text field", () => {
     expect(
-      isSearchShortcut({ key: "k", ctrlKey: true, target: { tagName: "INPUT" } }),
+      isSearchShortcut({
+        key: "k",
+        ctrlKey: true,
+        target: { tagName: "INPUT" },
+      }),
     ).toBe(true);
     expect(
-      isSearchShortcut({ key: "K", metaKey: true, target: { tagName: "INPUT" } }),
+      isSearchShortcut({
+        key: "K",
+        metaKey: true,
+        target: { tagName: "INPUT" },
+      }),
     ).toBe(true);
   });
 

@@ -27,7 +27,8 @@ function updateBodyOverlayState() {
  * on desktop the same form is an inline toolbar, where those roles would lie.
  */
 function syncOverlaySemantics(form) {
-  const modal = form.classList.contains("is-search-open") && searchOverlayMedia.matches;
+  const modal =
+    form.classList.contains("is-search-open") && searchOverlayMedia.matches;
   if (modal) {
     form.setAttribute("role", "dialog");
     form.setAttribute("aria-modal", "true");
@@ -110,8 +111,16 @@ function initSearchOverlay(form) {
       return;
     }
     if (event.key !== "Tab") return;
-    if (!form.classList.contains("is-search-open") || !searchOverlayMedia.matches) return;
-    const target = nextTrapTarget(focusableItems(form), document.activeElement, event.shiftKey);
+    if (
+      !form.classList.contains("is-search-open") ||
+      !searchOverlayMedia.matches
+    )
+      return;
+    const target = nextTrapTarget(
+      focusableItems(form),
+      document.activeElement,
+      event.shiftKey,
+    );
     if (target instanceof HTMLElement) {
       event.preventDefault();
       target.focus();
@@ -124,7 +133,9 @@ function initSearchOverlay(form) {
 }
 
 function openerFor(form) {
-  return document.querySelector(`[data-search-overlay-open][aria-controls="${form.id}"]`);
+  return document.querySelector(
+    `[data-search-overlay-open][aria-controls="${form.id}"]`,
+  );
 }
 
 function focusPageSearch() {
@@ -155,7 +166,11 @@ function focusPageSearch() {
 document.addEventListener("keydown", (event) => {
   if (!isSearchShortcut(event)) return;
   // While a listbox is open its typeahead owns the printable keys.
-  if (event.target instanceof Element && event.target.closest('[role="listbox"]')) return;
+  if (
+    event.target instanceof Element &&
+    event.target.closest('[role="listbox"]')
+  )
+    return;
   if (focusPageSearch()) event.preventDefault();
 });
 
@@ -180,7 +195,9 @@ document.addEventListener("htmx:afterSwap", (event) => {
 // Resizing past the breakpoint turns the sheet back into an inline toolbar, so
 // the dialog roles and the scroll lock have to go with it.
 function onOverlayMediaChange() {
-  document.querySelectorAll("[data-search-overlay]").forEach(syncOverlaySemantics);
+  document
+    .querySelectorAll("[data-search-overlay]")
+    .forEach(syncOverlaySemantics);
   updateBodyOverlayState();
 }
 

@@ -26,7 +26,11 @@ function syncDatePresetState(form) {
   const toInput = form.querySelector('input[name="to"]');
   const custom = form.querySelector(".date-custom");
   const chips = Array.from(form.querySelectorAll(".date-chip"));
-  if (!(fromInput instanceof HTMLInputElement) || !(toInput instanceof HTMLInputElement)) return;
+  if (
+    !(fromInput instanceof HTMLInputElement) ||
+    !(toInput instanceof HTMLInputElement)
+  )
+    return;
   if (!(custom instanceof HTMLElement) || chips.length === 0) return;
 
   const preset = datePresetForRange(
@@ -46,11 +50,19 @@ function initDatePresets(form) {
   const custom = form.querySelector(".date-custom");
   const presetGroup = form.querySelector(".date-presets");
   const chips = Array.from(form.querySelectorAll(".date-chip"));
-  if (!(fromInput instanceof HTMLInputElement) || !(toInput instanceof HTMLInputElement)) return;
-  if (!(custom instanceof HTMLElement) || !(presetGroup instanceof HTMLElement)) return;
+  if (
+    !(fromInput instanceof HTMLInputElement) ||
+    !(toInput instanceof HTMLInputElement)
+  )
+    return;
+  if (!(custom instanceof HTMLElement) || !(presetGroup instanceof HTMLElement))
+    return;
 
   presetGroup.addEventListener("click", (event) => {
-    const chip = event.target instanceof Element ? event.target.closest(".date-chip") : null;
+    const chip =
+      event.target instanceof Element
+        ? event.target.closest(".date-chip")
+        : null;
     if (!(chip instanceof HTMLButtonElement)) return;
     const preset = chip.dataset.preset || "all";
     setActivePreset(chips, preset);
@@ -69,7 +81,12 @@ function initDatePresets(form) {
       return;
     }
 
-    const range = rangeForDatePreset(preset, todayIso(), fromInput.min, toInput.max);
+    const range = rangeForDatePreset(
+      preset,
+      todayIso(),
+      fromInput.min,
+      toInput.max,
+    );
     fromInput.value = range.from;
     toInput.value = range.to;
     custom.hidden = true;
@@ -84,7 +101,8 @@ function initDatePresets(form) {
 function closeSort(control) {
   const button = control.querySelector(".toolbar-sort");
   const menu = control.querySelector(".sort-menu");
-  if (button instanceof HTMLButtonElement) button.setAttribute("aria-expanded", "false");
+  if (button instanceof HTMLButtonElement)
+    button.setAttribute("aria-expanded", "false");
   if (menu instanceof HTMLElement) menu.hidden = true;
 }
 
@@ -94,14 +112,17 @@ function initSortControl(control) {
   const menu = control.querySelector(".sort-menu");
   const label = control.querySelector("[data-sort-label]");
   if (!(input instanceof HTMLInputElement)) return;
-  if (!(button instanceof HTMLButtonElement) || !(menu instanceof HTMLElement)) return;
+  if (!(button instanceof HTMLButtonElement) || !(menu instanceof HTMLElement))
+    return;
   if (!(label instanceof HTMLElement)) return;
 
   let typeahead = "";
   let typeaheadAt = 0;
 
   const options = () =>
-    /** @type {HTMLElement[]} */ (Array.from(menu.querySelectorAll(".sort-item")));
+    /** @type {HTMLElement[]} */ (
+      Array.from(menu.querySelectorAll(".sort-item"))
+    );
 
   function focusOption(index) {
     const target = options()[index];
@@ -109,7 +130,9 @@ function initSortControl(control) {
   }
 
   function selectedIndex() {
-    const found = options().findIndex((item) => item.getAttribute("aria-selected") === "true");
+    const found = options().findIndex(
+      (item) => item.getAttribute("aria-selected") === "true",
+    );
     return found < 0 ? 0 : found;
   }
 
@@ -147,10 +170,13 @@ function initSortControl(control) {
       return;
     }
 
-    if (menu.hidden || !menu.contains(/** @type {Node} */ (event.target))) return;
+    if (menu.hidden || !menu.contains(/** @type {Node} */ (event.target)))
+      return;
 
     const items = options();
-    const current = items.indexOf(/** @type {HTMLElement} */ (document.activeElement));
+    const current = items.indexOf(
+      /** @type {HTMLElement} */ (document.activeElement),
+    );
 
     const next = nextSortIndex(event.key, current, items.length);
     if (next !== null) {
@@ -164,9 +190,14 @@ function initSortControl(control) {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
 
     const now = Date.now();
-    typeahead = now - typeaheadAt > TYPEAHEAD_RESET_MS ? event.key : typeahead + event.key;
+    typeahead =
+      now - typeaheadAt > TYPEAHEAD_RESET_MS
+        ? event.key
+        : typeahead + event.key;
     typeaheadAt = now;
-    const labels = items.map((item) => item.dataset.label || item.textContent?.trim() || "");
+    const labels = items.map(
+      (item) => item.dataset.label || item.textContent?.trim() || "",
+    );
     const match = typeaheadIndex(labels, typeahead, current);
     if (match !== null) {
       event.preventDefault();
@@ -186,7 +217,10 @@ function initSortControl(control) {
   });
 
   menu.addEventListener("click", (event) => {
-    const item = event.target instanceof Element ? event.target.closest(".sort-item") : null;
+    const item =
+      event.target instanceof Element
+        ? event.target.closest(".sort-item")
+        : null;
     if (!(item instanceof HTMLButtonElement)) return;
     const value = item.dataset.value || "";
     const text = item.dataset.label || item.textContent?.trim() || value;
@@ -207,7 +241,11 @@ function initSortControl(control) {
 
 function initListFilters(root = document) {
   root.querySelectorAll("[data-list-filters]").forEach((form) => {
-    if (!(form instanceof HTMLFormElement) || form.dataset.enhancedFilters === "true") return;
+    if (
+      !(form instanceof HTMLFormElement) ||
+      form.dataset.enhancedFilters === "true"
+    )
+      return;
     form.dataset.enhancedFilters = "true";
     initDatePresets(form);
     form.querySelectorAll("[data-sort-control]").forEach((control) => {
@@ -217,7 +255,11 @@ function initListFilters(root = document) {
 }
 
 document.addEventListener("click", (event) => {
-  if (event.target instanceof Element && event.target.closest("[data-sort-control]")) return;
+  if (
+    event.target instanceof Element &&
+    event.target.closest("[data-sort-control]")
+  )
+    return;
   document.querySelectorAll("[data-sort-control]").forEach((control) => {
     if (control instanceof HTMLElement) closeSort(control);
   });

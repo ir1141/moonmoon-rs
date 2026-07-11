@@ -49,7 +49,8 @@ function showListError(event) {
   const error = document.createElement("div");
   error.className = "list-error";
   error.setAttribute("role", "alert");
-  error.textContent = "Could not update results. Check your connection and try again.";
+  error.textContent =
+    "Could not update results. Check your connection and try again.";
 
   const loading = region.querySelector(".list-loading");
   if (loading) {
@@ -92,9 +93,12 @@ function pruneEmptyRequestParameters(event) {
 // live region from screen readers while it is open, so the count is republished
 // on the sheet's own dismiss button.
 function syncOverlayApplyLabel() {
-  const summary = document.querySelector("[data-list-region] .list-summary[data-result-label]");
+  const summary = document.querySelector(
+    "[data-list-region] .list-summary[data-result-label]",
+  );
   const label = document.querySelector("[data-overlay-apply-label]");
-  if (!(summary instanceof HTMLElement) || !(label instanceof HTMLElement)) return;
+  if (!(summary instanceof HTMLElement) || !(label instanceof HTMLElement))
+    return;
 
   const state = overlayApplyState(summary.dataset.resultLabel);
   if (label.textContent !== state.label) label.textContent = state.label;
@@ -108,7 +112,10 @@ function onListSettled() {
   syncOverlayApplyLabel();
 }
 
-document.body.addEventListener("htmx:configRequest", pruneEmptyRequestParameters);
+document.body.addEventListener(
+  "htmx:configRequest",
+  pruneEmptyRequestParameters,
+);
 document.body.addEventListener("htmx:beforeRequest", setListBusyFromEvent);
 document.body.addEventListener("htmx:afterSettle", onListSettled);
 document.body.addEventListener("htmx:responseError", showListError);

@@ -29,7 +29,10 @@ export function initialPartDurations(parts, cachedDurations, maxPartDuration) {
       ? part.duration
       : maxPartDuration,
   );
-  if (Array.isArray(cachedDurations) && cachedDurations.length === parts.length) {
+  if (
+    Array.isArray(cachedDurations) &&
+    cachedDurations.length === parts.length
+  ) {
     for (let i = 0; i < cachedDurations.length; i++) {
       if (cachedDurations[i] > 0) {
         durations[i] = cachedDurations[i];

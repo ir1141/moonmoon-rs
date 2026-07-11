@@ -31,8 +31,14 @@ describe("overlayApplyState", () => {
   });
 
   test("an unparseable label falls back to a safe dismiss", () => {
-    expect(overlayApplyState("")).toEqual({ label: "Show results", empty: false });
-    expect(overlayApplyState(null)).toEqual({ label: "Show results", empty: false });
+    expect(overlayApplyState("")).toEqual({
+      label: "Show results",
+      empty: false,
+    });
+    expect(overlayApplyState(null)).toEqual({
+      label: "Show results",
+      empty: false,
+    });
     expect(overlayApplyState("streams")).toEqual({
       label: "Show results",
       empty: false,

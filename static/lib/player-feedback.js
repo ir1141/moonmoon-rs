@@ -24,10 +24,18 @@ export function chatFeedbackView(state, messageCount) {
   }
 
   if (state === "loading") {
-    return { notice: null, headerText: chatLoadStatusText(), headerRetry: false };
+    return {
+      notice: null,
+      headerText: chatLoadStatusText(),
+      headerRetry: false,
+    };
   }
   if (state === "error") {
-    return { notice: null, headerText: chatErrorStatusText(), headerRetry: true };
+    return {
+      notice: null,
+      headerText: chatErrorStatusText(),
+      headerRetry: true,
+    };
   }
   return { notice: null, headerText: "", headerRetry: false };
 }

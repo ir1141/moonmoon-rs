@@ -6,7 +6,8 @@ export function parameterIsEmpty(value) {
 export function deleteEmptyParameter(parameters, key) {
   if (parameters instanceof FormData) {
     const values = parameters.getAll(key);
-    if (!values.length || values.every(parameterIsEmpty)) parameters.delete(key);
+    if (!values.length || values.every(parameterIsEmpty))
+      parameters.delete(key);
     return;
   }
 

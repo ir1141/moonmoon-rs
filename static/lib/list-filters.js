@@ -7,7 +7,11 @@ function parseIsoDate(value) {
   const year = Number(parts[0]);
   const month = Number(parts[1]);
   const day = Number(parts[2]);
-  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day)
+  ) {
     return null;
   }
   const date = new Date(Date.UTC(year, month - 1, day));
@@ -65,7 +69,12 @@ export function rangeForDatePreset(preset, todayIso, minIso, maxIso) {
     return boundedRange(addDays(today, -90), today, minIso, maxIso);
   }
   if (preset === "year") {
-    return boundedRange(new Date(Date.UTC(today.getUTCFullYear(), 0, 1)), today, minIso, maxIso);
+    return boundedRange(
+      new Date(Date.UTC(today.getUTCFullYear(), 0, 1)),
+      today,
+      minIso,
+      maxIso,
+    );
   }
   return { from: "", to: "" };
 }

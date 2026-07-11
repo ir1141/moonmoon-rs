@@ -16,7 +16,13 @@ export const SCROLL_JITTER_PX = 4;
  * }} input
  * @returns {boolean} whether the header should be hidden
  */
-export function nextHeaderHidden({ hidden, y, lastY, headerHeight, overlayOpen }) {
+export function nextHeaderHidden({
+  hidden,
+  y,
+  lastY,
+  headerHeight,
+  overlayOpen,
+}) {
   if (overlayOpen) return false;
   if (y <= headerHeight) return false;
   const delta = y - lastY;

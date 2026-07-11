@@ -50,9 +50,9 @@ describe("computeChatDelay", () => {
   test("accepts a resolved numeric durations array (the player's recompute path)", () => {
     // onPlayerReady recomputes the delay from partDurations (plain numbers)
     // after refining it with cached real durations.
-    expect(computeChatDelay(28050, [10800, 10800, 6279], MAX_PART_DURATION)).toBe(
-      171,
-    );
+    expect(
+      computeChatDelay(28050, [10800, 10800, 6279], MAX_PART_DURATION),
+    ).toBe(171);
     expect(computeChatDelay(7000, [0], MAX_PART_DURATION)).toBe(0);
   });
 

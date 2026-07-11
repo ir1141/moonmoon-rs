@@ -12,7 +12,12 @@ export function nextSearchOverlayState(state, action) {
       return { open: true, query: "", focusInput: true, focusOpener: false };
     case "backdrop": {
       const next = action.onBackdrop ? false : open;
-      return { open: next, query, focusInput: false, focusOpener: open && !next };
+      return {
+        open: next,
+        query,
+        focusInput: false,
+        focusOpener: open && !next,
+      };
     }
     default:
       return { open, query, focusInput: false, focusOpener: false };
@@ -37,7 +42,8 @@ export function isEditableTarget(target) {
 export function isSearchShortcut(event) {
   if (event.altKey) return false;
   const key = String(event.key || "");
-  if ((event.ctrlKey || event.metaKey) && key.toLowerCase() === "k") return true;
+  if ((event.ctrlKey || event.metaKey) && key.toLowerCase() === "k")
+    return true;
   if (key !== "/" || event.ctrlKey || event.metaKey) return false;
   return !isEditableTarget(event.target);
 }
