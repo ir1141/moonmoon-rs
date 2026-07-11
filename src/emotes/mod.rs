@@ -7,8 +7,6 @@ use serde::{Deserialize, Serialize};
 pub use fetch::load_prefetched;
 pub use store::EmoteIndex;
 
-// Consumed by the lookup handler in Task 10.
-#[allow(unused_imports)]
 pub use store::{Lookup, ResolvedEntry};
 
 /// How often the background ticker re-fetches the prefetched channel/global

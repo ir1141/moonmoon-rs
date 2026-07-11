@@ -63,8 +63,11 @@ pub type SharedState = Arc<AppState>;
 async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "moonmoon=info,tower_http=debug".parse().unwrap()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                "moonmoon=info,tower_http=debug"
+                    .parse()
+                    .expect("default env filter is valid")
+            }),
         )
         .init();
 
@@ -240,7 +243,9 @@ async fn main() {
 
     let port = std::env::var("PORT").unwrap_or_else(|_| "3000".to_string());
     let addr = format!("0.0.0.0:{port}");
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(&addr)
+        .await
+        .unwrap_or_else(|e| panic!("failed to bind {addr}: {e}"));
     tracing::info!("listening on http://localhost:{port}");
     axum::serve(
         listener,
@@ -248,7 +253,7 @@ async fn main() {
     )
     .with_graceful_shutdown(shutdown_signal())
     .await
-    .unwrap();
+    .expect("server exited with an error");
 }
 
 async fn shutdown_signal() {

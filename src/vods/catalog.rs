@@ -121,7 +121,8 @@ impl CatalogLoad {
 
 pub(crate) const REFRESH_INTERVAL: Duration = Duration::from_secs(60 * 60);
 /// While the catalog is empty (failed/timed-out boot fetch) retry much faster
-/// so a bad boot doesn't leave the site empty for six hours.
+/// so a bad boot self-heals in about a minute instead of waiting out the
+/// hourly refresh.
 pub(crate) const EMPTY_RETRY_INTERVAL: Duration = Duration::from_secs(60);
 
 pub(crate) fn next_refresh_delay(vod_count: usize) -> Duration {

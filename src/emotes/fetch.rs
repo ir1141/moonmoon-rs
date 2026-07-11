@@ -34,16 +34,14 @@ async fn fetch_json(
     unreachable!("loop returns inside both branches");
 }
 
+type EmoteParser = fn(&serde_json::Value) -> HashMap<String, EmoteRecord>;
+
 /// Fetch + merge all 6 endpoints (3 providers × {channel, global}) into one
 /// map. Individual provider failures are logged and skipped — we'd rather
 /// return a partial map than fail the whole boot.
 pub async fn load_prefetched(client: &reqwest::Client) -> HashMap<String, EmoteRecord> {
     let user_id = MOONMOON_TWITCH_ID;
-    #[allow(clippy::type_complexity)]
-    let endpoints: Vec<(
-        String,
-        fn(&serde_json::Value) -> HashMap<String, EmoteRecord>,
-    )> = vec![
+    let endpoints: Vec<(String, EmoteParser)> = vec![
         (
             "https://7tv.io/v3/emote-sets/global".to_string(),
             parse::parse_seventv_global,

@@ -62,11 +62,11 @@ pub async fn lookup_emote(
         .await;
 
     let body = match result {
-        Lookup::Hit(record) => {
-            serde_json::to_string(&LookupResponse::Hit { hit: true, record }).unwrap()
-        }
+        Lookup::Hit(record) => serde_json::to_string(&LookupResponse::Hit { hit: true, record })
+            .expect("LookupResponse is always serializable"),
         Lookup::Miss | Lookup::Unknown => {
-            serde_json::to_string(&LookupResponse::Miss { hit: false }).unwrap()
+            serde_json::to_string(&LookupResponse::Miss { hit: false })
+                .expect("LookupResponse is always serializable")
         }
     };
     (

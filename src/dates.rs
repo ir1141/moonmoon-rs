@@ -14,6 +14,7 @@ pub(crate) fn date_query_for_days(days: i64) -> String {
     format!("{year:04}-{month:02}-{day:02}")
 }
 
+/// `month` must already be validated to 1..=12 by the caller.
 pub(crate) fn days_in_month(year: i32, month: u32) -> u32 {
     match month {
         1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
@@ -25,7 +26,7 @@ pub(crate) fn days_in_month(year: i32, month: u32) -> u32 {
                 28
             }
         }
-        _ => 30,
+        _ => unreachable!("month out of range: {month}"),
     }
 }
 

@@ -7,6 +7,13 @@ repository = "https://github.com/ir1141/moonmoon-rs"
 license = "MIT"
 readme = "README.md"
 
+[lints.rust]
+future-incompatible = "warn"
+nonstandard-style = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+
 [dependencies]
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
