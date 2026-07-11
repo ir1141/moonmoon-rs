@@ -1,7 +1,8 @@
-use crate::emotes::EmoteRecord;
-use crate::emotes::parse;
 use std::collections::HashMap;
 use std::time::Duration;
+
+use crate::emotes::EmoteRecord;
+use crate::emotes::parse;
 
 /// Moonmoon's Twitch user ID — shared with player.js (MOONMOON_TWITCH_ID).
 /// All three providers key channel emotes by this ID.

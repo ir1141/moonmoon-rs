@@ -1,3 +1,12 @@
+use std::sync::Arc;
+
+use askama::Template;
+use axum::Json;
+use axum::extract::{Extension, Query, State};
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use serde::Deserialize;
+
 use super::{
     Headers, Listing, Pagination, Section, SortOption, VodDisplay, VodsGridTemplate,
     build_watch_url, find_vod_by_id, format_chapter_start, list_sort_options_grouped,
@@ -6,13 +15,6 @@ use super::{
 use crate::SharedState;
 use crate::middleware::CspNonce;
 use crate::vods::Vod;
-use askama::Template;
-use axum::Json;
-use axum::extract::{Extension, Query, State};
-use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use serde::Deserialize;
-use std::sync::Arc;
 
 const HISTORY_SORTS: [(&str, &str, bool); 2] = [
     ("recent", "Most recently watched", false),

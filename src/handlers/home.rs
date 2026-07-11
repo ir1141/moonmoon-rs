@@ -1,12 +1,14 @@
+use std::sync::Arc;
+
+use askama::Template;
+use axum::extract::{Extension, State};
+use axum::response::IntoResponse;
+
 use super::{Section, VodDisplay, format_date, render_template};
 use crate::SharedState;
 use crate::dates::{current_utc_days, date_query_for_days, days_to_civil, parse_ymd_to_days};
 use crate::middleware::CspNonce;
 use crate::vods::{Game, Vod, chapter_color_idx};
-use askama::Template;
-use axum::extract::{Extension, State};
-use axum::response::IntoResponse;
-use std::sync::Arc;
 
 /// How many cards each landing rail shows before the user has to "See all".
 const RECENT_RAIL_SIZE: usize = 4;

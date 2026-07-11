@@ -1,5 +1,6 @@
-use crate::emotes::{EmoteProvider, EmoteRecord};
 use std::collections::HashMap;
+
+use crate::emotes::{EmoteProvider, EmoteRecord};
 
 /// Parse 7TV's `/v3/users/twitch/{id}` response. Shape:
 /// `{ "emote_set": { "emotes": [{ name, data: { host: { url }, owner: { ... } } }] } }`.

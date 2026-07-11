@@ -18,14 +18,15 @@ pub(crate) use listing::{Headers, Listing, Pagination};
 pub use sync::{sync_get, sync_put};
 pub use watch::{next_in_period, random_vod, vod_detail, watch_page};
 
+use askama::Template;
+use axum::response::{Html, IntoResponse};
+use serde::Deserialize;
+
 use crate::dates::{
     current_utc_days, date_query_for_days, days_in_month, days_to_civil, parse_ymd_to_days,
 };
 use crate::vods::month_abbr;
 use crate::vods::{Game, Vod};
-use askama::Template;
-use axum::response::{Html, IntoResponse};
-use serde::Deserialize;
 
 pub(crate) const VOD_BATCH_SIZE: usize = 36;
 pub(crate) const GAME_BATCH_SIZE: usize = 60;

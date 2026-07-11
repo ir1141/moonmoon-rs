@@ -1,10 +1,11 @@
-use crate::SharedState;
-use crate::emotes::parse;
-use crate::emotes::{Lookup, ResolvedEntry};
 use axum::extract::{Path, State};
 use axum::response::IntoResponse;
 use axum::response::Response;
 use serde::Serialize;
+
+use crate::SharedState;
+use crate::emotes::parse;
+use crate::emotes::{Lookup, ResolvedEntry};
 
 #[derive(Serialize)]
 pub struct ChannelEmotesResponse<'a> {

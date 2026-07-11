@@ -5,12 +5,13 @@
 //! [`build_router`] is split out so integration tests can drive the full
 //! route table (rate limiting, CSP, and tracing included) without a socket.
 
+use std::net::SocketAddr;
+use std::sync::Arc;
+
 use axum::{
     Router,
     routing::{get, post},
 };
-use std::net::SocketAddr;
-use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_governor::{
     GovernorLayer, governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor,

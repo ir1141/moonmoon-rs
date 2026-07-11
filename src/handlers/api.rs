@@ -1,8 +1,9 @@
-use super::find_vod_by_id;
-use crate::{SharedState, vods::Vod};
 use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
 use serde::Deserialize;
+
+use super::find_vod_by_id;
+use crate::{SharedState, vods::Vod};
 
 // ─── Chat proxy ───
 

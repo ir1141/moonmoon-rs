@@ -1,12 +1,13 @@
 //! Sync endpoints. Tokens are base32 (RFC 4648 alphabet) so they survive
 //! double-click selection, copy-paste between browsers, and QR codes.
 
-use crate::SharedState;
-use crate::sync_store::{MAX_BLOB_BYTES, SyncBlob};
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
+
+use crate::SharedState;
+use crate::sync_store::{MAX_BLOB_BYTES, SyncBlob};
 
 const TOKEN_MIN_LEN: usize = 26;
 const TOKEN_MAX_LEN: usize = 32;

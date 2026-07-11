@@ -1,7 +1,9 @@
-use super::{Vod, canonical_youtube_uploads, filter_playable_vods};
-use serde::Deserialize;
 use std::future::Future;
 use std::time::Duration;
+
+use serde::Deserialize;
+
+use super::{Vod, canonical_youtube_uploads, filter_playable_vods};
 
 #[must_use]
 #[derive(Debug, Clone)]

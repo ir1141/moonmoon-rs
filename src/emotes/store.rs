@@ -1,7 +1,9 @@
-use crate::emotes::EmoteRecord;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
+
 use tokio::sync::Mutex as AsyncMutex;
+
+use crate::emotes::EmoteRecord;
 
 /// What we cache for a failed lookup. The unit struct lets us store "miss"
 /// without paying the size of a full record, and lets `lookup` return a

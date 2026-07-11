@@ -1,0 +1,4 @@
+# Unstable option: enforced by `cargo +nightly fmt`. Stable rustfmt warns,
+# skips it, and still formats everything else; the import blocks below are
+# hand-grouped std / external / crate to match.
+group_imports = "StdExternalCrate"

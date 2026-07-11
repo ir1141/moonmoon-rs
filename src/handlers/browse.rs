@@ -1,3 +1,9 @@
+use std::sync::Arc;
+
+use askama::Template;
+use axum::extract::{Extension, Path, Query, RawQuery, State};
+use axum::response::{IntoResponse, Redirect, Response};
+
 use super::{
     GAME_BATCH_SIZE, GamesGridTemplate, Headers, ListFilterConfig, ListMetadata, ListQuery,
     Listing, Pagination, Section, VOD_BATCH_SIZE, VodDisplay, VodsGridTemplate, date_preset_state,
@@ -7,10 +13,6 @@ use super::{
 use crate::SharedState;
 use crate::middleware::CspNonce;
 use crate::vods::{Game, chapter_color_idx};
-use askama::Template;
-use axum::extract::{Extension, Path, Query, RawQuery, State};
-use axum::response::{IntoResponse, Redirect, Response};
-use std::sync::Arc;
 
 const GAME_SORTS: [(&str, &str, bool); 6] = [
     ("recent", "Latest stream", false),

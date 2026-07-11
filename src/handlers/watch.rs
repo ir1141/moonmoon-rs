@@ -1,3 +1,12 @@
+use std::sync::Arc;
+
+use askama::Template;
+use axum::extract::{Extension, Path, Query, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Redirect};
+use rand::prelude::IndexedRandom;
+use serde::{Deserialize, Serialize};
+
 use super::{
     Section, find_vod_by_id, get_chapter_segments, get_game_tags, next_vod_in_period,
     render_template,
@@ -5,13 +14,6 @@ use super::{
 use crate::SharedState;
 use crate::middleware::CspNonce;
 use crate::vods::{Vod, canonical_youtube_uploads};
-use askama::Template;
-use axum::extract::{Extension, Path, Query, State};
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Redirect};
-use rand::prelude::IndexedRandom;
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 #[derive(Template)]
 #[template(path = "watch.html")]

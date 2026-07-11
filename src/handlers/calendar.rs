@@ -1,14 +1,16 @@
+use std::sync::Arc;
+
+use askama::Template;
+use axum::extract::{Extension, Query, State};
+use axum::response::IntoResponse;
+use serde::Deserialize;
+
 use super::{Section, build_watch_url, get_chapter_segments, render_template};
 use crate::SharedState;
 use crate::dates::{days_to_civil, parse_ymd_to_days};
 use crate::middleware::CspNonce;
 use crate::vods::Vod;
 use crate::vods::month_abbr_num;
-use askama::Template;
-use axum::extract::{Extension, Query, State};
-use axum::response::IntoResponse;
-use serde::Deserialize;
-use std::sync::Arc;
 
 #[derive(Deserialize, Default)]
 pub struct CalendarQuery {
