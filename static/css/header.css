@@ -66,11 +66,6 @@
   background: var(--bg-elevated);
 }
 
-.nav-link:focus-visible {
-  outline: 2px solid var(--accent-soft);
-  outline-offset: 2px;
-}
-
 .nav-link.active {
   color: #fff;
   background: var(--accent);
@@ -114,11 +109,6 @@
 .icon-btn:active,
 .btn-icon:active {
   transform: scale(0.96);
-}
-.icon-btn:focus-visible,
-.btn-icon:focus-visible {
-  outline: 2px solid var(--accent-soft);
-  outline-offset: 2px;
 }
 .icon-btn svg,
 .btn-icon svg {
@@ -413,8 +403,6 @@
   .games-toolbar .toolbar-search-wrap,
   .vod-toolbar .toolbar-search,
   .games-toolbar .toolbar-search,
-  .vod-toolbar .toolbar-select,
-  .games-toolbar .toolbar-select,
   .vod-toolbar .toolbar-sort,
   .games-toolbar .toolbar-sort {
     width: 100%;

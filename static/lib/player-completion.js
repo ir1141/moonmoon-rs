@@ -21,10 +21,6 @@ export function shouldFinalizePlaybackAtTick(options) {
   return currentTime >= Math.max(0, duration - threshold);
 }
 
-export function shouldSaveResume(options) {
-  return !(options && options.completed === true);
-}
-
 // The unload write may only record positions the session earned. Playing
 // ticks already persist every second, so a session that never played (or is
 // still parked on its last played save) has nothing to add - writing anyway

@@ -2,8 +2,6 @@
 
 {% block title %}Calendar — {{ guide.week_label }}{% endblock %}
 
-{% block search %}{% endblock %}
-
 {% block content %}
 <div class="calendar-page">
   <div class="calendar-nav">
@@ -46,10 +44,9 @@
         {% if day.is_today %}<span class="cal-tg-today-tag">Today</span>{% endif %}
       </div>
       <div class="cal-tg-track">
-        {% if day.is_future %}
-        {% else if day.is_off %}
+        {% if !day.is_future && day.is_off %}
         <span class="cal-tg-off">No stream</span>
-        {% else %}
+        {% else if !day.is_future %}
         {% for block in day.blocks %}
         <div class="cal-tg-block{% if block.is_live %} is-live{% endif %}{% if block.continues_past_midnight %} continues-past-midnight{% endif %}"
              style="left: {{ block.left_pct }}%; width: {{ block.width_pct }}%"

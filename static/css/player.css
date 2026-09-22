@@ -69,10 +69,6 @@
   gap: 6px;
 }
 
-.part-selector[hidden] {
-  display: none;
-}
-
 .part-btn {
   flex-shrink: 0;
 }
@@ -145,10 +141,6 @@
   padding: 8px;
   z-index: var(--z-player-popover);
   animation: wcPopIn 0.16s ease;
-}
-
-.wc-pop[hidden] {
-  display: none;
 }
 
 @keyframes wcPopIn {
@@ -512,6 +504,8 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 8px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) var(--bg-deep);
 }
 
 .chat-messages::-webkit-scrollbar {
@@ -526,10 +520,6 @@
 }
 .chat-messages::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
-}
-.chat-messages {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) var(--bg-deep);
 }
 
 .chat-msg {

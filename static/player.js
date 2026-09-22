@@ -20,7 +20,6 @@ import { chatStripeClass } from "./lib/chat-stripe.js";
 import {
   shouldFinalizePlaybackAtTick,
   shouldSaveOnUnload,
-  shouldSaveResume,
 } from "./lib/player-completion.js";
 import {
   chatFeedbackView,
@@ -91,7 +90,6 @@ var partDurations = initialPartDurations(
   null,
   MAX_PART_DURATION,
 );
-var tickInterval = null;
 
 // Chat state
 var chatMessages = [];
@@ -100,7 +98,6 @@ var chatCursor = null;
 var chatLoading = false;
 var chatAutoScroll = true;
 var chatRendering = false;
-var chatInitialOffset = 0;
 var chatUserScrollIntentUntil = 0;
 var chatAutoScrollFrame = null;
 var chatScrollGeneration = 0;
@@ -446,21 +443,6 @@ chatTimestampToggle.addEventListener("click", function () {
   applyChatTimestamps();
 });
 
-// ─── Utility ───
-
-function formatTime(seconds) {
-  seconds = Math.max(0, Math.floor(seconds));
-  var h = Math.floor(seconds / 3600);
-  var m = Math.floor((seconds % 3600) / 60);
-  var s = seconds % 60;
-  if (h > 0) {
-    return (
-      h + ":" + String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0")
-    );
-  }
-  return m + ":" + String(s).padStart(2, "0");
-}
-
 // ─── Multi-Part ───
 
 function getGlobalTime() {
@@ -501,9 +483,7 @@ function seekToGlobal(seconds) {
 }
 
 function clearChatContainer() {
-  while (chatContainer.firstChild) {
-    chatContainer.removeChild(chatContainer.firstChild);
-  }
+  chatContainer.replaceChildren();
 }
 
 var pendingSeekListener = null;
@@ -576,9 +556,7 @@ function buildPartSelector() {
     return;
   }
   if (YOUTUBE_IDS.length <= 1) return;
-  while (partSelector.firstChild) {
-    partSelector.removeChild(partSelector.firstChild);
-  }
+  partSelector.replaceChildren();
   for (var i = 0; i < YOUTUBE_IDS.length; i++) {
     var btn = document.createElement("button");
     btn.className = "btn-chip part-btn";
@@ -723,7 +701,7 @@ function buildChapterSelector() {
     meta.className = "wc-pop-meta";
     var timeEl = document.createElement("span");
     timeEl.className = "wc-pop-time";
-    timeEl.textContent = formatTime(c.start);
+    timeEl.textContent = formatChatTimestamp(c.start);
     var nowEl = document.createElement("span");
     nowEl.className = "wc-pop-nowtag";
     nowEl.textContent = "Now";
@@ -850,7 +828,7 @@ window.addEventListener("moonmoon:historyChanged", function () {
 });
 
 function savePosition() {
-  if (!shouldSaveResume({ completed: watchCompleted })) return;
+  if (watchCompleted) return;
 
   try {
     if (!player || !player.getCurrentTime) return;
@@ -909,7 +887,6 @@ function loadChat(fromOffset) {
   } else {
     var offset = fromOffset !== undefined ? fromOffset : 0;
     url = "/api/chat/" + VOD_ID + "?content_offset_seconds=" + offset;
-    chatInitialOffset = offset;
   }
 
   fetch(url)
@@ -1437,7 +1414,7 @@ async function onPlayerReady() {
         switchPart(resume.part, resume.localTime);
         // switchPart already loaded chat with the correct offset, and we
         // still need the tick loop running. Skip the boot loadChat below.
-        tickInterval = setInterval(tick, 1000);
+        setInterval(tick, 1000);
         return;
       }
       if (resume.localTime > 0) {
@@ -1460,7 +1437,7 @@ async function onPlayerReady() {
   loadChat(initialOffset + CHAT_DELAY);
 
   // Start tick
-  tickInterval = setInterval(tick, 1000);
+  setInterval(tick, 1000);
 }
 
 function onPlayerStateChange(event) {

@@ -257,14 +257,6 @@ impl VodDuration {
     }
 }
 
-impl std::ops::Deref for VodDuration {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        &self.display
-    }
-}
-
 impl From<&str> for VodDuration {
     fn from(value: &str) -> Self {
         Self::from_display(value.to_string())
@@ -697,7 +689,10 @@ mod tests {
         let vod: Vod = serde_json::from_str(json).unwrap();
         assert_eq!(vod.id, "abc123");
         assert_eq!(vod.platform_vod_id.as_deref(), Some("2237432794"));
-        assert_eq!(vod.duration.as_deref(), Some("3h 20m"));
+        assert_eq!(
+            vod.duration.as_ref().map(VodDuration::display),
+            Some("3h 20m")
+        );
         assert_eq!(vod.duration.as_ref().map(VodDuration::seconds), Some(12000));
         assert_eq!(vod.chapters.unwrap()[0].name.as_deref(), Some("Elden Ring"));
     }

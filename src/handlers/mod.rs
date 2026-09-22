@@ -61,6 +61,13 @@ pub(crate) fn find_vod_by_id<'a>(vods: &'a [Vod], requested_id: &str) -> Option<
     vods.iter().find(|vod| vod_matches_id(vod, requested_id))
 }
 
+pub(crate) fn valid_vod_id(id: &str) -> bool {
+    !id.is_empty()
+        && id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+}
+
 // ─── Query types ───
 
 #[derive(Deserialize, Default)]
@@ -99,7 +106,6 @@ pub(crate) struct SortOption {
 pub(crate) struct ListFilterConfig {
     pub form_id: &'static str,
     pub toolbar_class: &'static str,
-    pub action: String,
     pub title: &'static str,
     pub search_placeholder: &'static str,
     pub search_label: String,
@@ -852,20 +858,6 @@ pub(crate) fn format_date_short(created_at: &str) -> String {
     format!("{} {day}", month_abbr(parts[1]))
 }
 
-pub(crate) fn paginate_with_nav<T>(
-    items: Vec<T>,
-    base_url: &str,
-    batch: usize,
-    params: &ListQuery,
-) -> (Vec<T>, bool, String) {
-    let page = params.page.unwrap_or(0);
-    let total = items.len();
-    let paged = paginate(items, page, batch);
-    let has_more = page.saturating_add(1).saturating_mul(batch) < total;
-    let next_url = build_next_url(base_url, page.saturating_add(1), params);
-    (paged, has_more, next_url)
-}
-
 pub(crate) fn paginate<T>(items: Vec<T>, page: usize, batch: usize) -> Vec<T> {
     let start = page.saturating_mul(batch);
     if start >= items.len() {
@@ -1088,14 +1080,7 @@ mod tests {
     #[test]
     fn paginate_handles_huge_page_without_overflow() {
         let items: Vec<i32> = (0..10).collect();
-        assert!(paginate(items.clone(), usize::MAX, 36).is_empty());
-        let params = ListQuery {
-            page: Some(usize::MAX),
-            ..Default::default()
-        };
-        let (paged, has_more, _) = paginate_with_nav(items, "/x", 36, &params);
-        assert!(paged.is_empty());
-        assert!(!has_more);
+        assert!(paginate(items, usize::MAX, 36).is_empty());
     }
 
     #[test]

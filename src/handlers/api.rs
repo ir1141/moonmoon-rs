@@ -2,8 +2,8 @@ use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
 use serde::Deserialize;
 
-use super::find_vod_by_id;
-use crate::{SharedState, vods::Vod};
+use super::{find_vod_by_id, valid_vod_id};
+use crate::SharedState;
 
 // ─── Chat proxy ───
 
@@ -17,24 +17,17 @@ pub struct ChatQuery {
 /// just burns an upstream connection on a guaranteed-failing URL.
 const MAX_CURSOR_LEN: usize = 2048;
 
-fn canonical_chat_vod_id(vods: &[Vod], requested_id: &str) -> Option<String> {
-    find_vod_by_id(vods, requested_id).map(|vod| vod.id.clone())
-}
-
 pub async fn chat_proxy(
     State(state): State<SharedState>,
     Path(vod_id): Path<String>,
     Query(params): Query<ChatQuery>,
 ) -> impl IntoResponse {
-    if !vod_id
-        .chars()
-        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-    {
+    if !valid_vod_id(&vod_id) {
         return (axum::http::StatusCode::BAD_REQUEST, "invalid vod_id").into_response();
     }
     let canonical_vod_id = {
         let catalog = state.catalog.read().await;
-        canonical_chat_vod_id(&catalog.vods, &vod_id)
+        find_vod_by_id(&catalog.vods, &vod_id).map(|vod| vod.id.clone())
     };
     let Some(canonical_vod_id) = canonical_vod_id else {
         return (axum::http::StatusCode::NOT_FOUND, "unknown vod_id").into_response();
@@ -116,55 +109,5 @@ pub async fn refresh_catalog(State(state): State<SharedState>) -> impl IntoRespo
         )
             .into_response(),
         RefreshOutcome::Error(e) => (axum::http::StatusCode::BAD_GATEWAY, e).into_response(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn make_vod(id: &str, platform_vod_id: Option<&str>) -> Vod {
-        Vod {
-            id: id.into(),
-            platform: None,
-            platform_vod_id: platform_vod_id.map(str::to_string),
-            platform_stream_id: None,
-            title: Some(format!("vod {id}")),
-            created_at: "2026-05-09T22:35:39.000Z".into(),
-            started_at: None,
-            updated_at: Some("2026-05-10T00:00:00.000Z".into()),
-            duration: Some("1h".into()),
-            thumbnail_url: None,
-            chapters: None,
-            youtube: None,
-            is_live: false,
-        }
-    }
-
-    #[test]
-    fn canonical_chat_vod_id_accepts_internal_id() {
-        let vods = vec![make_vod("1430", Some("2768249708"))];
-
-        assert_eq!(
-            canonical_chat_vod_id(&vods, "1430").as_deref(),
-            Some("1430")
-        );
-    }
-
-    #[test]
-    fn canonical_chat_vod_id_accepts_platform_vod_id() {
-        let vods = vec![make_vod("1430", Some("2768249708"))];
-
-        assert_eq!(
-            canonical_chat_vod_id(&vods, "2768249708").as_deref(),
-            Some("1430")
-        );
-    }
-
-    #[test]
-    fn canonical_chat_vod_id_rejects_unknown_id() {
-        let vods = vec![make_vod("1430", Some("2768249708"))];
-
-        assert_eq!(canonical_chat_vod_id(&vods, "missing"), None);
     }
 }

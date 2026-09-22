@@ -425,7 +425,10 @@ mod tests {
         let vod = &vods[0];
         assert_eq!(vod.id, "1430");
         assert_eq!(vod.platform_vod_id.as_deref(), Some("2768249708"));
-        assert_eq!(vod.duration.as_deref(), Some("6h 59m"));
+        assert_eq!(
+            vod.duration.as_ref().map(VodDuration::display),
+            Some("6h 59m")
+        );
         assert_eq!(vod.duration.as_ref().map(VodDuration::seconds), Some(25194));
         assert_eq!(vod.youtube.as_ref().unwrap()[0].id, "M1giB9QeXNM");
         assert_eq!(

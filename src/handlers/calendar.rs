@@ -106,24 +106,6 @@ fn month_name(m: u32) -> &'static str {
     }
 }
 
-fn month_abbr(m: u32) -> &'static str {
-    match m {
-        1 => "Jan",
-        2 => "Feb",
-        3 => "Mar",
-        4 => "Apr",
-        5 => "May",
-        6 => "Jun",
-        7 => "Jul",
-        8 => "Aug",
-        9 => "Sep",
-        10 => "Oct",
-        11 => "Nov",
-        12 => "Dec",
-        _ => "Unknown",
-    }
-}
-
 // Tomohiko Sakamoto's algorithm: day of week for any date (0=Sun..6=Sat)
 fn day_of_week(year: i32, month: u32, day: u32) -> u32 {
     let t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
@@ -194,19 +176,19 @@ fn format_week_label_short(week_start: i64) -> String {
     if start_year == end_year && start_month == end_month {
         format!(
             "{} {start_day}–{end_day} ’{end_year_short:02}",
-            month_abbr(start_month)
+            month_abbr_num(start_month)
         )
     } else if start_year == end_year {
         format!(
             "{} {start_day}–{} {end_day} ’{end_year_short:02}",
-            month_abbr(start_month),
-            month_abbr(end_month)
+            month_abbr_num(start_month),
+            month_abbr_num(end_month)
         )
     } else {
         format!(
             "{} {start_day} ’{start_year_short:02}–{} {end_day} ’{end_year_short:02}",
-            month_abbr(start_month),
-            month_abbr(end_month)
+            month_abbr_num(start_month),
+            month_abbr_num(end_month)
         )
     }
 }

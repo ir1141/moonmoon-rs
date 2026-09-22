@@ -6,9 +6,9 @@ use axum::response::{IntoResponse, Redirect, Response};
 
 use super::{
     GAME_BATCH_SIZE, GamesGridTemplate, Headers, ListFilterConfig, ListMetadata, ListQuery,
-    Listing, Pagination, Section, VOD_BATCH_SIZE, VodDisplay, VodsGridTemplate, date_preset_state,
-    filter_games_with_metadata, filter_vods_with_metadata, list_sort_options_grouped,
-    paginate_with_nav, render_template, selected_sort_option,
+    Listing, Pagination, Section, VOD_BATCH_SIZE, VodDisplay, VodsGridTemplate, build_next_url,
+    date_preset_state, filter_games_with_metadata, filter_vods_with_metadata,
+    list_sort_options_grouped, paginate, render_template, selected_sort_option,
 };
 use crate::SharedState;
 use crate::middleware::CspNonce;
@@ -126,8 +126,11 @@ async fn prepare_browse(
                 "/browse?lens=games",
                 sort,
             );
-            let (paged, has_more, next_url) =
-                paginate_with_nav(filtered.games, "/browse/grid", GAME_BATCH_SIZE, params);
+            let page = params.page.unwrap_or(0);
+            let total = filtered.games.len();
+            let paged = paginate(filtered.games, page, GAME_BATCH_SIZE);
+            let has_more = page.saturating_add(1).saturating_mul(GAME_BATCH_SIZE) < total;
+            let next_url = build_next_url("/browse/grid", page.saturating_add(1), params);
             PreparedBrowse {
                 games: paged
                     .into_iter()
@@ -165,8 +168,6 @@ async fn prepare_browse(
                 metadata.unfiltered_count = vods.len();
             }
 
-            let headers = headers_for_sort(sort);
-
             // The builder paginates before this closure runs, so chapter
             // segments and tags are only computed for the rendered cards.
             let listing = Listing::build(
@@ -177,7 +178,11 @@ async fn prepare_browse(
                     batch: VOD_BATCH_SIZE,
                     params,
                 },
-                headers,
+                if matches!(sort, "newest" | "oldest") {
+                    Headers::Period
+                } else {
+                    Headers::None
+                },
                 |r| {
                     let mut display = match game {
                         Some(name) => VodDisplay::from_vod_with(
@@ -206,17 +211,6 @@ async fn prepare_browse(
                 show_subtitle: game.is_none(),
             }
         }
-    }
-}
-
-/// Month headers whenever the grid is in chronological order, drilldown or not.
-/// A game's streams cluster: ELDEN RING's 71 fall in 8 months, none of them
-/// alone, which is what answers "which run was that".
-fn headers_for_sort(sort: &str) -> Headers {
-    if matches!(sort, "newest" | "oldest") {
-        Headers::Period
-    } else {
-        Headers::None
     }
 }
 
@@ -300,7 +294,6 @@ pub async fn browse_page(
         filter: ListFilterConfig {
             form_id: "browse-filters",
             toolbar_class: "vod-toolbar",
-            action: hx_get.clone(),
             title: "Filter archive",
             search_placeholder: if is_games {
                 "Search games..."
@@ -404,14 +397,6 @@ pub async fn game_redirect(Path(name): Path<String>, RawQuery(query): RawQuery) 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn period_headers_follow_chronological_sort_in_drilldowns_too() {
-        assert!(matches!(headers_for_sort("newest"), Headers::Period));
-        assert!(matches!(headers_for_sort("oldest"), Headers::Period));
-        assert!(matches!(headers_for_sort("longest"), Headers::None));
-        assert!(matches!(headers_for_sort("shortest"), Headers::None));
-    }
 
     #[test]
     fn games_lens_defaults_to_most_streams() {

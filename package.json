@@ -4,7 +4,6 @@
   "type": "module",
   "description": "Test harness for static/lib/* pure helpers used by player.js and sync.js (uses bun's native test runner).",
   "scripts": {
-    "check": "bun run format:check && bun test && bun run check:js",
     "check:js": "tsc --noEmit",
     "test": "bun test",
     "format": "prettier --write \"static/**/*.js\" \"tests/**/*.js\"",

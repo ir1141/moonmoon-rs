@@ -77,12 +77,6 @@ pub struct ContinueResumeQuery {
     pub time: Option<i64>,
 }
 
-#[derive(Clone, Copy)]
-struct HistoryDisplayOptions {
-    resume_links: bool,
-    show_headers: bool,
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum HistoryEntryState {
@@ -116,7 +110,6 @@ fn build_history_displays(
     vods: &[Vod],
     requested_vods: &[HistoryRequestedVod],
     sort: Option<&str>,
-    options: HistoryDisplayOptions,
 ) -> Vec<VodDisplay> {
     use std::collections::HashMap;
     // One pass over the catalog instead of a linear scan per requested id.
@@ -165,22 +158,14 @@ fn build_history_displays(
         });
     }
 
-    let headers = if options.show_headers {
-        Headers::Series
-    } else {
-        Headers::None
-    };
-
-    Listing::build(&entries, Pagination::All, headers, |e| {
+    Listing::build(&entries, Pagination::All, Headers::Series, |e| {
         let display = match e.state {
-            HistoryEntryState::InProgress => {
-                let link_start = if options.resume_links {
-                    e.resume_time
-                } else {
-                    e.resume_time.or(e.chapter_start)
-                };
-                VodDisplay::in_progress(e.vod, link_start, e.resume_time, e.game_key.as_deref())
-            }
+            HistoryEntryState::InProgress => VodDisplay::in_progress(
+                e.vod,
+                e.resume_time.or(e.chapter_start),
+                e.resume_time,
+                e.game_key.as_deref(),
+            ),
             HistoryEntryState::Watched => {
                 VodDisplay::watched(e.vod, e.chapter_start, e.game_key.as_deref())
             }
@@ -270,15 +255,7 @@ pub async fn history_vods_grid(
     let catalog = Arc::clone(&*state.catalog.read().await);
     let vods = &catalog.vods;
 
-    let displays = build_history_displays(
-        vods,
-        &requested_vods,
-        body.sort.as_deref(),
-        HistoryDisplayOptions {
-            resume_links: false,
-            show_headers: true,
-        },
-    );
+    let displays = build_history_displays(vods, &requested_vods, body.sort.as_deref());
 
     render_template(&VodsGridTemplate {
         vods: displays,
@@ -336,10 +313,6 @@ mod tests {
             &vods,
             &[requested("v1", Some(5000), HistoryEntryState::Watched)],
             None,
-            HistoryDisplayOptions {
-                resume_links: false,
-                show_headers: true,
-            },
         );
 
         assert_eq!(displays[0].watch_url, "/watch/v1?t=3600&game=Terraria");
@@ -361,10 +334,6 @@ mod tests {
                 HistoryEntryState::InProgress,
             )],
             None,
-            HistoryDisplayOptions {
-                resume_links: true,
-                show_headers: true,
-            },
         );
 
         assert_eq!(displays[0].id, "v1");
@@ -384,23 +353,6 @@ mod tests {
         assert_eq!(resume.resume_seconds, 5000);
         assert_eq!(resume.duration_seconds, 7200);
         assert_eq!(resume.subline, "36m left · resumes at 1:23:20");
-    }
-
-    #[test]
-    fn history_displays_can_suppress_series_headers() {
-        let vods = vec![make_history_vod()];
-
-        let displays = build_history_displays(
-            &vods,
-            &[requested("v1", Some(5000), HistoryEntryState::InProgress)],
-            None,
-            HistoryDisplayOptions {
-                resume_links: true,
-                show_headers: false,
-            },
-        );
-
-        assert!(displays[0].period_header.is_none());
     }
 
     fn requested(id: &str, time: Option<i64>, state: HistoryEntryState) -> HistoryRequestedVod {
@@ -456,10 +408,6 @@ mod tests {
             &vods,
             &[requested("v1", None, HistoryEntryState::Watched)],
             None,
-            HistoryDisplayOptions {
-                resume_links: false,
-                show_headers: true,
-            },
         );
 
         assert_eq!(displays.len(), 1);
@@ -475,10 +423,6 @@ mod tests {
             &vods,
             &[requested("v1", Some(5000), HistoryEntryState::InProgress)],
             None,
-            HistoryDisplayOptions {
-                resume_links: false,
-                show_headers: true,
-            },
         );
 
         assert_eq!(displays[0].watch_url, "/watch/v1?t=5000&game=Terraria");
@@ -497,10 +441,6 @@ mod tests {
             &vods,
             &[requested("v1", None, HistoryEntryState::InProgress)],
             None,
-            HistoryDisplayOptions {
-                resume_links: false,
-                show_headers: true,
-            },
         );
 
         assert_eq!(displays[0].status_label.as_deref(), Some("In progress"));
@@ -522,10 +462,6 @@ mod tests {
                 requested("v1", Some(5000), HistoryEntryState::InProgress),
             ],
             Some("recent"),
-            HistoryDisplayOptions {
-                resume_links: false,
-                show_headers: false,
-            },
         );
 
         assert_eq!(
@@ -552,10 +488,6 @@ mod tests {
                 requested("second", Some(100), HistoryEntryState::InProgress),
             ],
             Some("game"),
-            HistoryDisplayOptions {
-                resume_links: false,
-                show_headers: true,
-            },
         );
 
         assert_eq!(displays[0].id, "second");

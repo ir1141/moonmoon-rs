@@ -395,10 +395,6 @@ body.lp-page .continue-hero {
 .lp-btn-lg:active {
   transform: scale(0.98);
 }
-.lp-btn-lg svg {
-  width: 17px;
-  height: 17px;
-}
 /* Was a hardcoded rgba per theme; in light it blended to ~1.05:1 against the
    calhook gradient and read as nothing. --bg-elevated is darker than the card
    in both themes, so the button always has a body. */
@@ -469,9 +465,5 @@ body.lp-page .continue-hero {
 @media (prefers-reduced-motion: reduce) {
   .rail {
     scroll-behavior: auto;
-  }
-  .lp .vod-card,
-  .lp .game-card {
-    animation: none;
   }
 }

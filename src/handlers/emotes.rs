@@ -3,6 +3,8 @@ use axum::response::IntoResponse;
 use axum::response::Response;
 use serde::Serialize;
 
+use super::valid_vod_id;
+
 use crate::SharedState;
 use crate::emotes::parse;
 use crate::emotes::{Lookup, ResolvedEntry};
@@ -86,15 +88,6 @@ fn valid_emote_name(name: &str) -> bool {
         return false;
     }
     name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-}
-
-// Mirrors chat_proxy's vod_id charset gate. The endpoint is public, so we
-// validate independently of the client.
-fn valid_vod_id(id: &str) -> bool {
-    !id.is_empty()
-        && id
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
 }
 
 /// Proxy the archive's per-VOD emote snapshot, returning the same `{emotes}`

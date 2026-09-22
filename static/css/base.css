@@ -184,11 +184,6 @@ summary:focus-visible,
   transform: scale(0.97);
 }
 
-.btn-chip:focus-visible {
-  outline: 2px solid var(--accent-soft);
-  outline-offset: 2px;
-}
-
 /* Same 44px floor icon-btn and continue-btn already get. The 30px default is a
    pointer size, not a thumb size. */
 @media (pointer: coarse) {
@@ -355,11 +350,6 @@ summary:focus-visible,
   background: var(--bg-elevated);
   border-color: var(--accent);
   color: var(--text);
-}
-
-.filter-clear:focus-visible {
-  outline: 2px solid var(--accent-soft);
-  outline-offset: 2px;
 }
 
 .list-loading,

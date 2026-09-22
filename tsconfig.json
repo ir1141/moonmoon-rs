@@ -5,11 +5,9 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "noImplicitAny": false,
     "noEmit": true,
     "skipLibCheck": true,
     "strict": false,
-    "strictNullChecks": false,
     "target": "ES2022",
     "types": ["bun"]
   },

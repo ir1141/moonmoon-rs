@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
   shouldFinalizePlaybackAtTick,
   shouldSaveOnUnload,
-  shouldSaveResume,
 } from "../static/lib/player-completion.js";
 
 describe("shouldFinalizePlaybackAtTick", () => {
@@ -42,13 +41,6 @@ describe("shouldFinalizePlaybackAtTick", () => {
         currentTime: 98,
       }),
     ).toBe(true);
-  });
-});
-
-describe("shouldSaveResume", () => {
-  test("skips resume persistence once the VOD has completed", () => {
-    expect(shouldSaveResume({ completed: true })).toBe(false);
-    expect(shouldSaveResume({ completed: false })).toBe(true);
   });
 });
 

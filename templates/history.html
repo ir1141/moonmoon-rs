@@ -2,10 +2,7 @@
 
 {% block title %}Watch History{% endblock %}
 
-{% block search %}{% endblock %}
-
 {% block content %}
-<div class="games-view">
   <div class="games-toolbar">
     <div class="stats" id="history-stats"></div>
     <form id="history-filters" class="games-filters" data-list-filters>
@@ -17,6 +14,5 @@
     </form>
   </div>
   <div id="history-grid" class="vod-grid"></div>
-</div>
 <script type="module" src="/static/history.js" nonce="{{ nonce }}"></script>
 {% endblock %}

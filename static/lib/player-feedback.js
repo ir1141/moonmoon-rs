@@ -1,15 +1,3 @@
-export function chatLoadStatusText() {
-  return "Loading chat...";
-}
-
-export function chatEmptyStatusText() {
-  return "No chat at this timestamp";
-}
-
-export function chatErrorStatusText() {
-  return "Chat unavailable";
-}
-
 // Decides where chat fetch feedback renders: with no messages on screen the
 // chat body owns the state (skeleton / empty / error notice); once messages
 // are showing, feedback stays compact in the chat header.
@@ -26,14 +14,14 @@ export function chatFeedbackView(state, messageCount) {
   if (state === "loading") {
     return {
       notice: null,
-      headerText: chatLoadStatusText(),
+      headerText: "Loading chat...",
       headerRetry: false,
     };
   }
   if (state === "error") {
     return {
       notice: null,
-      headerText: chatErrorStatusText(),
+      headerText: "Chat unavailable",
       headerRetry: true,
     };
   }

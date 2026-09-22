@@ -1,24 +1,9 @@
 import { expect, test } from "bun:test";
 import {
-  chatEmptyStatusText,
-  chatErrorStatusText,
   chatFeedbackView,
-  chatLoadStatusText,
   nextPlayerFallbackState,
   playerFallbackText,
 } from "./player-feedback.js";
-
-test("chat status announces loading before requesting chat", () => {
-  expect(chatLoadStatusText()).toBe("Loading chat...");
-});
-
-test("empty chat result explains the current timestamp has no messages", () => {
-  expect(chatEmptyStatusText()).toBe("No chat at this timestamp");
-});
-
-test("chat failure exposes unavailable copy for the retry state", () => {
-  expect(chatErrorStatusText()).toBe("Chat unavailable");
-});
 
 test("with no messages the chat body owns loading, empty, and error states", () => {
   for (const state of ["loading", "empty", "error"]) {
