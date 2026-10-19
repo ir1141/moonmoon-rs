@@ -37,9 +37,10 @@ const THEME_LABELS: Record<string, string> = {
   Horror: "Horror",
   Survival: "Survival",
 };
-// "Roguelike" has no IGDB genre; it is only ever hand-tagged.
+// "Roguelike" and "MMORPG" have no IGDB genre; they are only ever hand-tagged.
 const LABEL_ORDER = [
   "RPG",
+  "MMORPG",
   "Strategy",
   "Action",
   "Shooter",
