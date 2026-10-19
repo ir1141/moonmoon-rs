@@ -1,9 +1,10 @@
-use super::{Vod, upscale_chapter_image};
+use super::{Vod, genres_for, upscale_chapter_image};
 
 #[derive(Debug, Clone)]
 pub struct Game {
     pub name: String,
     pub image: Option<String>,
+    pub genres: &'static [String],
     pub vod_count: usize,
     pub dominant_stream_count: usize,
     pub first_streamed: Option<String>,
@@ -37,6 +38,7 @@ pub fn build_games(vods: &[Vod]) -> Vec<Game> {
                     let entry = games.entry(key).or_insert_with(|| Game {
                         name: name.clone(),
                         image: None,
+                        genres: genres_for(name),
                         vod_count: 0,
                         dominant_stream_count: 0,
                         first_streamed: None,
@@ -54,6 +56,7 @@ pub fn build_games(vods: &[Vod]) -> Vec<Game> {
             let entry = games.entry(key).or_insert_with(|| Game {
                 name: dominant.name.clone(),
                 image: dominant.image.clone(),
+                genres: genres_for(&dominant.name),
                 vod_count: 0,
                 dominant_stream_count: 0,
                 first_streamed: None,
@@ -85,6 +88,7 @@ where
         let entry = games.entry(key).or_insert_with(|| Game {
             name: dominant.name.clone(),
             image: dominant.image.clone(),
+            genres: genres_for(&dominant.name),
             vod_count: 0,
             dominant_stream_count: 0,
             first_streamed: None,
@@ -243,6 +247,18 @@ mod tests {
             start,
             duration,
             end,
+        }
+    }
+
+    #[test]
+    fn built_games_carry_genres_from_the_mapping_in_both_builders() {
+        let vods = vec![vod_with(
+            3600,
+            vec![ch("ELDEN RING", Some(0.0), Some(3600.0), None)],
+        )];
+        for games in [build_games(&vods), build_dominant_games(&vods)] {
+            assert_eq!(games[0].genres, genres_for("elden ring"));
+            assert!(games[0].genres.iter().any(|g| g == "RPG"));
         }
     }
 

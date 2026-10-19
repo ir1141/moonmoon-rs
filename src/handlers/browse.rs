@@ -5,9 +5,9 @@ use axum::extract::{Extension, Path, Query, RawQuery, State};
 use axum::response::{IntoResponse, Redirect, Response};
 
 use super::{
-    GAME_BATCH_SIZE, GamesGridTemplate, Headers, ListFilterConfig, ListMetadata, ListQuery,
-    Listing, Pagination, Section, VOD_BATCH_SIZE, VodDisplay, VodsGridTemplate, build_next_url,
-    date_preset_state, filter_games_with_metadata, filter_vods_with_metadata,
+    GAME_BATCH_SIZE, GamesGridTemplate, GenreOption, Headers, ListFilterConfig, ListMetadata,
+    ListQuery, Listing, Pagination, Section, VOD_BATCH_SIZE, VodDisplay, VodsGridTemplate,
+    build_next_url, date_preset_state, filter_games_with_metadata, filter_vods_with_metadata,
     list_sort_options_grouped, paginate, render_template, selected_sort_option,
 };
 use crate::SharedState;
@@ -46,12 +46,13 @@ fn resolve_lens(lens: Option<&str>, game: Option<&str>) -> Lens {
     }
 }
 
-/// `&search=…&from=…&to=…` for the values that survive a lens switch (sort and
+/// `&search=…&genre=…&from=…&to=…` for the values that survive a lens switch (sort and
 /// game are intentionally dropped). Empty when nothing is carried.
 fn carry_filters(params: &ListQuery) -> String {
     let mut out = String::new();
     for (key, value) in [
         ("search", &params.search),
+        ("genre", &params.genre),
         ("from", &params.from),
         ("to", &params.to),
     ] {
@@ -100,6 +101,7 @@ struct PreparedBrowse {
     next_url: String,
     archive_min_date: String,
     archive_max_date: String,
+    genres: Vec<String>,
     show_recency: bool,
     show_oldest_recency: bool,
     show_game_tags: bool,
@@ -142,6 +144,7 @@ async fn prepare_browse(
                 next_url,
                 archive_min_date,
                 archive_max_date,
+                genres: catalog.genres.clone(),
                 show_recency: matches!(sort, "recent" | "oldest"),
                 show_oldest_recency: sort == "oldest",
                 show_game_tags: false,
@@ -205,6 +208,7 @@ async fn prepare_browse(
                 next_url: listing.next_url,
                 archive_min_date,
                 archive_max_date,
+                genres: catalog.genres.clone(),
                 show_recency: false,
                 show_oldest_recency: false,
                 show_game_tags: game.is_none(),
@@ -245,6 +249,16 @@ fn resolve_browse_params(params: &mut ListQuery) -> (Option<String>, Lens, bool,
         .unwrap_or_else(|| default_sort.to_string());
     params.sort = Some(sort.clone());
     (game, lens, is_games, sort)
+}
+
+fn genre_options(genres: Vec<String>, selected: Option<&str>) -> Vec<GenreOption> {
+    genres
+        .into_iter()
+        .map(|value| GenreOption {
+            selected: selected.is_some_and(|s| s.eq_ignore_ascii_case(&value)),
+            value,
+        })
+        .collect()
 }
 
 pub async fn browse_page(
@@ -316,6 +330,7 @@ pub async fn browse_page(
             archive_max_date: prepared.archive_max_date,
             date_preset: date_state.active,
             show_custom_dates: date_state.show_custom,
+            genre_options: genre_options(prepared.genres, params.genre.as_deref()),
         },
         search: params.search.clone(),
         from: params.from.clone(),
@@ -459,6 +474,15 @@ mod tests {
         assert!(out.contains("&search=dark%20souls"));
         assert!(out.contains("&from=2026-01-01"));
         assert!(!out.contains("to="));
+    }
+
+    #[test]
+    fn carry_filters_keeps_genre_across_lens_switch() {
+        let params = ListQuery {
+            genre: Some("RPG".into()),
+            ..Default::default()
+        };
+        assert_eq!(carry_filters(&params), "&genre=RPG");
     }
 
     #[test]

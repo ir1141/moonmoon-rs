@@ -147,3 +147,18 @@ async fn sync_put_then_get_roundtrips_through_the_router() {
 
     let _ = std::fs::remove_file(&path);
 }
+
+#[tokio::test]
+async fn browse_accepts_a_genre_filter_on_both_lenses() {
+    for uri in [
+        "/browse?lens=games&genre=RPG",
+        "/browse?lens=streams&genre=RPG",
+        "/browse/grid?lens=streams&genre=RPG&page=1",
+    ] {
+        let resp = moonmoon::build_router(empty_state())
+            .oneshot(request("GET", uri, Body::empty()))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK, "{uri}");
+    }
+}

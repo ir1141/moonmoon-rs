@@ -36,6 +36,20 @@
       {% let sort_menu_id = "browse-sort-menu" %}
       {% include "_sort_control.html" %}
     </div>
+    {% if !filter.genre_options.is_empty() %}
+    <div class="toolbar-genre-wrap">
+      <label class="toolbar-label" for="{{ filter.form_id }}-genre">Genre</label>
+      <select id="{{ filter.form_id }}-genre" name="genre" class="toolbar-genre"
+              hx-get="{{ filter.hx_get }}" hx-trigger="change"
+              hx-select="#{{ filter.results_id }}" hx-target="#{{ filter.results_id }}" hx-swap="outerHTML"
+              hx-push-url="true" hx-include="#{{ filter.form_id }}" hx-indicator="#{{ filter.loading_id }}">
+        <option value="">All genres</option>
+        {% for option in filter.genre_options %}
+        <option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
     <div class="toolbar-dates">
       <span class="toolbar-label">Aired</span>
       <div class="date-presets" role="group" aria-label="Filter by air date">

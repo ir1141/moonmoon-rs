@@ -70,6 +70,7 @@
 .toolbar-search:focus-visible,
 .toolbar-sort:focus-visible,
 .toolbar-date:focus-visible,
+.toolbar-genre:focus-visible,
 .filter-clear:focus-visible,
 .vod-card .thumb-link:focus-visible,
 .vod-card .card-body:focus-visible,
@@ -235,7 +236,14 @@
   font-weight: 600;
 }
 
-.toolbar-date {
+.toolbar-genre-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-date,
+.toolbar-genre {
   font-family: var(--font-body);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
@@ -248,7 +256,8 @@
   accent-color: var(--accent);
   transition: border-color 0.2s;
 }
-.toolbar-date:focus {
+.toolbar-date:focus,
+.toolbar-genre:focus {
   border-color: var(--accent);
 }
 

@@ -2,12 +2,14 @@ use serde::{Deserialize, Serialize};
 
 mod catalog;
 mod games;
+mod genres;
 
 pub use catalog::CatalogLoad;
 pub(crate) use catalog::{CatalogSnapshot, next_refresh_delay};
 pub use catalog::{RefreshOutcome, load_catalog, refresh_in_place};
 pub use games::{Game, build_dominant_games, build_games};
 pub(crate) use games::{chapter_color_idx, month_abbr, month_abbr_num};
+pub use genres::genres_for;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Vod {
@@ -70,6 +72,17 @@ impl Vod {
                 ch.name
                     .as_deref()
                     .is_some_and(|n| n.eq_ignore_ascii_case(game_name))
+            })
+        })
+    }
+
+    /// Whether any chapter of this VOD is a game tagged with `genre` (case-insensitive).
+    pub fn has_genre(&self, genre: &str) -> bool {
+        self.chapters.as_ref().is_some_and(|chapters| {
+            chapters.iter().any(|ch| {
+                ch.name
+                    .as_deref()
+                    .is_some_and(|n| genres_for(n).iter().any(|g| g.eq_ignore_ascii_case(genre)))
             })
         })
     }

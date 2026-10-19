@@ -79,6 +79,7 @@ pub struct ListQuery {
     pub page: Option<usize>,
     pub lens: Option<String>,
     pub game: Option<String>,
+    pub genre: Option<String>,
 }
 
 // ─── Display types ───
@@ -103,6 +104,11 @@ pub(crate) struct SortOption {
     pub separator_before: bool,
 }
 
+pub(crate) struct GenreOption {
+    pub value: String,
+    pub selected: bool,
+}
+
 pub(crate) struct ListFilterConfig {
     pub form_id: &'static str,
     pub toolbar_class: &'static str,
@@ -120,6 +126,7 @@ pub(crate) struct ListFilterConfig {
     pub archive_max_date: String,
     pub date_preset: &'static str,
     pub show_custom_dates: bool,
+    pub genre_options: Vec<GenreOption>,
 }
 
 pub(crate) fn list_sort_options_grouped(
@@ -365,7 +372,7 @@ pub(crate) fn filter_games_with_metadata<'a>(
     } else {
         games.iter().map(Cow::Borrowed).collect()
     };
-    let filtered = filter_and_sort_games(candidates, &params.search, sort);
+    let filtered = filter_and_sort_games(candidates, params, sort);
 
     let filtered_count = filtered.len();
     let metadata = build_list_metadata_for_kind(
@@ -385,12 +392,15 @@ pub(crate) fn filter_games_with_metadata<'a>(
 
 fn filter_and_sort_games<'a>(
     mut filtered: Vec<std::borrow::Cow<'a, Game>>,
-    search: &Option<String>,
+    params: &ListQuery,
     sort: &str,
 ) -> Vec<std::borrow::Cow<'a, Game>> {
-    if let Some(search) = normalized_filter_value(search) {
+    if let Some(search) = normalized_filter_value(&params.search) {
         let search_lower = search.to_lowercase();
         filtered.retain(|g| g.name.to_lowercase().contains(&search_lower));
+    }
+    if let Some(genre) = normalized_filter_value(&params.genre) {
+        filtered.retain(|g| g.genres.iter().any(|x| x.eq_ignore_ascii_case(&genre)));
     }
 
     match sort {
@@ -555,6 +565,10 @@ pub(crate) fn filter_vods_with_metadata<'a>(
         });
     }
 
+    if let Some(genre) = normalized_filter_value(&params.genre) {
+        refs.retain(|r| r.vod.has_genre(&genre));
+    }
+
     if let Some(from) = date_filter_lower_bound(&params.from) {
         refs.retain(|r| vod_date(r.vod) >= from.as_str());
     }
@@ -666,6 +680,12 @@ fn build_list_metadata_for_kind(
     if let Some(search) = search.as_ref() {
         active_filters.push(ActiveFilter {
             label: format!("Search: {search}"),
+        });
+    }
+
+    if let Some(genre) = normalized_filter_value(&params.genre) {
+        active_filters.push(ActiveFilter {
+            label: format!("Genre: {genre}"),
         });
     }
 
@@ -881,6 +901,11 @@ pub(crate) fn build_next_url(base: &str, page: usize, params: &ListQuery) -> Str
         && !s.is_empty()
     {
         parts.push(format!("search={}", urlencoding::encode(s)));
+    }
+    if let Some(ref s) = params.genre
+        && !s.is_empty()
+    {
+        parts.push(format!("genre={}", urlencoding::encode(s)));
     }
     if let Some(ref s) = params.sort {
         parts.push(format!("sort={}", urlencoding::encode(s)));
@@ -1225,6 +1250,64 @@ mod tests {
                 .map(|game| (game.name.as_str(), game.vod_count))
                 .collect::<Vec<_>>(),
             vec![("Alpha Zero", 1), ("Alpha Quest", 2)]
+        );
+    }
+
+    #[test]
+    fn games_genre_filter_keeps_multi_genre_games_and_whole_archive_baseline() {
+        let vods = vec![
+            make_vod("elden", "2026-05-20T10:00:00Z", &["Elden Ring"]),
+            make_vod("hades", "2026-05-20T11:00:00Z", &["Hades"]),
+            make_vod("chat", "2026-05-20T12:00:00Z", &["Just Chatting"]),
+        ];
+        let all_games = crate::vods::build_games(&vods);
+        let names = |genre: &str| {
+            let params = ListQuery {
+                genre: Some(genre.into()),
+                ..Default::default()
+            };
+            let filtered = filter_games_with_metadata(&all_games, &vods, &params, "/games", "az");
+            assert_eq!(filtered.metadata.unfiltered_count, 3);
+            filtered
+                .games
+                .iter()
+                .map(|g| g.name.clone())
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(names("rpg"), vec!["Elden Ring", "Hades"]);
+        assert_eq!(names("Adventure"), vec!["Elden Ring"]);
+        assert_eq!(names("Action"), vec!["Hades"]);
+    }
+
+    #[test]
+    fn streams_genre_filter_matches_any_chapter_and_shows_a_chip() {
+        let vods = [
+            make_vod(
+                "chat-then-elden",
+                "2026-05-20T10:00:00Z",
+                &["Just Chatting", "Elden Ring"],
+            ),
+            make_vod("chat-only", "2026-05-20T11:00:00Z", &["Just Chatting"]),
+        ];
+        let params = ListQuery {
+            genre: Some("RPG".into()),
+            ..Default::default()
+        };
+
+        let (refs, metadata) = filter_vods_with_metadata(vods.iter(), &params, "newest", "/browse");
+
+        assert_eq!(
+            refs.iter().map(|r| r.vod.id.as_str()).collect::<Vec<_>>(),
+            vec!["chat-then-elden"]
+        );
+        assert_eq!(metadata.unfiltered_count, 2);
+        assert!(metadata.is_filtered);
+        assert!(
+            metadata
+                .active_filters
+                .iter()
+                .any(|f| f.label == "Genre: RPG")
         );
     }
 
@@ -1630,6 +1713,16 @@ mod tests {
         assert!(url.contains("page=2"));
         assert!(url.contains("lens=streams"));
         assert!(url.contains("game=Elden%20Ring"));
+    }
+
+    #[test]
+    fn build_next_url_carries_genre() {
+        let params = ListQuery {
+            genre: Some("Card & Board".into()),
+            ..Default::default()
+        };
+        let url = build_next_url("/browse/grid", 1, &params);
+        assert!(url.contains("genre=Card%20%26%20Board"), "{url}");
     }
 
     #[test]

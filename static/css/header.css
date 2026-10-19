@@ -404,8 +404,16 @@
   .vod-toolbar .toolbar-search,
   .games-toolbar .toolbar-search,
   .vod-toolbar .toolbar-sort,
-  .games-toolbar .toolbar-sort {
+  .games-toolbar .toolbar-sort,
+  .vod-toolbar .toolbar-genre-wrap,
+  .games-toolbar .toolbar-genre-wrap {
     width: 100%;
+  }
+
+  .vod-toolbar .toolbar-genre,
+  .games-toolbar .toolbar-genre {
+    flex: 1 1 0;
+    min-width: 0;
   }
 
   .vod-toolbar .toolbar-dates,

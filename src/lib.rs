@@ -37,6 +37,8 @@ pub use vods::CatalogLoad;
 pub struct Catalog {
     pub vods: Vec<vods::Vod>,
     pub games: Vec<vods::Game>,
+    /// Distinct genre labels across `games`, sorted; feeds the genre filter.
+    pub genres: Vec<String>,
     pub(crate) snapshot: vods::CatalogSnapshot,
     /// (min, max) `YYYY-MM-DD` stream dates across the catalog; only changes
     /// on refresh, so it's computed once per catalog swap instead of per
@@ -49,10 +51,18 @@ impl Catalog {
     /// derived from the same `vods` they're stored with.
     pub fn build(load: CatalogLoad) -> Self {
         let games = vods::build_games(&load.vods);
+        let genres = games
+            .iter()
+            .flat_map(|g| g.genres)
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
         let date_bounds = vods::archive_date_bounds(&load.vods);
         Self {
             vods: load.vods,
             games,
+            genres,
             snapshot: load.snapshot,
             date_bounds,
         }
