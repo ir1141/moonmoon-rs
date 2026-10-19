@@ -1277,7 +1277,7 @@ mod tests {
 
         assert_eq!(names("rpg"), vec!["Elden Ring", "Hades"]);
         assert_eq!(names("Adventure"), vec!["Elden Ring"]);
-        assert_eq!(names("Action"), vec!["Hades"]);
+        assert_eq!(names("Roguelike"), vec!["Hades"]);
     }
 
     #[test]
