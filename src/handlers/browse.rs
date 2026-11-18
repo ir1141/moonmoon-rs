@@ -379,16 +379,25 @@ pub async fn browse_grid(
 }
 
 /// Build the `/browse` URL an old route redirects to, preserving its original
-/// query string verbatim.
+/// query string except the keys the route itself sets: `ListQuery` rejects a
+/// repeated key, so `/games?lens=streams` must not become `lens=games&lens=streams`.
 fn browse_redirect_target(lens: &str, game: Option<&str>, raw_query: Option<&str>) -> String {
     let mut url = format!("/browse?lens={lens}");
     if let Some(g) = game {
         url.push_str("&game=");
         url.push_str(&urlencoding::encode(g));
     }
-    if let Some(q) = raw_query.filter(|q| !q.is_empty()) {
+    let owned = |pair: &str| {
+        let key = pair.split('=').next().unwrap_or_default();
+        key == "lens" || (game.is_some() && key == "game")
+    };
+    for pair in raw_query
+        .unwrap_or_default()
+        .split('&')
+        .filter(|p| !p.is_empty() && !owned(p))
+    {
         url.push('&');
-        url.push_str(q);
+        url.push_str(pair);
     }
     url
 }
@@ -502,6 +511,22 @@ mod tests {
         assert_eq!(
             browse_redirect_target("streams", Some("C++"), None),
             "/browse?lens=streams&game=C%2B%2B"
+        );
+        assert_eq!(
+            browse_redirect_target("games", None, Some("lens=streams&search=x")),
+            "/browse?lens=games&search=x"
+        );
+        assert_eq!(
+            browse_redirect_target("streams", None, Some("game=Elden%20Ring")),
+            "/browse?lens=streams&game=Elden%20Ring"
+        );
+        assert_eq!(
+            browse_redirect_target(
+                "streams",
+                Some("A"),
+                Some("game=B&lens=games&to=2026-01-01")
+            ),
+            "/browse?lens=streams&game=A&to=2026-01-01"
         );
     }
 }

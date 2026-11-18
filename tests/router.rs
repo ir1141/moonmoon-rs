@@ -184,3 +184,30 @@ async fn manual_refresh_within_cooldown_is_rejected_with_retry_after() {
         .unwrap();
     assert!((1..=60).contains(&retry_after), "{retry_after}");
 }
+
+#[tokio::test]
+async fn legacy_redirects_with_their_own_lens_or_game_param_still_resolve() {
+    for uri in [
+        "/games?lens=streams",
+        "/streams?lens=games&search=elden",
+        "/game/Elden%20Ring?game=Other&sort=oldest",
+    ] {
+        let app = moonmoon::build_router(empty_state());
+        let resp = app
+            .oneshot(request("GET", uri, Body::empty()))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::TEMPORARY_REDIRECT, "{uri}");
+        let location = resp.headers()[header::LOCATION]
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let app = moonmoon::build_router(empty_state());
+        let followed = app
+            .oneshot(request("GET", &location, Body::empty()))
+            .await
+            .unwrap();
+        assert_eq!(followed.status(), StatusCode::OK, "{uri} -> {location}");
+    }
+}
