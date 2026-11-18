@@ -41,33 +41,34 @@ type EmoteParser = fn(&serde_json::Value) -> HashMap<String, EmoteRecord>;
 /// concurrently, so this also bounds a whole prefetch.
 const ENDPOINT_TIMEOUT: Duration = Duration::from_secs(15);
 
-/// The 6 prefetched endpoints (3 providers × {global, channel}). Order is
-/// merge priority: on a name collision the earlier endpoint wins.
+/// The 6 prefetched endpoints (3 providers × {channel, global}). Order is
+/// merge priority: on a name collision the earlier endpoint wins, so every
+/// channel set outranks every global one, as on Twitch.
 fn endpoints() -> Vec<(String, EmoteParser)> {
     let user_id = MOONMOON_TWITCH_ID;
     vec![
         (
-            "https://7tv.io/v3/emote-sets/global".to_string(),
-            parse::parse_seventv_global,
-        ),
-        (
             format!("https://7tv.io/v3/users/twitch/{user_id}"),
             parse::parse_seventv_user,
-        ),
-        (
-            "https://api.betterttv.net/3/cached/emotes/global".to_string(),
-            parse::parse_bttv_global,
         ),
         (
             format!("https://api.betterttv.net/3/cached/users/twitch/{user_id}"),
             parse::parse_bttv_user,
         ),
         (
-            "https://api.frankerfacez.com/v1/set/global".to_string(),
+            format!("https://api.frankerfacez.com/v1/room/id/{user_id}"),
             parse::parse_ffz,
         ),
         (
-            format!("https://api.frankerfacez.com/v1/room/id/{user_id}"),
+            "https://7tv.io/v3/emote-sets/global".to_string(),
+            parse::parse_seventv_global,
+        ),
+        (
+            "https://api.betterttv.net/3/cached/emotes/global".to_string(),
+            parse::parse_bttv_global,
+        ),
+        (
+            "https://api.frankerfacez.com/v1/set/global".to_string(),
             parse::parse_ffz,
         ),
     ]
@@ -269,6 +270,15 @@ mod tests {
         assert!(sets[0].is_none());
         assert!(sets[1].as_ref().unwrap().contains_key("Kappa"));
         assert!(sets[2].is_none());
+    }
+
+    #[test]
+    fn channel_sets_outrank_global_sets() {
+        let urls: Vec<String> = endpoints().into_iter().map(|(u, _)| u).collect();
+        let is_global = |u: &String| u.contains("global");
+        let first_global = urls.iter().position(is_global).unwrap();
+        assert_eq!(first_global, 3, "{urls:?}");
+        assert!(urls[first_global..].iter().all(is_global), "{urls:?}");
     }
 
     #[test]
