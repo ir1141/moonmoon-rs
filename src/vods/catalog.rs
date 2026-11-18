@@ -115,6 +115,7 @@ impl CatalogLoad {
     }
 
     fn from_raw_vods(snapshot: CatalogSnapshot, mut vods: Vec<Vod>) -> Self {
+        dedupe_by_id(&mut vods);
         filter_playable_vods(&mut vods);
         backfill_thumbnails(&mut vods);
 
@@ -306,6 +307,21 @@ impl VodSource for HttpArchive<'_> {
     }
 }
 
+/// Offset pagination shifts when a VOD lands mid-fetch, repeating a row across
+/// two pages. Keep the first copy.
+fn dedupe_by_id(vods: &mut Vec<Vod>) {
+    let mut seen = std::collections::HashSet::new();
+    vods.retain(|v| seen.insert(v.id.clone()));
+}
+
+/// A reload that returns under half the current catalog is far more likely an
+/// upstream hiccup (an empty or truncated listing served as 200) than real
+/// deletions, so it is refused rather than swapped in. A restart still accepts
+/// whatever upstream serves.
+fn accept_reload(current: usize, reloaded: usize) -> bool {
+    reloaded.saturating_mul(2) >= current
+}
+
 /// Upstream doesn't expose `thumbnail_url` at the VOD level — only on each
 /// `vod_uploads` entry. Lift it from the first upload so templates and
 /// `VodDisplay` can keep reading `vod.thumbnail_url` directly.
@@ -412,6 +428,15 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
             RefreshOutcome::Unchanged(count)
         }
         RefreshPlan::Refresh(catalog) => {
+            let current = state.catalog.read().await.vods.len();
+            if !accept_reload(current, catalog.vods.len()) {
+                let msg = format!(
+                    "refusing reload: {} vods would replace {current}",
+                    catalog.vods.len()
+                );
+                tracing::error!("refresh: {msg}");
+                return RefreshOutcome::Error(msg);
+            }
             let new_catalog = std::sync::Arc::new(crate::Catalog::build(catalog));
             let count = new_catalog.vods.len();
             *state.catalog.write().await = new_catalog;
@@ -426,6 +451,32 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
 mod tests {
     use super::*;
     use crate::vods::{VodDuration, YoutubeVideo};
+
+    #[test]
+    fn duplicate_rows_across_pages_are_kept_once() {
+        let json = r#"{"meta":{"total":3},"data":[
+            {"id":1,"title":"first","created_at":"2026-01-02T00:00:00Z"},
+            {"id":2,"title":"second","created_at":"2026-01-01T00:00:00Z"},
+            {"id":1,"title":"repeat","created_at":"2026-01-02T00:00:00Z"}
+        ]}"#;
+        let mut vods = serde_json::from_str::<ApiResponse>(json).unwrap().data;
+        dedupe_by_id(&mut vods);
+        let kept: Vec<_> = vods
+            .iter()
+            .map(|v| (v.id.as_str(), v.title.as_deref()))
+            .collect();
+        assert_eq!(kept, vec![("1", Some("first")), ("2", Some("second"))]);
+    }
+
+    #[test]
+    fn reload_shrinking_below_half_is_refused() {
+        assert!(accept_reload(0, 0));
+        assert!(accept_reload(1500, 1500));
+        assert!(accept_reload(1500, 750));
+        assert!(!accept_reload(1500, 749));
+        assert!(!accept_reload(1500, 0));
+        assert!(accept_reload(10, 2000));
+    }
 
     #[test]
     fn api_response_skips_malformed_rows() {
