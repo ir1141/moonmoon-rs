@@ -54,9 +54,15 @@ pub async fn sync_put(
         Err(_) => return (StatusCode::BAD_REQUEST, "invalid json").into_response(),
     };
     // `stored_at` in the body is ignored — SyncStore::put stamps it.
-    if let Err(e) = state.sync_store.put(token, blob).await {
-        tracing::error!("sync put failed: {e}");
-        return (StatusCode::INTERNAL_SERVER_ERROR, "store error").into_response();
+    match state.sync_store.put(token, blob).await {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::StorageFull => {
+            return (StatusCode::INSUFFICIENT_STORAGE, "sync store full").into_response();
+        }
+        Err(e) => {
+            tracing::error!("sync put failed: {e}");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "store error").into_response();
+        }
     }
     StatusCode::NO_CONTENT.into_response()
 }

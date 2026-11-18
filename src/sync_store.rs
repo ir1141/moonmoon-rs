@@ -46,35 +46,44 @@ fn blob_len(blob: &SyncBlob) -> usize {
     blob.blob.get().len()
 }
 
-/// Oldest-stored tokens to drop so that `map` plus the incoming blob fits
-/// within `limits`. Replacing an existing token frees its old size first.
+/// Entries written within this window are never evicted, so a flood of new
+/// tokens can block new sign-ups but can't erase active users' history.
+const EVICTABLE_AFTER_SECS: i64 = 30 * 24 * 60 * 60;
+
+/// Tokens to drop so that `map` plus the incoming blob fits within `limits`,
+/// oldest-stored first and only those stored before `evictable_before`.
+/// `None` when even that can't make room. Replacing an existing token frees
+/// its old size first.
 fn tokens_to_evict(
     map: &HashMap<String, SyncBlob>,
     incoming: &str,
     incoming_len: usize,
     limits: Limits,
-) -> Vec<String> {
+    evictable_before: i64,
+) -> Option<Vec<String>> {
     let mut others: Vec<(&String, &SyncBlob)> =
         map.iter().filter(|(token, _)| *token != incoming).collect();
     let mut entries = others.len() + 1;
     let mut bytes = incoming_len + others.iter().map(|(_, b)| blob_len(b)).sum::<usize>();
+    let fits = |entries: usize, bytes: usize| entries <= limits.entries && bytes <= limits.bytes;
     others.sort_by_key(|(_, b)| b.stored_at);
     let mut evict = Vec::new();
     for (token, blob) in others {
-        if entries <= limits.entries && bytes <= limits.bytes {
+        if fits(entries, bytes) || blob.stored_at >= evictable_before {
             break;
         }
         entries -= 1;
         bytes -= blob_len(blob);
         evict.push(token.clone());
     }
-    evict
+    fits(entries, bytes).then_some(evict)
 }
 
 pub struct SyncStore {
     path: PathBuf,
     /// Single Mutex covers both the map and the on-disk file — see `put`.
     inner: Mutex<HashMap<String, SyncBlob>>,
+    limits: Limits,
 }
 
 /// Read and parse the on-disk map. Returns the underlying `io::Error`
@@ -112,6 +121,7 @@ impl SyncStore {
         Self {
             path,
             inner: Mutex::new(HashMap::new()),
+            limits: LIMITS,
         }
     }
 
@@ -137,6 +147,7 @@ impl SyncStore {
         Self {
             path,
             inner: Mutex::new(map),
+            limits: LIMITS,
         }
     }
 
@@ -152,16 +163,32 @@ impl SyncStore {
     /// `stored_at` is stamped here, not by callers: it's the eviction key,
     /// and the store owning it is what keeps a client-supplied value (e.g.
     /// `i64::MAX`) from gaming eviction order.
+    ///
+    /// Fails with `ErrorKind::StorageFull` when the store is at capacity and
+    /// nothing is old enough to evict.
     pub async fn put(&self, token: String, mut blob: SyncBlob) -> std::io::Result<()> {
-        blob.stored_at = std::time::SystemTime::now()
+        let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs() as i64;
+        blob.stored_at = now;
         let mut g = self.inner.lock().await;
-        let evict = tokens_to_evict(&g, &token, blob_len(&blob), LIMITS);
+        let Some(evict) = tokens_to_evict(
+            &g,
+            &token,
+            blob_len(&blob),
+            self.limits,
+            now - EVICTABLE_AFTER_SECS,
+        ) else {
+            tracing::warn!("sync store full with no evictable entries; rejecting put");
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::StorageFull,
+                "sync store full",
+            ));
+        };
         if !evict.is_empty() {
             tracing::warn!(
-                "sync store at capacity; evicting {} oldest token(s)",
+                "sync store at capacity; evicting {} stale token(s)",
                 evict.len()
             );
             for t in &evict {
@@ -245,6 +272,8 @@ mod tests {
             .collect()
     }
 
+    const ALL_STALE: i64 = i64::MAX;
+
     #[test]
     fn eviction_at_entry_cap_drops_oldest_stored() {
         let map = map_of(&[("OLD", sized(10, 100)), ("NEW", sized(10, 200))]);
@@ -252,13 +281,22 @@ mod tests {
             entries: 2,
             bytes: usize::MAX,
         };
-        assert_eq!(tokens_to_evict(&map, "FRESH", 10, limits), vec!["OLD"]);
+        assert_eq!(
+            tokens_to_evict(&map, "FRESH", 10, limits, ALL_STALE),
+            Some(vec!["OLD".to_string()])
+        );
         let roomy = Limits {
             entries: 3,
             bytes: usize::MAX,
         };
-        assert!(tokens_to_evict(&map, "FRESH", 10, roomy).is_empty());
-        assert!(tokens_to_evict(&map, "OLD", 10, limits).is_empty());
+        assert_eq!(
+            tokens_to_evict(&map, "FRESH", 10, roomy, ALL_STALE),
+            Some(vec![])
+        );
+        assert_eq!(
+            tokens_to_evict(&map, "OLD", 10, limits, ALL_STALE),
+            Some(vec![])
+        );
     }
 
     #[test]
@@ -272,7 +310,10 @@ mod tests {
             entries: usize::MAX,
             bytes: 120,
         };
-        assert_eq!(tokens_to_evict(&map, "FRESH", 70, limits), vec!["A", "B"]);
+        assert_eq!(
+            tokens_to_evict(&map, "FRESH", 70, limits, ALL_STALE),
+            Some(vec!["A".to_string(), "B".to_string()])
+        );
     }
 
     #[test]
@@ -282,8 +323,50 @@ mod tests {
             entries: usize::MAX,
             bytes: 100,
         };
-        assert!(tokens_to_evict(&map, "B", 60, limits).is_empty());
-        assert_eq!(tokens_to_evict(&map, "B", 61, limits), vec!["A"]);
+        assert_eq!(
+            tokens_to_evict(&map, "B", 60, limits, ALL_STALE),
+            Some(vec![])
+        );
+        assert_eq!(
+            tokens_to_evict(&map, "B", 61, limits, ALL_STALE),
+            Some(vec!["A".to_string()])
+        );
+    }
+
+    #[test]
+    fn eviction_never_drops_recently_stored_entries() {
+        let map = map_of(&[("STALE", sized(40, 100)), ("RECENT", sized(40, 500))]);
+        let limits = Limits {
+            entries: usize::MAX,
+            bytes: 100,
+        };
+        assert_eq!(
+            tokens_to_evict(&map, "FRESH", 40, limits, 200),
+            Some(vec!["STALE".to_string()])
+        );
+        assert_eq!(tokens_to_evict(&map, "FRESH", 70, limits, 200), None);
+    }
+
+    #[tokio::test]
+    async fn flood_of_new_tokens_is_rejected_without_evicting_active_users() {
+        let dir = TempDir::new();
+        let mut s = SyncStore::new_in_memory(dir.join("sync.json"));
+        s.limits = Limits {
+            entries: usize::MAX,
+            bytes: 1000,
+        };
+        s.put("ACTIVE".into(), blob("mine", 1)).await.unwrap();
+        let big = sized(100, 0);
+        let mut rejected = 0;
+        for i in 0..20 {
+            match s.put(format!("FLOOD{i}"), big.clone()).await {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::StorageFull => rejected += 1,
+                Err(e) => panic!("unexpected error: {e}"),
+            }
+        }
+        assert!(rejected > 0);
+        assert_eq!(resume_v(&s.get("ACTIVE").await.unwrap()), "mine");
     }
 
     #[test]
