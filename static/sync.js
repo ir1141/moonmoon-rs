@@ -10,6 +10,7 @@ import { createSyncSession } from "./lib/sync-session.js";
 // goes through the lib/storage.js guards against this handle.
 var storage = safeLocalStorage();
 var INITIAL_PULL_TIMEOUT_MS = 3_000;
+var KEEPALIVE_MAX_BYTES = 60 * 1024;
 
 function generateToken() {
   return generateTokenPure(function (n) {
@@ -37,12 +38,17 @@ var transport = {
         clearTimeout(timeout);
       });
   },
-  push: function (token, body) {
+  push: function (token, body, options) {
+    var payload = JSON.stringify(body);
     return fetch("/api/sync/" + encodeURIComponent(token), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      keepalive: true,
+      body: payload,
+      // Browsers reject keepalive bodies over 64 KiB outright, so only use
+      // it where it's needed (a page being hidden) and where it fits.
+      keepalive:
+        !!(options && options.keepalive) &&
+        new Blob([payload]).size < KEEPALIVE_MAX_BYTES,
     }).then(function (res) {
       if (!res.ok) throw new Error("HTTP " + res.status);
     });

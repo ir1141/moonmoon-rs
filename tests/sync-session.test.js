@@ -129,8 +129,8 @@ function createTransport(initial = null) {
       pulls.push(token);
       return remote;
     },
-    async push(token, body) {
-      pushes.push({ token, body });
+    async push(token, body, options) {
+      pushes.push({ token, body, options });
       remote = body;
     },
   };
@@ -227,5 +227,100 @@ describe("Sync session inbound freshness", () => {
     runtime.setVisible(true);
     await runtime.emitDocument("visibilitychange");
     expect(transport.pulls).toHaveLength(3);
+  });
+});
+
+describe("Sync session multi-device convergence", () => {
+  test("a push carries entries another device pushed since the last pull", async () => {
+    const storage = createStorage({
+      [TOKEN_KEY]: TOKEN,
+      [HISTORY_KEY]: JSON.stringify(history(100, 1_000)),
+    });
+    const runtime = createRuntime();
+    const transport = createTransport();
+    const session = createSyncSession({ storage, runtime, transport });
+    await session.start();
+
+    transport.setRemote({
+      blob: {
+        v: 2,
+        history: {
+          "vod-7": { state: "in_progress", time: 500, updated: 2_000 },
+        },
+      },
+      updated_at: 2_000,
+    });
+    await runtime.advance(MAX_PUSH_STALENESS_MS);
+    storage.setItem(HISTORY_KEY, JSON.stringify(history(200, 3_000)));
+    await runtime.advance(LOCAL_POLL_MS);
+
+    const pushed = transport.pushes.at(-1).body.blob.history;
+    expect(pushed["vod-42"].time).toBe(200);
+    expect(pushed["vod-7"].time).toBe(500);
+    const local = JSON.parse(storage.getItem(HISTORY_KEY) || "{}");
+    expect(local["vod-7"].time).toBe(500);
+  });
+
+  test("a failed pre-push pull still pushes local changes", async () => {
+    const storage = createStorage({ [TOKEN_KEY]: TOKEN });
+    const runtime = createRuntime();
+    const transport = createTransport();
+    const session = createSyncSession({ storage, runtime, transport });
+    await session.start();
+
+    transport.pull = async () => {
+      throw new Error("offline");
+    };
+    storage.setItem(HISTORY_KEY, JSON.stringify(history(300)));
+    await runtime.advance(LOCAL_POLL_MS);
+
+    expect(transport.pushes.at(-1).body.blob.history["vod-42"].time).toBe(300);
+  });
+});
+
+describe("Sync session flush on hide", () => {
+  for (const [label, hide] of [
+    [
+      "visibilitychange to hidden",
+      async (runtime) => {
+        runtime.setVisible(false);
+        await runtime.emitDocument("visibilitychange");
+      },
+    ],
+    ["pagehide", async (runtime) => runtime.emitWindow("pagehide")],
+  ]) {
+    test(`${label} pushes an unannounced write immediately with keepalive`, async () => {
+      const storage = createStorage({ [TOKEN_KEY]: TOKEN });
+      const runtime = createRuntime();
+      const transport = createTransport();
+      const session = createSyncSession({ storage, runtime, transport });
+      await session.start();
+      storage.setItem(HISTORY_KEY, JSON.stringify(history(100)));
+      await runtime.advance(LOCAL_POLL_MS + MAX_PUSH_STALENESS_MS);
+      const before = transport.pushes.length;
+
+      storage.setItem(HISTORY_KEY, JSON.stringify(history(250)));
+      await hide(runtime);
+
+      expect(transport.pushes).toHaveLength(before + 1);
+      const last = transport.pushes.at(-1);
+      expect(last.body.blob.history["vod-42"].time).toBe(250);
+      expect(last.options).toEqual({ keepalive: true });
+    });
+  }
+
+  test("hiding with nothing new does not push", async () => {
+    const storage = createStorage({ [TOKEN_KEY]: TOKEN });
+    const runtime = createRuntime();
+    const transport = createTransport();
+    const session = createSyncSession({ storage, runtime, transport });
+    await session.start();
+    storage.setItem(HISTORY_KEY, JSON.stringify(history(100)));
+    await runtime.advance(LOCAL_POLL_MS + MAX_PUSH_STALENESS_MS);
+    const before = transport.pushes.length;
+
+    await runtime.emitWindow("pagehide");
+
+    expect(transport.pushes).toHaveLength(before);
   });
 });

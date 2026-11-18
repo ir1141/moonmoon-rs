@@ -28,7 +28,7 @@ export const REMOTE_POLL_MS = 15_000;
  *   } | null,
  *   transport: {
  *     pull(token: string): Promise<any>,
- *     push(token: string, body: any): Promise<void>,
+ *     push(token: string, body: any, options?: { keepalive: true }): Promise<void>,
  *   },
  *   runtime: {
  *     now(): number,
@@ -112,16 +112,58 @@ export function createSyncSession({ storage, transport, runtime }) {
     );
   }
 
-  function historyChanged() {
+  function noteLocalChange() {
     if (applyingRemote) return;
     const current = storageGet(storage, HISTORY_KEY) || "";
     if (current === lastHistoryStr) return;
     lastHistoryStr = current;
     dirty = true;
+  }
+
+  function historyChanged() {
+    noteLocalChange();
     schedulePush();
   }
 
-  async function push() {
+  // A hidden page may be frozen or discarded before a timer fires, so flush
+  // now, and skip the pre-push pull: its round trip would not finish.
+  function flushOnHide() {
+    noteLocalChange();
+    if (dirty) void push({ beforeHide: true });
+  }
+
+  function applyRemote(data) {
+    const local = getHistory();
+    const remote = historyFromBlob(data.blob);
+    const remoteContribution = mergeHistory(local, remote);
+    if (remoteContribution.changed) publishHistory(remoteContribution.merged);
+    storageSet(
+      storage,
+      META_KEY,
+      JSON.stringify({
+        last_pulled_updated_at: data.updated_at || 0,
+        last_pulled_at: runtime.now(),
+      }),
+    );
+    return {
+      remoteChanged: remoteContribution.changed,
+      localAhead: mergeHistory(remote, local).changed,
+    };
+  }
+
+  // The server stores whole blobs last-write-wins, so merge the current
+  // remote in first; otherwise another device's push since our last pull is
+  // overwritten. A failed pull falls back to pushing what we have.
+  async function pullBeforePush(token) {
+    try {
+      const data = await transport.pull(token);
+      if (data) applyRemote(data);
+    } catch (error) {
+      warn("pre-push pull failed", error);
+    }
+  }
+
+  async function push({ beforeHide = false } = {}) {
     clearPushTimer();
     const token = getToken();
     if (!token) {
@@ -139,14 +181,18 @@ export function createSyncSession({ storage, transport, runtime }) {
 
     dirty = false;
     lastPushAt = runtime.now();
-    const body = {
-      blob: buildSyncBlob(getHistory()),
-      updated_at: runtime.now(),
-    };
-    pushInFlight = transport.push(token, body);
-    try {
-      await pushInFlight;
+    pushInFlight = (async () => {
+      if (!beforeHide) await pullBeforePush(token);
+      const body = {
+        blob: buildSyncBlob(getHistory()),
+        updated_at: runtime.now(),
+      };
+      if (beforeHide) await transport.push(token, body, { keepalive: true });
+      else await transport.push(token, body);
       return body;
+    })();
+    try {
+      return await pushInFlight;
     } catch (error) {
       dirty = true;
       warn("push failed", error);
@@ -164,30 +210,13 @@ export function createSyncSession({ storage, transport, runtime }) {
 
     pullInFlight = (async () => {
       const data = await transport.pull(token);
-      const local = getHistory();
       if (!data) {
-        if (hasHistory(local)) dirty = true;
+        if (hasHistory(getHistory())) dirty = true;
         return null;
       }
-
-      const remote = historyFromBlob(data.blob);
-      const remoteContribution = mergeHistory(local, remote);
-      const localContribution = mergeHistory(remote, local);
-      if (remoteContribution.changed) publishHistory(remoteContribution.merged);
-      if (localContribution.changed) dirty = true;
-
-      storageSet(
-        storage,
-        META_KEY,
-        JSON.stringify({
-          last_pulled_updated_at: data.updated_at || 0,
-          last_pulled_at: runtime.now(),
-        }),
-      );
-      return {
-        changed: remoteContribution.changed,
-        updated_at: data.updated_at,
-      };
+      const { remoteChanged, localAhead } = applyRemote(data);
+      if (localAhead) dirty = true;
+      return { changed: remoteChanged, updated_at: data.updated_at };
     })();
 
     try {
@@ -243,11 +272,12 @@ export function createSyncSession({ storage, transport, runtime }) {
       runtime.onWindow("pageshow", () => {
         void pullIfVisible();
       }),
-      runtime.onWindow("beforeunload", () => {
-        if (dirty) void push();
-      }),
+      // pagehide fires after every beforeunload handler, so it also sees the
+      // player's final position save.
+      runtime.onWindow("pagehide", flushOnHide),
       runtime.onDocument("visibilitychange", () => {
-        void pullIfVisible();
+        if (runtime.isVisible()) void pull();
+        else flushOnHide();
       }),
     );
 
