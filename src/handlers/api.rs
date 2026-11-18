@@ -94,8 +94,28 @@ pub async fn chat_proxy(
 
 // ─── Manual refresh ───
 
+/// Minimum gap between manual refreshes. The endpoint is unauthenticated;
+/// without this, back-to-back calls keep a snapshot fetch to the archive
+/// permanently in flight.
+const MANUAL_REFRESH_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(60);
+
 pub async fn refresh_catalog(State(state): State<SharedState>) -> impl IntoResponse {
     use crate::vods::RefreshOutcome;
+    {
+        let mut last = state.last_manual_refresh.lock().await;
+        if let Some(started) = *last
+            && let Some(wait) = MANUAL_REFRESH_COOLDOWN.checked_sub(started.elapsed())
+        {
+            let secs = wait.as_secs().max(1).to_string();
+            return (
+                axum::http::StatusCode::TOO_MANY_REQUESTS,
+                [(axum::http::header::RETRY_AFTER, secs)],
+                "refresh cooling down".to_string(),
+            )
+                .into_response();
+        }
+        *last = Some(std::time::Instant::now());
+    }
     match crate::vods::refresh_in_place(&state).await {
         RefreshOutcome::Refreshed(n) => {
             (axum::http::StatusCode::OK, format!("refreshed {n} vods")).into_response()

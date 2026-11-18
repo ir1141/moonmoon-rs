@@ -67,9 +67,14 @@ pub async fn lookup_emote(
     let body = match result {
         Lookup::Hit(record) => serde_json::to_string(&LookupResponse::Hit { hit: true, record })
             .expect("LookupResponse is always serializable"),
-        Lookup::Miss | Lookup::Unknown => {
-            serde_json::to_string(&LookupResponse::Miss { hit: false })
-                .expect("LookupResponse is always serializable")
+        Lookup::Miss => serde_json::to_string(&LookupResponse::Miss { hit: false })
+            .expect("LookupResponse is always serializable"),
+        Lookup::Unknown => {
+            return (
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                [("content-type", "application/json")],
+                r#"{"error":"lookup unavailable, retry later"}"#.to_string(),
+            );
         }
     };
     (
@@ -125,31 +130,71 @@ pub async fn vod_emotes(State(state): State<SharedState>, Path(vod_id): Path<Str
         return empty();
     };
 
-    let url = format!("https://archive.overpowered.tv/api/v1/moonmoon/vods/{canonical}/emotes");
-    let map = match state.http_client.get(&url).send().await {
-        Ok(resp) => match resp.json::<serde_json::Value>().await {
-            Ok(json) if json.get("success").and_then(|v| v.as_bool()) == Some(true) => json
-                .get("data")
-                .map(parse::parse_vod_emote_snapshot)
-                .unwrap_or_default(),
-            _ => Default::default(),
-        },
-        Err(e) => {
-            tracing::warn!("vod emote snapshot fetch failed for {canonical}: {e}");
-            Default::default()
+    let body = match state
+        .vod_emotes
+        .get(&canonical, crate::emotes::VOD_EMOTES_TTL)
+    {
+        Some(body) => body,
+        None => {
+            let url =
+                format!("https://archive.overpowered.tv/api/v1/moonmoon/vods/{canonical}/emotes");
+            let fetched = match state.http_client.get(&url).send().await {
+                Ok(resp) => {
+                    let status = resp.status();
+                    let json = resp.json::<serde_json::Value>().await.ok();
+                    let outcome = vod_snapshot_outcome(status, json);
+                    if outcome.is_none() {
+                        tracing::warn!(
+                            "vod emote snapshot for {canonical}: unusable upstream {status}"
+                        );
+                    }
+                    outcome
+                }
+                Err(e) => {
+                    tracing::warn!("vod emote snapshot fetch failed for {canonical}: {e}");
+                    None
+                }
+            };
+            let cacheable = fetched.is_some();
+            let body: std::sync::Arc<str> =
+                serde_json::json!({ "emotes": fetched.unwrap_or_default() })
+                    .to_string()
+                    .into();
+            if cacheable {
+                state
+                    .vod_emotes
+                    .put(canonical, std::sync::Arc::clone(&body));
+            }
+            body
         }
     };
-
-    let body = serde_json::json!({ "emotes": map }).to_string();
     (
         StatusCode::OK,
         [
             ("content-type", "application/json"),
             ("cache-control", "public, max-age=300"),
         ],
-        body,
+        body.to_string(),
     )
         .into_response()
+}
+
+/// The emote map to serve for an archive snapshot response, or `None` when the
+/// answer is transient (rate limit, server error, unexpected body) and must not
+/// be cached. A 404 is definitive: old VODs have no snapshot.
+fn vod_snapshot_outcome(
+    status: axum::http::StatusCode,
+    json: Option<serde_json::Value>,
+) -> Option<std::collections::HashMap<String, crate::emotes::EmoteRecord>> {
+    if status == axum::http::StatusCode::NOT_FOUND {
+        return Some(Default::default());
+    }
+    let json = json.filter(|_| status.is_success())?;
+    (json.get("success").and_then(|v| v.as_bool()) == Some(true)).then(|| {
+        json.get("data")
+            .map(parse::parse_vod_emote_snapshot)
+            .unwrap_or_default()
+    })
 }
 
 /// Query all three providers concurrently and combine the answers via
@@ -229,6 +274,20 @@ async fn search_all_providers(client: &reqwest::Client, name: &str) -> Option<Re
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn vod_snapshot_caches_only_definitive_answers() {
+        use axum::http::StatusCode;
+        let ok = serde_json::json!({ "success": true, "data": {} });
+        assert!(vod_snapshot_outcome(StatusCode::OK, Some(ok.clone())).is_some());
+        assert!(vod_snapshot_outcome(StatusCode::NOT_FOUND, None).is_some());
+        assert!(vod_snapshot_outcome(StatusCode::TOO_MANY_REQUESTS, Some(ok.clone())).is_none());
+        assert!(vod_snapshot_outcome(StatusCode::BAD_GATEWAY, None).is_none());
+        assert!(vod_snapshot_outcome(StatusCode::FORBIDDEN, Some(ok)).is_none());
+        assert!(vod_snapshot_outcome(StatusCode::OK, None).is_none());
+        let refused = serde_json::json!({ "success": false });
+        assert!(vod_snapshot_outcome(StatusCode::OK, Some(refused)).is_none());
+    }
     use crate::emotes::{EmoteIndex, EmoteProvider, EmoteRecord};
     use std::collections::HashMap;
 

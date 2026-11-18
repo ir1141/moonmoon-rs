@@ -77,6 +77,9 @@ pub struct AppState {
     pub refresh_lock: tokio::sync::Mutex<()>,
     pub sync_store: Arc<sync_store::SyncStore>,
     pub emotes: RwLock<Arc<emotes::EmoteIndex>>,
+    pub vod_emotes: emotes::VodEmoteCache,
+    /// When `POST /api/refresh` last started a refresh; see its cooldown.
+    pub last_manual_refresh: tokio::sync::Mutex<Option<std::time::Instant>>,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -131,6 +134,8 @@ pub async fn run() {
         refresh_lock: tokio::sync::Mutex::new(()),
         sync_store,
         emotes: RwLock::new(Arc::new(emotes::EmoteIndex::new(prefetched))),
+        vod_emotes: Default::default(),
+        last_manual_refresh: Default::default(),
     });
 
     let refresh_state = Arc::clone(&state);

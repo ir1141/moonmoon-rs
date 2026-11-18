@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 pub use fetch::{PrefetchCache, fetch_sets};
 pub use store::EmoteIndex;
 
-pub use store::{Lookup, ResolvedEntry};
+pub use store::{Lookup, ResolvedEntry, VOD_EMOTES_TTL, VodEmoteCache};
 
 /// How often the background ticker re-fetches the prefetched channel/global
 /// emote sets. Independent of the VOD catalog refresh interval; emote sets

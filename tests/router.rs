@@ -21,6 +21,8 @@ fn state_with_sync_path(path: PathBuf) -> SharedState {
         refresh_lock: tokio::sync::Mutex::new(()),
         sync_store: Arc::new(SyncStore::new_in_memory(path)),
         emotes: RwLock::new(Arc::new(EmoteIndex::new(Default::default()))),
+        vod_emotes: Default::default(),
+        last_manual_refresh: Default::default(),
     })
 }
 
@@ -161,4 +163,24 @@ async fn browse_accepts_a_genre_filter_on_both_lenses() {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK, "{uri}");
     }
+}
+
+#[tokio::test]
+async fn manual_refresh_within_cooldown_is_rejected_with_retry_after() {
+    let state = empty_state();
+    *state.last_manual_refresh.lock().await = Some(std::time::Instant::now());
+    let app = moonmoon::build_router(state);
+
+    let resp = app
+        .oneshot(request("POST", "/api/refresh", Body::empty()))
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+    let retry_after: u64 = resp.headers()[header::RETRY_AFTER]
+        .to_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!((1..=60).contains(&retry_after), "{retry_after}");
 }
