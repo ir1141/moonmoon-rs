@@ -4,7 +4,7 @@ pub mod store;
 
 use serde::{Deserialize, Serialize};
 
-pub use fetch::load_prefetched;
+pub use fetch::{PrefetchCache, fetch_sets};
 pub use store::EmoteIndex;
 
 pub use store::{Lookup, ResolvedEntry};
@@ -14,6 +14,10 @@ pub use store::{Lookup, ResolvedEntry};
 /// change rarely, so this is much slower than the VOD refresh.
 pub(crate) const EMOTE_REFRESH_INTERVAL: std::time::Duration =
     std::time::Duration::from_secs(24 * 60 * 60);
+
+/// Refresh delay while any prefetched endpoint has never loaded, so a
+/// provider that was down at boot comes back within minutes, not a day.
+pub(crate) const EMOTE_RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5 * 60);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]

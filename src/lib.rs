@@ -115,19 +115,9 @@ pub async fn run() {
     tracing::info!("ready with {} vods", catalog.vods.len());
     tracing::info!("found {} games", catalog.games.len());
 
-    const EMOTE_BOOT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
-    let prefetched =
-        match tokio::time::timeout(EMOTE_BOOT_TIMEOUT, emotes::load_prefetched(&http_client)).await
-        {
-            Ok(map) => map,
-            Err(_) => {
-                tracing::warn!(
-                    "emote boot fetch timed out after {:?}; starting with empty index",
-                    EMOTE_BOOT_TIMEOUT
-                );
-                std::collections::HashMap::new()
-            }
-        };
+    let mut emote_cache = emotes::PrefetchCache::default();
+    emote_cache.update(emotes::fetch_sets(&http_client).await);
+    let prefetched = emote_cache.merged();
     tracing::info!("emotes: prefetched {} entries", prefetched.len());
 
     let sync_store_path: std::path::PathBuf = std::env::var("SYNC_STORE_PATH")
@@ -167,11 +157,20 @@ pub async fn run() {
 
     let emote_state = Arc::clone(&state);
     tokio::spawn(async move {
-        let mut tick = tokio::time::interval(emotes::EMOTE_REFRESH_INTERVAL);
-        tick.tick().await; // skip immediate tick; boot already loaded
         loop {
-            tick.tick().await;
-            let prefetched = emotes::load_prefetched(&emote_state.http_client).await;
+            let delay = if emote_cache.is_complete() {
+                emotes::EMOTE_REFRESH_INTERVAL
+            } else {
+                emotes::EMOTE_RETRY_INTERVAL
+            };
+            tokio::time::sleep(delay).await;
+            let fetched = emotes::fetch_sets(&emote_state.http_client).await;
+            if fetched.iter().all(Option::is_none) {
+                tracing::warn!("emote tick refresh: every endpoint failed; keeping current index");
+                continue;
+            }
+            emote_cache.update(fetched);
+            let prefetched = emote_cache.merged();
             tracing::info!(
                 "emote tick refresh: {} prefetched entries",
                 prefetched.len()
