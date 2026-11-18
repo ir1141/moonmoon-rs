@@ -22,6 +22,12 @@ pub struct SyncBlob {
     /// eviction order — `updated_at` is client-supplied and gameable.
     #[serde(default)]
     pub(crate) stored_at: i64,
+    /// Server-set insertion order of this token (kept across rewrites). An
+    /// existing token that needs room may evict tokens created after it, so a
+    /// flood of new tokens can never lock out users who were already here.
+    /// Entries persisted before this field load as 0, the most senior.
+    #[serde(default)]
+    pub(crate) created_seq: u64,
 }
 
 /// Hard cap on distinct sync tokens; real usage is a handful of tokens.
@@ -50,8 +56,9 @@ fn blob_len(blob: &SyncBlob) -> usize {
 /// tokens can block new sign-ups but can't erase active users' history.
 const EVICTABLE_AFTER_SECS: i64 = 30 * 24 * 60 * 60;
 
-/// Tokens to drop so that `map` plus the incoming blob fits within `limits`,
-/// oldest-stored first and only those stored before `evictable_before`.
+/// Tokens to drop so that `map` plus the incoming blob fits within `limits`:
+/// first entries stored before `evictable_before` (oldest first), then, when
+/// the incoming token already exists, tokens created after it (newest first).
 /// `None` when even that can't make room. Replacing an existing token frees
 /// its old size first.
 fn tokens_to_evict(
@@ -61,15 +68,28 @@ fn tokens_to_evict(
     limits: Limits,
     evictable_before: i64,
 ) -> Option<Vec<String>> {
-    let mut others: Vec<(&String, &SyncBlob)> =
+    let others: Vec<(&String, &SyncBlob)> =
         map.iter().filter(|(token, _)| *token != incoming).collect();
     let mut entries = others.len() + 1;
     let mut bytes = incoming_len + others.iter().map(|(_, b)| blob_len(b)).sum::<usize>();
     let fits = |entries: usize, bytes: usize| entries <= limits.entries && bytes <= limits.bytes;
-    others.sort_by_key(|(_, b)| b.stored_at);
+
+    let (mut stale, fresh): (Vec<_>, Vec<_>) = others
+        .into_iter()
+        .partition(|(_, b)| b.stored_at < evictable_before);
+    stale.sort_by_key(|(_, b)| b.stored_at);
+    let mut junior: Vec<_> = match map.get(incoming) {
+        Some(existing) => fresh
+            .into_iter()
+            .filter(|(_, b)| b.created_seq > existing.created_seq)
+            .collect(),
+        None => Vec::new(),
+    };
+    junior.sort_by_key(|(_, b)| std::cmp::Reverse(b.created_seq));
+
     let mut evict = Vec::new();
-    for (token, blob) in others {
-        if fits(entries, bytes) || blob.stored_at >= evictable_before {
+    for (token, blob) in stale.into_iter().chain(junior) {
+        if fits(entries, bytes) {
             break;
         }
         entries -= 1;
@@ -173,6 +193,10 @@ impl SyncStore {
             .as_secs() as i64;
         blob.stored_at = now;
         let mut g = self.inner.lock().await;
+        blob.created_seq = match g.get(&token) {
+            Some(existing) => existing.created_seq,
+            None => g.values().map(|b| b.created_seq).max().unwrap_or(0) + 1,
+        };
         let Some(evict) = tokens_to_evict(
             &g,
             &token,
@@ -237,6 +261,7 @@ mod tests {
             blob: raw(serde_json::json!({ "resume": { "v": value } })),
             updated_at,
             stored_at: 0,
+            created_seq: 0,
         }
     }
 
@@ -245,6 +270,7 @@ mod tests {
             blob: raw(serde_json::json!({ "resume": { "v": value } })),
             updated_at,
             stored_at,
+            created_seq: 0,
         }
     }
 
@@ -262,6 +288,7 @@ mod tests {
             blob: raw(serde_json::json!({ "p": pad })),
             updated_at: 0,
             stored_at,
+            created_seq: 0,
         }
     }
 
@@ -345,6 +372,27 @@ mod tests {
             Some(vec!["STALE".to_string()])
         );
         assert_eq!(tokens_to_evict(&map, "FRESH", 70, limits, 200), None);
+    }
+
+    #[tokio::test]
+    async fn existing_user_can_still_grow_their_blob_after_a_flood_fills_the_store() {
+        let dir = TempDir::new();
+        let mut s = SyncStore::new_in_memory(dir.join("sync.json"));
+        s.limits = Limits {
+            entries: usize::MAX,
+            bytes: 1000,
+        };
+        s.put("ACTIVE".into(), sized(100, 0)).await.unwrap();
+        for i in 0..20 {
+            let _ = s.put(format!("FLOOD{i}"), sized(100, 0)).await;
+        }
+        assert!(s.put("LATECOMER".into(), sized(100, 0)).await.is_err());
+
+        s.put("ACTIVE".into(), sized(300, 0)).await.unwrap();
+        assert_eq!(blob_len(&s.get("ACTIVE").await.unwrap()), 300);
+
+        let _ = s.put("FLOOD0".into(), sized(400, 0)).await;
+        assert_eq!(blob_len(&s.get("ACTIVE").await.unwrap()), 300);
     }
 
     #[tokio::test]
@@ -480,6 +528,7 @@ mod tests {
             blob: RawValue::from_string(text.to_string()).unwrap(),
             updated_at: 1,
             stored_at: 0,
+            created_seq: 0,
         };
         s.put("TOKEN".into(), b).await.unwrap();
         let got = SyncStore::load(path).await.get("TOKEN").await.unwrap();
@@ -492,11 +541,12 @@ mod tests {
         // PUT body must not be able to pin its blob against eviction.
         let dir = TempDir::new();
         let s = SyncStore::new_in_memory(dir.join("sync.json"));
-        s.put("TOKEN".into(), blob_with_stored("x", 1, i64::MAX))
-            .await
-            .unwrap();
+        let mut claimed = blob_with_stored("x", 1, i64::MAX);
+        claimed.created_seq = u64::MAX;
+        s.put("TOKEN".into(), claimed).await.unwrap();
         let got = s.get("TOKEN").await.unwrap();
         assert_ne!(got.stored_at, i64::MAX);
+        assert_ne!(got.created_seq, u64::MAX);
         assert!(got.stored_at > 0);
     }
 
