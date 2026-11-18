@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use tokio::sync::Mutex;
 
 /// Hard cap for incoming sync blobs. The full payload (including JSON
@@ -12,7 +13,8 @@ pub(crate) const MAX_BLOB_BYTES: usize = 256 * 1024;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SyncBlob {
     /// Opaque blob the server never inspects — currently `{ "resume": {...} }`.
-    pub(crate) blob: serde_json::Value,
+    /// Kept as raw JSON text: a parsed `Value` costs ~16x the wire size.
+    pub(crate) blob: Box<RawValue>,
     /// Client-supplied milliseconds since epoch. Used for last-write-wins
     /// across the whole blob; per-VOD merging is the client's job.
     pub(crate) updated_at: i64,
@@ -22,17 +24,51 @@ pub struct SyncBlob {
     pub(crate) stored_at: i64,
 }
 
-/// Hard cap on distinct sync tokens. MAX_SYNC_ENTRIES × MAX_BLOB_BYTES bounds
-/// worst-case memory and on-disk size; real usage is a handful of tokens.
+/// Hard cap on distinct sync tokens; real usage is a handful of tokens.
 pub(crate) const MAX_SYNC_ENTRIES: usize = 10_000;
 
-fn token_to_evict(map: &HashMap<String, SyncBlob>, incoming: &str, cap: usize) -> Option<String> {
-    if map.contains_key(incoming) || map.len() < cap {
-        return None;
+/// Hard cap on the summed size of all stored blobs. Bounds resident memory
+/// and the size of the file every `put` rewrites.
+pub(crate) const MAX_STORE_BYTES: usize = 32 * 1024 * 1024;
+
+#[derive(Clone, Copy)]
+struct Limits {
+    entries: usize,
+    bytes: usize,
+}
+
+const LIMITS: Limits = Limits {
+    entries: MAX_SYNC_ENTRIES,
+    bytes: MAX_STORE_BYTES,
+};
+
+fn blob_len(blob: &SyncBlob) -> usize {
+    blob.blob.get().len()
+}
+
+/// Oldest-stored tokens to drop so that `map` plus the incoming blob fits
+/// within `limits`. Replacing an existing token frees its old size first.
+fn tokens_to_evict(
+    map: &HashMap<String, SyncBlob>,
+    incoming: &str,
+    incoming_len: usize,
+    limits: Limits,
+) -> Vec<String> {
+    let mut others: Vec<(&String, &SyncBlob)> =
+        map.iter().filter(|(token, _)| *token != incoming).collect();
+    let mut entries = others.len() + 1;
+    let mut bytes = incoming_len + others.iter().map(|(_, b)| blob_len(b)).sum::<usize>();
+    others.sort_by_key(|(_, b)| b.stored_at);
+    let mut evict = Vec::new();
+    for (token, blob) in others {
+        if entries <= limits.entries && bytes <= limits.bytes {
+            break;
+        }
+        entries -= 1;
+        bytes -= blob_len(blob);
+        evict.push(token.clone());
     }
-    map.iter()
-        .min_by_key(|(_, blob)| blob.stored_at)
-        .map(|(token, _)| token.clone())
+    evict
 }
 
 pub struct SyncStore {
@@ -59,6 +95,18 @@ fn tmp_path(path: &Path) -> PathBuf {
     s.into()
 }
 
+/// Where an unparseable store file is moved so the next `put` can't
+/// overwrite the only copy of everyone's history.
+fn corrupt_path(path: &Path) -> PathBuf {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let mut s = path.as_os_str().to_owned();
+    s.push(format!(".corrupt-{secs}"));
+    s.into()
+}
+
 impl SyncStore {
     pub fn new_in_memory(path: PathBuf) -> Self {
         Self {
@@ -72,7 +120,16 @@ impl SyncStore {
             Ok(m) => m,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => HashMap::new(),
             Err(e) => {
-                tracing::warn!("sync store load failed: {e}; starting empty");
+                let aside = corrupt_path(&path);
+                match tokio::fs::rename(&path, &aside).await {
+                    Ok(()) => tracing::error!(
+                        "sync store load failed: {e}; moved to {} and starting empty",
+                        aside.display()
+                    ),
+                    Err(re) => tracing::error!(
+                        "sync store load failed: {e}; could not move aside ({re}); starting empty"
+                    ),
+                }
                 HashMap::new()
             }
         };
@@ -101,9 +158,15 @@ impl SyncStore {
             .unwrap_or_default()
             .as_secs() as i64;
         let mut g = self.inner.lock().await;
-        if let Some(evict) = token_to_evict(&g, &token, MAX_SYNC_ENTRIES) {
-            tracing::warn!("sync store at capacity ({MAX_SYNC_ENTRIES}); evicting oldest token");
-            g.remove(&evict);
+        let evict = tokens_to_evict(&g, &token, blob_len(&blob), LIMITS);
+        if !evict.is_empty() {
+            tracing::warn!(
+                "sync store at capacity; evicting {} oldest token(s)",
+                evict.len()
+            );
+            for t in &evict {
+                g.remove(t);
+            }
         }
         g.insert(token, blob);
         let bytes = serde_json::to_vec(&*g)
@@ -144,7 +207,7 @@ mod tests {
 
     fn blob(value: &str, updated_at: i64) -> SyncBlob {
         SyncBlob {
-            blob: serde_json::json!({ "resume": { "v": value } }),
+            blob: raw(serde_json::json!({ "resume": { "v": value } })),
             updated_at,
             stored_at: 0,
         }
@@ -152,23 +215,80 @@ mod tests {
 
     fn blob_with_stored(value: &str, updated_at: i64, stored_at: i64) -> SyncBlob {
         SyncBlob {
-            blob: serde_json::json!({ "resume": { "v": value } }),
+            blob: raw(serde_json::json!({ "resume": { "v": value } })),
             updated_at,
             stored_at,
         }
     }
 
+    fn raw(v: serde_json::Value) -> Box<RawValue> {
+        RawValue::from_string(v.to_string()).unwrap()
+    }
+
+    fn resume_v(b: &SyncBlob) -> serde_json::Value {
+        serde_json::from_str::<serde_json::Value>(b.blob.get()).unwrap()["resume"]["v"].clone()
+    }
+
+    fn sized(len: usize, stored_at: i64) -> SyncBlob {
+        let pad = "x".repeat(len - r#"{"p":""}"#.len());
+        SyncBlob {
+            blob: raw(serde_json::json!({ "p": pad })),
+            updated_at: 0,
+            stored_at,
+        }
+    }
+
+    fn map_of(entries: &[(&str, SyncBlob)]) -> HashMap<String, SyncBlob> {
+        entries
+            .iter()
+            .map(|(t, b)| (t.to_string(), b.clone()))
+            .collect()
+    }
+
     #[test]
-    fn token_to_evict_prefers_oldest_stored_at() {
-        let mut map = HashMap::new();
-        map.insert("OLD".to_string(), blob_with_stored("x", 9, 100));
-        map.insert("NEW".to_string(), blob_with_stored("y", 1, 200));
-        // at capacity, a brand-new token evicts the oldest-stored entry
-        assert_eq!(token_to_evict(&map, "FRESH", 2), Some("OLD".to_string()));
-        // under capacity: no eviction
-        assert_eq!(token_to_evict(&map, "FRESH", 3), None);
-        // overwriting an existing token never evicts
-        assert_eq!(token_to_evict(&map, "OLD", 2), None);
+    fn eviction_at_entry_cap_drops_oldest_stored() {
+        let map = map_of(&[("OLD", sized(10, 100)), ("NEW", sized(10, 200))]);
+        let limits = Limits {
+            entries: 2,
+            bytes: usize::MAX,
+        };
+        assert_eq!(tokens_to_evict(&map, "FRESH", 10, limits), vec!["OLD"]);
+        let roomy = Limits {
+            entries: 3,
+            bytes: usize::MAX,
+        };
+        assert!(tokens_to_evict(&map, "FRESH", 10, roomy).is_empty());
+        assert!(tokens_to_evict(&map, "OLD", 10, limits).is_empty());
+    }
+
+    #[test]
+    fn eviction_at_byte_cap_drops_oldest_until_incoming_fits() {
+        let map = map_of(&[
+            ("A", sized(40, 100)),
+            ("B", sized(40, 200)),
+            ("C", sized(40, 300)),
+        ]);
+        let limits = Limits {
+            entries: usize::MAX,
+            bytes: 120,
+        };
+        assert_eq!(tokens_to_evict(&map, "FRESH", 70, limits), vec!["A", "B"]);
+    }
+
+    #[test]
+    fn eviction_counts_replaced_token_at_its_new_size() {
+        let map = map_of(&[("A", sized(40, 100)), ("B", sized(60, 200))]);
+        let limits = Limits {
+            entries: usize::MAX,
+            bytes: 100,
+        };
+        assert!(tokens_to_evict(&map, "B", 60, limits).is_empty());
+        assert_eq!(tokens_to_evict(&map, "B", 61, limits), vec!["A"]);
+    }
+
+    #[test]
+    fn sized_helper_produces_exact_length() {
+        assert_eq!(blob_len(&sized(40, 0)), 40);
     }
 
     /// Self-cleaning tempdir. Avoids adding a `tempfile` dep just for a
@@ -209,7 +329,7 @@ mod tests {
         s.insert_in_memory("ABC".into(), blob("first", 100)).await;
         let got = s.get("ABC").await.unwrap();
         assert_eq!(got.updated_at, 100);
-        assert_eq!(got.blob["resume"]["v"], "first");
+        assert_eq!(resume_v(&got), "first");
     }
 
     #[tokio::test]
@@ -219,7 +339,7 @@ mod tests {
         s.insert_in_memory("ABC".into(), blob("second", 200)).await;
         let got = s.get("ABC").await.unwrap();
         assert_eq!(got.updated_at, 200);
-        assert_eq!(got.blob["resume"]["v"], "second");
+        assert_eq!(resume_v(&got), "second");
         assert_eq!(s.len().await, 1);
     }
 
@@ -236,7 +356,7 @@ mod tests {
         let s2 = SyncStore::load(path).await;
         assert_eq!(s2.len().await, 2);
         let a = s2.get("AAA").await.unwrap();
-        assert_eq!(a.blob["resume"]["v"], "alpha");
+        assert_eq!(resume_v(&a), "alpha");
     }
 
     #[tokio::test]
@@ -248,12 +368,39 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn load_corrupt_file_starts_empty() {
+    async fn load_corrupt_file_starts_empty_and_preserves_original() {
         let dir = TempDir::new();
         let path = dir.join("sync.json");
         tokio::fs::write(&path, b"not valid json").await.unwrap();
-        let s = SyncStore::load(path).await;
+        let s = SyncStore::load(path.clone()).await;
         assert_eq!(s.len().await, 0);
+        s.put("TOKEN".into(), blob("x", 1)).await.unwrap();
+
+        let mut preserved = Vec::new();
+        let mut entries = tokio::fs::read_dir(&dir.0).await.unwrap();
+        while let Some(e) = entries.next_entry().await.unwrap() {
+            let name = e.file_name().into_string().unwrap();
+            if name.starts_with("sync.json.corrupt-") {
+                preserved.push(tokio::fs::read(e.path()).await.unwrap());
+            }
+        }
+        assert_eq!(preserved, vec![b"not valid json".to_vec()]);
+    }
+
+    #[tokio::test]
+    async fn put_then_load_preserves_blob_bytes_verbatim() {
+        let dir = TempDir::new();
+        let path = dir.join("sync.json");
+        let text = r#"{"resume":{"vod-1":{"t":12.5,"w":true}},"extra":[1,2]}"#;
+        let s = SyncStore::new_in_memory(path.clone());
+        let b = SyncBlob {
+            blob: RawValue::from_string(text.to_string()).unwrap(),
+            updated_at: 1,
+            stored_at: 0,
+        };
+        s.put("TOKEN".into(), b).await.unwrap();
+        let got = SyncStore::load(path).await.get("TOKEN").await.unwrap();
+        assert_eq!(got.blob.get(), text);
     }
 
     #[tokio::test]
@@ -279,7 +426,7 @@ mod tests {
         let s2 = SyncStore::load(path).await;
         let got = s2.get("ZZZ").await.unwrap();
         assert_eq!(got.updated_at, 42);
-        assert_eq!(got.blob["resume"]["v"], "via-put");
+        assert_eq!(resume_v(&got), "via-put");
     }
 
     #[test]
