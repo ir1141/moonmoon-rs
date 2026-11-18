@@ -242,10 +242,11 @@ fn resolve_browse_params(params: &mut ListQuery) -> (Option<String>, Lens, bool,
     // lens=streams, so this only drops junk).
     let game = if lens == Lens::Streams { game } else { None };
     let is_games = lens == Lens::Games;
-    let (_, default_sort) = sort_context(is_games);
+    let (sorts, default_sort) = sort_context(is_games);
     let sort = params
         .sort
         .clone()
+        .filter(|s| sorts.iter().any(|(value, _, _)| value == s))
         .unwrap_or_else(|| default_sort.to_string());
     params.sort = Some(sort.clone());
     (game, lens, is_games, sort)
@@ -456,6 +457,27 @@ mod tests {
             Lens::Streams
         ));
         assert!(matches!(resolve_lens(None, Some("Sekiro")), Lens::Streams));
+    }
+
+    #[test]
+    fn resolve_browse_params_replaces_unknown_or_empty_sort_with_lens_default() {
+        for (lens, sort, expected) in [
+            ("streams", Some("bogus"), "newest"),
+            ("streams", Some(""), "newest"),
+            ("streams", Some("longest"), "longest"),
+            ("games", Some(""), "most"),
+            ("games", Some("newest"), "most"),
+            ("games", Some("az"), "az"),
+        ] {
+            let mut params = ListQuery {
+                lens: Some(lens.into()),
+                sort: sort.map(Into::into),
+                ..Default::default()
+            };
+            let (_, _, _, resolved) = resolve_browse_params(&mut params);
+            assert_eq!(resolved, expected, "{lens} {sort:?}");
+            assert_eq!(params.sort.as_deref(), Some(expected));
+        }
     }
 
     #[test]
