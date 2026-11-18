@@ -37,6 +37,7 @@ struct HomePageTemplate {
     show_recency: bool,
     show_oldest_recency: bool,
     show_subtitle: bool,
+    game_link_filters: String,
     active_section: Section,
     nonce: String,
 }
@@ -135,6 +136,7 @@ pub async fn home_page(
         show_recency: false,
         show_oldest_recency: false,
         show_subtitle: true,
+        game_link_filters: String::new(),
         active_section: Section::Home,
         nonce: nonce.0,
     })
@@ -260,6 +262,7 @@ mod tests {
             show_recency: false,
             show_oldest_recency: false,
             show_subtitle: true,
+            game_link_filters: String::new(),
             active_section: Section::Home,
             nonce: "test".into(),
         }
@@ -292,6 +295,7 @@ mod tests {
             show_recency: false,
             show_oldest_recency: false,
             show_subtitle: true,
+            game_link_filters: String::new(),
             active_section: Section::Home,
             nonce: "test".into(),
         }

@@ -118,6 +118,9 @@ pub(crate) struct ListFilterConfig {
     pub sort_label: &'static str,
     pub hx_get: String,
     pub results_id: &'static str,
+    /// Extra region the filter controls pull out of the same response, for
+    /// links outside the results that encode the active filters.
+    pub select_oob: Option<&'static str>,
     pub loading_id: &'static str,
     pub sort_options: Vec<SortOption>,
     pub selected_sort_value: &'static str,
@@ -188,6 +191,7 @@ pub(crate) struct VodsGridTemplate {
 #[template(path = "games_grid.html")]
 pub(crate) struct GamesGridTemplate {
     pub games: Vec<Game>,
+    pub game_link_filters: String,
     pub has_more: bool,
     pub next_url: String,
     pub show_recency: bool,

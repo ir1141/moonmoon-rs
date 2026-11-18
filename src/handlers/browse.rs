@@ -48,6 +48,17 @@ fn resolve_lens(lens: Option<&str>, game: Option<&str>) -> Lens {
 
 /// `&search=…&genre=…&from=…&to=…` for the values that survive a lens switch (sort and
 /// game are intentionally dropped). Empty when nothing is carried.
+/// The query suffix a game card carries into its streams drilldown: only the
+/// date range, which scopes the card's VOD count. Search is left behind (on the
+/// games lens it matches game names, not stream titles).
+fn game_link_filters(params: &ListQuery) -> String {
+    carry_filters(&ListQuery {
+        from: params.from.clone(),
+        to: params.to.clone(),
+        ..Default::default()
+    })
+}
+
 fn carry_filters(params: &ListQuery) -> String {
     let mut out = String::new();
     for (key, value) in [
@@ -84,6 +95,7 @@ struct BrowsePageTemplate {
     lens_games_url: String,
     lens_streams_url: String,
     clear_game_url: String,
+    game_link_filters: String,
     show_recency: bool,
     show_oldest_recency: bool,
     show_game_tags: bool,
@@ -323,6 +335,7 @@ pub async fn browse_page(
             sort_label: "Sort",
             hx_get,
             results_id: "browse-results",
+            select_oob: Some("#lens-toggle"),
             loading_id: "browse-loading",
             sort_options: list_sort_options_grouped(selected_sort_value, sort_specs),
             selected_sort_value,
@@ -341,6 +354,7 @@ pub async fn browse_page(
         lens_games_url,
         lens_streams_url,
         clear_game_url,
+        game_link_filters: game_link_filters(&params),
         show_recency: prepared.show_recency,
         show_oldest_recency: prepared.show_oldest_recency,
         show_game_tags: prepared.show_game_tags,
@@ -360,6 +374,7 @@ pub async fn browse_grid(
 
     if is_games {
         render_template(&GamesGridTemplate {
+            game_link_filters: game_link_filters(&params),
             games: prepared.games,
             has_more: prepared.has_more,
             next_url: prepared.next_url,
@@ -505,6 +520,19 @@ mod tests {
         assert!(out.contains("&search=dark%20souls"));
         assert!(out.contains("&from=2026-01-01"));
         assert!(!out.contains("to="));
+    }
+
+    #[test]
+    fn game_card_link_carries_the_date_range_but_not_the_name_search() {
+        let params = ListQuery {
+            search: Some("elden".into()),
+            genre: Some("RPG".into()),
+            from: Some("2026-01-01".into()),
+            to: Some("2026-03-31".into()),
+            ..Default::default()
+        };
+        assert_eq!(game_link_filters(&params), "&from=2026-01-01&to=2026-03-31");
+        assert_eq!(game_link_filters(&ListQuery::default()), "");
     }
 
     #[test]

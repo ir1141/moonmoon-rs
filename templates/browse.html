@@ -9,7 +9,7 @@
       {# Links to two URLs, not tabs over one panel: the borrowed tablist role
          announced a keyboard contract (arrow keys, one tab stop) that neither
          the markup nor the htmx swap ever implemented. #}
-      <nav class="lens-toggle" aria-label="Browse lens">
+      <nav id="lens-toggle" class="lens-toggle" aria-label="Browse lens">
         <a class="lens-btn{% if is_games_lens %} active{% endif %}"
            {% if is_games_lens %}aria-current="page"{% endif %}
            href="{{ lens_games_url }}"
