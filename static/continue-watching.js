@@ -24,42 +24,60 @@ function clearReservation() {
   document.documentElement.removeAttribute("data-continue");
 }
 
-async function initContinueWatching() {
+function initContinueWatching() {
   const shelf = document.getElementById("continue-watching");
   const hero = document.getElementById("continue-hero");
   if (!shelf || !hero) return;
 
-  const [entry] = selectContinueWatchingEntries(
-    loadHistoryStore(safeLocalStorage()),
-  );
-  if (!entry) {
-    clearReservation();
-    return;
-  }
+  let shownUrl = null;
+  let generation = 0;
 
-  try {
-    const response = await fetch(buildContinueResumeUrl(entry));
-    if (!response.ok) {
+  async function render() {
+    const [entry] = selectContinueWatchingEntries(
+      loadHistoryStore(safeLocalStorage()),
+    );
+    const url = entry ? buildContinueResumeUrl(entry) : null;
+    if (url === shownUrl) return;
+    shownUrl = url;
+    const current = ++generation;
+
+    if (!url) {
       clearReservation();
       return;
     }
 
-    // A 204 is `ok` but carries no card (the VOD left the catalog).
-    const html = (await response.text()).trim();
-    if (!html) {
-      clearReservation();
-      return;
-    }
+    try {
+      const response = await fetch(url);
+      if (current !== generation) return;
+      if (!response.ok) {
+        clearReservation();
+        return;
+      }
 
-    const template = document.createElement("template");
-    template.innerHTML = html;
-    hero.replaceChildren(template.content);
-    fillProgressBar(hero);
-    hero.setAttribute("aria-busy", "false");
-  } catch (error) {
-    clearReservation();
-    console.warn("[ContinueWatching] failed to load:", error);
+      // A 204 is `ok` but carries no card (the VOD left the catalog).
+      const html = (await response.text()).trim();
+      if (current !== generation) return;
+      if (!html) {
+        clearReservation();
+        return;
+      }
+
+      const template = document.createElement("template");
+      template.innerHTML = html;
+      hero.replaceChildren(template.content);
+      fillProgressBar(hero);
+      hero.setAttribute("aria-busy", "false");
+      document.documentElement.setAttribute("data-continue", "");
+    } catch (error) {
+      if (current !== generation) return;
+      clearReservation();
+      console.warn("[ContinueWatching] failed to load:", error);
+    }
   }
+
+  // Sync's first pull usually lands after this script runs.
+  window.addEventListener("moonmoon:historyChanged", () => void render());
+  void render();
 }
 
 initContinueWatching();

@@ -43,22 +43,32 @@ function initHistoryPage() {
 
   applySortToControl(readHistorySort());
 
-  const entries = buildHistoryEntries(loadHistoryStore(storage));
-
-  if (entries.length === 0) {
-    stats.textContent = "No watch history";
-    showMessage(grid, "No watch history");
-    return;
-  }
-
-  stats.textContent =
-    entries.length === 1
-      ? "1 history entry"
-      : `${entries.length} history entries`;
-
+  let entries = [];
+  let renderedKey = null;
   let loadGeneration = 0;
 
+  function render() {
+    const next = buildHistoryEntries(loadHistoryStore(storage));
+    const key = JSON.stringify(next);
+    if (key === renderedKey) return;
+    renderedKey = key;
+    entries = next;
+
+    if (entries.length === 0) {
+      ++loadGeneration;
+      stats.textContent = "No watch history";
+      showMessage(grid, "No watch history");
+      return;
+    }
+    stats.textContent =
+      entries.length === 1
+        ? "1 history entry"
+        : `${entries.length} history entries`;
+    load();
+  }
+
   function load() {
+    if (entries.length === 0) return;
     const generation = ++loadGeneration;
 
     fetch("/history/vods", {
@@ -93,7 +103,9 @@ function initHistoryPage() {
     writeHistorySort(storage, sortInput.value);
     load();
   });
-  load();
+  // Sync's first pull usually lands after this script runs.
+  window.addEventListener("moonmoon:historyChanged", render);
+  render();
 }
 
 initHistoryPage();
