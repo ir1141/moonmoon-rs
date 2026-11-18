@@ -16,7 +16,7 @@ import {
   chatDistanceFromBottom,
   nextChatAutoScrollState,
 } from "./lib/chat-autoscroll.js";
-import { chatStripeClass } from "./lib/chat-stripe.js";
+import { chatStripeClass, dropRenderedChat } from "./lib/chat-stripe.js";
 import {
   shouldFinalizePlaybackAtTick,
   shouldSaveOnUnload,
@@ -113,7 +113,7 @@ var REPLY_CHAIN_TIMEOUT = 120; // seconds — 2 min gap breaks the chain
 var REPLY_CHAIN_MAX = 5;
 
 // Third-party emotes: name → { url, provider }
-var thirdPartyEmotes = {};
+var thirdPartyEmotes = Object.create(null);
 
 function loadEmotes() {
   fetchChannelEmotes().then(function (emotes) {
@@ -897,7 +897,9 @@ function loadChat(fromOffset) {
     .then(function (data) {
       if (gen !== chatGeneration) return; // stale: chat state was reset mid-flight
       if (data.comments && data.comments.length > 0) {
-        chatMessages = chatMessages.concat(data.comments);
+        var kept = dropRenderedChat(chatMessages, chatIndex);
+        chatMessages = kept.messages.concat(data.comments);
+        chatIndex = kept.index;
       }
       chatCursor = data.cursor || null;
       chatLoading = false;
@@ -1447,6 +1449,11 @@ function onPlayerStateChange(event) {
       if (dur > 0) {
         partDurations[currentPart] = dur;
         savePartDuration(currentPart, dur);
+        CHAT_DELAY = computeChatDelay(
+          VOD_TOTAL_SECS,
+          partDurations,
+          MAX_PART_DURATION,
+        );
       }
     } catch (e) {
       /* ignore */
