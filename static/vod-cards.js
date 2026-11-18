@@ -161,8 +161,10 @@ export function initVodCards(root = document) {
   initChapterPopovers(root);
 }
 
+// event.target, not detail.target: on outerHTML swaps detail.target is the
+// detached element htmx just replaced; afterSwap fires on each inserted node.
 function applyFromEvent(event) {
-  initVodCards((event.detail && event.detail.target) || document);
+  initVodCards(event.target instanceof Element ? event.target : document);
 }
 
 applyVodCardState();
