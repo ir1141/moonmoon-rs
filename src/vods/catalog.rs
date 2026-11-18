@@ -128,6 +128,11 @@ pub(crate) const REFRESH_INTERVAL: Duration = Duration::from_secs(60 * 60);
 /// hourly refresh.
 pub(crate) const EMPTY_RETRY_INTERVAL: Duration = Duration::from_secs(60);
 
+/// The snapshot only describes the newest VOD, so edits to older ones (chapter
+/// fixes, uploads finishing processing) never move it. Past this age a refresh
+/// reloads regardless of the snapshot.
+pub(crate) const FULL_RELOAD_AFTER: Duration = Duration::from_secs(24 * 60 * 60);
+
 pub(crate) fn next_refresh_delay(vod_count: usize) -> Duration {
     if vod_count == 0 {
         EMPTY_RETRY_INTERVAL
@@ -341,7 +346,11 @@ enum RefreshPlan {
     Failed(String),
 }
 
-async fn plan_refresh(cached: &CatalogSnapshot, source: &impl VodSource) -> RefreshPlan {
+async fn plan_refresh(
+    cached: &CatalogSnapshot,
+    force_reload: bool,
+    source: &impl VodSource,
+) -> RefreshPlan {
     let remote = match source.snapshot().await {
         Ok(snapshot) => snapshot,
         Err(e) => {
@@ -350,12 +359,16 @@ async fn plan_refresh(cached: &CatalogSnapshot, source: &impl VodSource) -> Refr
         }
     };
 
-    if remote == *cached {
+    if remote == *cached && !force_reload {
         tracing::info!("refresh: catalog unchanged ({cached:?})");
         return RefreshPlan::Unchanged;
     }
 
-    tracing::info!("refresh: catalog changed ({cached:?} -> {remote:?}), fetching...");
+    if remote == *cached {
+        tracing::info!("refresh: catalog older than {FULL_RELOAD_AFTER:?}, reloading...");
+    } else {
+        tracing::info!("refresh: catalog changed ({cached:?} -> {remote:?}), fetching...");
+    }
     match source.load().await {
         Ok(catalog) => RefreshPlan::Refresh(catalog),
         Err(e) => {
@@ -374,11 +387,21 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
         }
     };
 
-    let cached_snapshot = state.catalog.read().await.snapshot.clone();
+    let (cached_snapshot, force_reload) = {
+        let catalog = state.catalog.read().await;
+        (
+            catalog.snapshot.clone(),
+            catalog.loaded_at.elapsed() >= FULL_RELOAD_AFTER,
+        )
+    };
 
     let plan = tokio::time::timeout(
         REFRESH_TIMEOUT,
-        plan_refresh(&cached_snapshot, &HttpArchive::new(&state.http_client)),
+        plan_refresh(
+            &cached_snapshot,
+            force_reload,
+            &HttpArchive::new(&state.http_client),
+        ),
     )
     .await
     .unwrap_or_else(|_| RefreshPlan::Failed(format!("timed out after {REFRESH_TIMEOUT:?}")));
@@ -763,7 +786,7 @@ mod tests {
             load: Err("load must not be called when unchanged".into()),
         };
         assert!(matches!(
-            plan_refresh(&cached, &source).await,
+            plan_refresh(&cached, false, &source).await,
             RefreshPlan::Unchanged
         ));
     }
@@ -776,7 +799,7 @@ mod tests {
             load: Ok(CatalogLoad::empty()),
         };
         assert!(matches!(
-            plan_refresh(&cached, &source).await,
+            plan_refresh(&cached, false, &source).await,
             RefreshPlan::Refresh(_)
         ));
     }
@@ -792,7 +815,20 @@ mod tests {
             load: Ok(CatalogLoad::empty()),
         };
         assert!(matches!(
-            plan_refresh(&cached, &source).await,
+            plan_refresh(&cached, false, &source).await,
+            RefreshPlan::Refresh(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn plan_refresh_reloads_an_aged_catalog_even_when_snapshot_matches() {
+        let cached = make_snapshot(10, "1430", true);
+        let source = FakeArchive {
+            snapshot: Ok(cached.clone()),
+            load: Ok(CatalogLoad::empty()),
+        };
+        assert!(matches!(
+            plan_refresh(&cached, true, &source).await,
             RefreshPlan::Refresh(_)
         ));
     }
@@ -804,7 +840,7 @@ mod tests {
             snapshot: Err("upstream 503".into()),
             load: Err("load must not be called after a poll failure".into()),
         };
-        match plan_refresh(&cached, &source).await {
+        match plan_refresh(&cached, false, &source).await {
             RefreshPlan::Failed(msg) => {
                 assert!(msg.contains("failed to check catalog snapshot"), "{msg}")
             }
@@ -819,7 +855,7 @@ mod tests {
             snapshot: Ok(make_snapshot(11, "1500", true)),
             load: Err("connection reset mid-page".into()),
         };
-        match plan_refresh(&cached, &source).await {
+        match plan_refresh(&cached, false, &source).await {
             RefreshPlan::Failed(msg) => assert!(msg.contains("failed to fetch vods"), "{msg}"),
             other => panic!("expected Failed, got {other:?}"),
         }

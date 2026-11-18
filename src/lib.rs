@@ -44,6 +44,8 @@ pub struct Catalog {
     /// on refresh, so it's computed once per catalog swap instead of per
     /// request.
     pub date_bounds: (String, String),
+    /// When this generation was built; drives `vods::FULL_RELOAD_AFTER`.
+    pub(crate) loaded_at: std::time::Instant,
 }
 
 impl Catalog {
@@ -65,6 +67,7 @@ impl Catalog {
             genres,
             snapshot: load.snapshot,
             date_bounds,
+            loaded_at: std::time::Instant::now(),
         }
     }
 }
