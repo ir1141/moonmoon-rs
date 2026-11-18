@@ -59,6 +59,12 @@ function boundedRange(from, to, minIso, maxIso) {
   };
 }
 
+export function localIsoDate(date) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
 export function rangeForDatePreset(preset, todayIso, minIso, maxIso) {
   const today = boundedToday(todayIso, minIso, maxIso);
   if (!today) return { from: "", to: "" };

@@ -2,12 +2,30 @@ import { describe, expect, test } from "bun:test";
 
 import {
   datePresetForRange,
+  localIsoDate,
   nextSortIndex,
   rangeForDatePreset,
   typeaheadIndex,
 } from "../static/lib/list-filters.js";
 
 describe("list filter date presets", () => {
+  test("today is the local calendar date, not the UTC one", () => {
+    // bun test pins TZ to UTC and ignores runtime changes, so evaluate in a
+    // child process that starts in a zone behind UTC.
+    const result = Bun.spawnSync({
+      cmd: [
+        process.execPath,
+        "-e",
+        `const { localIsoDate } = await import(${JSON.stringify(
+          new URL("../static/lib/list-filters.js", import.meta.url).href,
+        )});
+        console.log(localIsoDate(new Date("2026-03-01T05:30:00Z")));`,
+      ],
+      env: { ...process.env, TZ: "America/Los_Angeles" },
+    });
+    expect(result.stdout.toString().trim()).toBe("2026-02-28");
+  });
+
   test("30 and 90 day presets clamp to archive bounds", () => {
     expect(
       rangeForDatePreset("30", "2026-06-07", "2026-05-20", "2026-06-01"),

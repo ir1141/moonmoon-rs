@@ -1,5 +1,6 @@
 import {
   datePresetForRange,
+  localIsoDate,
   nextSortIndex,
   rangeForDatePreset,
   typeaheadIndex,
@@ -8,7 +9,7 @@ import {
 const TYPEAHEAD_RESET_MS = 500;
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return localIsoDate(new Date());
 }
 
 function triggerChange(input) {
