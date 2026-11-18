@@ -118,15 +118,18 @@ function createRuntime() {
 function createTransport(initial = null) {
   let remote = initial;
   const pulls = [];
+  const pullOptions = [];
   const pushes = [];
   return {
     pulls,
+    pullOptions,
     pushes,
     setRemote(value) {
       remote = value;
     },
-    async pull(token) {
+    async pull(token, options) {
       pulls.push(token);
+      pullOptions.push(options);
       return remote;
     },
     async push(token, body, options) {
@@ -279,15 +282,18 @@ describe("Sync session multi-device convergence", () => {
 });
 
 describe("Sync session flush on hide", () => {
-  for (const [label, hide] of [
-    [
-      "visibilitychange to hidden",
-      async (runtime) => {
+  for (const { label, hide } of [
+    {
+      label: "visibilitychange to hidden",
+      hide: async (runtime) => {
         runtime.setVisible(false);
         await runtime.emitDocument("visibilitychange");
       },
-    ],
-    ["pagehide", async (runtime) => runtime.emitWindow("pagehide")],
+    },
+    {
+      label: "pagehide",
+      hide: async (runtime) => runtime.emitWindow("pagehide"),
+    },
   ]) {
     test(`${label} pushes an unannounced write immediately with keepalive`, async () => {
       const storage = createStorage({ [TOKEN_KEY]: TOKEN });
@@ -322,5 +328,55 @@ describe("Sync session flush on hide", () => {
     await runtime.emitWindow("pagehide");
 
     expect(transport.pushes).toHaveLength(before);
+  });
+});
+
+describe("Sync session pull timeouts", () => {
+  test("only the boot pull asks for the short boot timeout", async () => {
+    const storage = createStorage({ [TOKEN_KEY]: TOKEN });
+    const runtime = createRuntime();
+    const transport = createTransport();
+    const session = createSyncSession({ storage, runtime, transport });
+    await session.start();
+
+    await runtime.advance(REMOTE_POLL_MS);
+    storage.setItem(HISTORY_KEY, JSON.stringify(history(100)));
+    await runtime.advance(LOCAL_POLL_MS);
+
+    expect(transport.pushes).toHaveLength(1);
+    expect(transport.pullOptions).toEqual([
+      { boot: true },
+      undefined,
+      undefined,
+    ]);
+  });
+});
+
+describe("Sync session connect", () => {
+  async function connectWith(transport) {
+    const storage = createStorage();
+    const runtime = createRuntime();
+    const session = createSyncSession({ storage, runtime, transport });
+    return session.connect(TOKEN);
+  }
+
+  test("reports a pull that reached the remote history", async () => {
+    const transport = createTransport({
+      blob: { v: 2, history: history(100) },
+      updated_at: 1_000,
+    });
+    expect(await connectWith(transport)).toBe(true);
+  });
+
+  test("reports success when the token has no remote history yet", async () => {
+    expect(await connectWith(createTransport(null))).toBe(true);
+  });
+
+  test("reports a failed pull", async () => {
+    const transport = createTransport();
+    transport.pull = async () => {
+      throw new Error("offline");
+    };
+    expect(await connectWith(transport)).toBe(false);
   });
 });

@@ -27,7 +27,7 @@ export const REMOTE_POLL_MS = 15_000;
  *     removeItem?(key: string): void,
  *   } | null,
  *   transport: {
- *     pull(token: string): Promise<any>,
+ *     pull(token: string, options?: { boot: true }): Promise<any>,
  *     push(token: string, body: any, options?: { keepalive: true }): Promise<void>,
  *   },
  *   runtime: {
@@ -203,16 +203,20 @@ export function createSyncSession({ storage, transport, runtime }) {
     }
   }
 
-  async function pull() {
+  // Resolves to null only when there is no token or the pull failed; a
+  // missing remote blob is a successful pull with nothing to apply.
+  async function pull({ boot = false } = {}) {
     const token = getToken();
     if (!token) return null;
-    if (pullInFlight) return pullInFlight;
+    if (pullInFlight) return pullInFlight.catch(() => null);
 
     pullInFlight = (async () => {
-      const data = await transport.pull(token);
+      const data = boot
+        ? await transport.pull(token, { boot: true })
+        : await transport.pull(token);
       if (!data) {
         if (hasHistory(getHistory())) dirty = true;
-        return null;
+        return { changed: false, updated_at: null };
       }
       const { remoteChanged, localAhead } = applyRemote(data);
       if (localAhead) dirty = true;
@@ -235,8 +239,7 @@ export function createSyncSession({ storage, transport, runtime }) {
     setToken(token);
     lastPushAt = null;
     lastHistoryStr = storageGet(storage, HISTORY_KEY) || "";
-    await pull();
-    return true;
+    return (await pull()) !== null;
   }
 
   function disconnect() {
@@ -284,7 +287,7 @@ export function createSyncSession({ storage, transport, runtime }) {
     // Guaranteed migration point, even before a Watch history read.
     loadHistoryStore(storage);
     lastHistoryStr = storageGet(storage, HISTORY_KEY) || "";
-    return pull();
+    return pull({ boot: true });
   }
 
   function stop() {

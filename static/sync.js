@@ -9,7 +9,8 @@ import { createSyncSession } from "./lib/sync-session.js";
 // bare module-eval call would abort the whole sync module, so all access
 // goes through the lib/storage.js guards against this handle.
 var storage = safeLocalStorage();
-var INITIAL_PULL_TIMEOUT_MS = 3_000;
+var BOOT_PULL_TIMEOUT_MS = 3_000;
+var PULL_TIMEOUT_MS = 15_000;
 var KEEPALIVE_MAX_BYTES = 60 * 1024;
 
 function generateToken() {
@@ -21,11 +22,14 @@ function generateToken() {
 }
 
 var transport = {
-  pull: function (token) {
+  pull: function (token, options) {
     var controller = new AbortController();
-    var timeout = setTimeout(function () {
-      controller.abort();
-    }, INITIAL_PULL_TIMEOUT_MS);
+    var timeout = setTimeout(
+      function () {
+        controller.abort();
+      },
+      options && options.boot ? BOOT_PULL_TIMEOUT_MS : PULL_TIMEOUT_MS,
+    );
     return fetch("/api/sync/" + encodeURIComponent(token), {
       signal: controller.signal,
     })
@@ -225,8 +229,10 @@ function initSettingsUi() {
     }
     var connection = session.connect(raw);
     refreshUi();
-    connection.then(function () {
-      status.textContent = "Connected. Pulled remote history.";
+    connection.then(function (pulled) {
+      status.textContent = pulled
+        ? "Connected. Pulled remote history."
+        : "Connected, but the sync server could not be reached. Retrying in the background.";
     });
   });
 
