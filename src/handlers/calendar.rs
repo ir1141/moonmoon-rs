@@ -300,8 +300,12 @@ fn fallback_segment(vod: &Vod, start_of_day_seconds: i64, duration_seconds: i64)
     let name = vod
         .chapters
         .as_deref()
-        .and_then(|chapters| chapters.iter().find_map(|ch| ch.name.clone()))
-        .or_else(|| vod.title.clone())
+        .and_then(|chapters| {
+            chapters
+                .iter()
+                .find_map(|ch| ch.name.clone().filter(|n| !n.trim().is_empty()))
+        })
+        .or_else(|| vod.title.clone().filter(|t| !t.trim().is_empty()))
         .unwrap_or_else(|| "Stream".to_string());
     GuideSeg {
         color_idx: crate::vods::chapter_color_idx(&name),
@@ -614,6 +618,23 @@ mod tests {
             youtube: None,
             is_live: false,
         }
+    }
+
+    #[test]
+    fn fallback_segment_skips_blank_chapter_names_for_the_title() {
+        let blank = Chapter {
+            name: Some("  ".into()),
+            image: None,
+            start: None,
+            duration: None,
+            end: None,
+        };
+        let vod = test_vod("1", "2026-01-01T20:00:00Z", 3600, vec![blank]);
+        assert_eq!(fallback_segment(&vod, 0, 3600).name, "Playable Stream");
+
+        let mut untitled = vod.clone();
+        untitled.title = Some(String::new());
+        assert_eq!(fallback_segment(&untitled, 0, 3600).name, "Stream");
     }
 
     fn assert_close(actual: f64, expected: f64) {
