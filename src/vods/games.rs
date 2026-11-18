@@ -68,9 +68,7 @@ pub fn build_games(vods: &[Vod]) -> Vec<Game> {
             update_dominant_stream_stats(entry, vod.stream_time());
         }
     }
-    let mut games: Vec<Game> = games.into_values().collect();
-    games.sort_by_key(|g| std::cmp::Reverse(g.vod_count));
-    games
+    sorted_by_count(games.into_values().collect())
 }
 
 pub fn build_dominant_games<'a, I>(vods: I) -> Vec<Game>
@@ -101,8 +99,14 @@ where
         update_dominant_stream_stats(entry, vod.stream_time());
     }
 
-    let mut games: Vec<Game> = games.into_values().collect();
-    games.sort_by_key(|g| std::cmp::Reverse(g.vod_count));
+    sorted_by_count(games.into_values().collect())
+}
+
+/// Most VODs first, ties by name: the builders collect from a `HashMap`, so
+/// without the tiebreak equal counts come out in a different order on every
+/// build and paginated grids repeat or skip games.
+fn sorted_by_count(mut games: Vec<Game>) -> Vec<Game> {
+    games.sort_by_cached_key(|g| (std::cmp::Reverse(g.vod_count), g.name.to_lowercase()));
     games
 }
 
@@ -247,6 +251,28 @@ mod tests {
             start,
             duration,
             end,
+        }
+    }
+
+    #[test]
+    fn both_builders_order_tied_counts_by_name() {
+        let mut vods: Vec<Vod> = (0..30)
+            .map(|i| {
+                vod_with(
+                    3600,
+                    vec![ch(&format!("Game {i:02}"), Some(0.0), Some(3600.0), None)],
+                )
+            })
+            .collect();
+        vods.push(vod_with(
+            3600,
+            vec![ch("Game 29", Some(0.0), Some(3600.0), None)],
+        ));
+        let mut expected = vec!["Game 29".to_string()];
+        expected.extend((0..29).map(|i| format!("Game {i:02}")));
+        for games in [build_games(&vods), build_dominant_games(&vods)] {
+            let names: Vec<String> = games.into_iter().map(|g| g.name).collect();
+            assert_eq!(names, expected);
         }
     }
 
