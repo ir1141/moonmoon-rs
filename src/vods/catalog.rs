@@ -140,6 +140,11 @@ const API: &str = "https://archive.overpowered.tv/api/v1/moonmoon/vods";
 const PAGE_SIZE: usize = 50;
 const MAX_429_RETRIES: usize = 6;
 const INITIAL_429_BACKOFF_MS: u64 = 250;
+/// A longer Retry-After surfaces as an error rather than parking the
+/// refresh (and `refresh_lock`) for however long upstream asks.
+const MAX_RETRY_AFTER: Duration = Duration::from_secs(60);
+/// Upper bound on how long one refresh may hold `refresh_lock`.
+const REFRESH_TIMEOUT: Duration = Duration::from_secs(300);
 
 fn page_url(page_one_based: usize) -> String {
     format!("{API}?page={page_one_based}&limit={PAGE_SIZE}&sort=created_at&order=desc")
@@ -169,6 +174,22 @@ fn jittered(base: Duration) -> Duration {
     Duration::from_millis(half.saturating_add(extra))
 }
 
+fn jitter_up_to(max: Duration) -> Duration {
+    use rand::Rng;
+    let ms = u64::try_from(max.as_millis()).unwrap_or(u64::MAX);
+    Duration::from_millis(rand::rng().random_range(0..=ms))
+}
+
+/// Delay before retrying a 429, or `None` to give up. An upstream
+/// Retry-After is a floor: jitter only ever lengthens it.
+fn retry_delay(retry_after: Option<Duration>, attempt: usize) -> Option<Duration> {
+    match retry_after {
+        Some(ra) if ra > MAX_RETRY_AFTER => None,
+        Some(ra) => Some(ra + jitter_up_to(ra / 2)),
+        None => Some(jittered(backoff_delay(attempt))),
+    }
+}
+
 fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
     headers
         .get(reqwest::header::RETRY_AFTER)?
@@ -190,9 +211,10 @@ async fn fetch_api_response(
     let mut attempt = 0;
     loop {
         let resp = client.get(url).send().await?;
-        if should_retry(resp.status(), attempt) {
-            let base = parse_retry_after(resp.headers()).unwrap_or_else(|| backoff_delay(attempt));
-            let delay = jittered(base);
+        let delay = should_retry(resp.status(), attempt)
+            .then(|| retry_delay(parse_retry_after(resp.headers()), attempt))
+            .flatten();
+        if let Some(delay) = delay {
             tracing::warn!(
                 "rate limited fetching {url}; retrying in {}ms (attempt {}/{})",
                 delay.as_millis(),
@@ -354,7 +376,14 @@ pub async fn refresh_in_place(state: &crate::SharedState) -> RefreshOutcome {
 
     let cached_snapshot = state.catalog.read().await.snapshot.clone();
 
-    match plan_refresh(&cached_snapshot, &HttpArchive::new(&state.http_client)).await {
+    let plan = tokio::time::timeout(
+        REFRESH_TIMEOUT,
+        plan_refresh(&cached_snapshot, &HttpArchive::new(&state.http_client)),
+    )
+    .await
+    .unwrap_or_else(|_| RefreshPlan::Failed(format!("timed out after {REFRESH_TIMEOUT:?}")));
+
+    match plan {
         RefreshPlan::Unchanged => {
             let count = state.catalog.read().await.vods.len();
             RefreshOutcome::Unchanged(count)
@@ -454,6 +483,30 @@ mod tests {
                 "jittered out of [0.5x, 1.5x]: {d:?}"
             );
         }
+    }
+
+    #[test]
+    fn retry_delay_never_undercuts_retry_after() {
+        let ra = Duration::from_secs(2);
+        for _ in 0..100 {
+            let d = retry_delay(Some(ra), 0).unwrap();
+            assert!(d >= ra && d <= ra * 3 / 2, "out of [1x, 1.5x]: {d:?}");
+        }
+    }
+
+    #[test]
+    fn retry_delay_gives_up_on_retry_after_over_cap() {
+        assert_eq!(
+            retry_delay(Some(MAX_RETRY_AFTER + Duration::from_secs(1)), 0),
+            None
+        );
+        assert!(retry_delay(Some(MAX_RETRY_AFTER), 0).is_some());
+    }
+
+    #[test]
+    fn retry_delay_without_header_uses_jittered_backoff() {
+        let d = retry_delay(None, 2).unwrap();
+        assert!(d >= Duration::from_millis(500) && d <= Duration::from_millis(1500));
     }
 
     #[test]
